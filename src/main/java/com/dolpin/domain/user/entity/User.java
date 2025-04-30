@@ -1,77 +1,84 @@
 package com.dolpin.domain.user.entity;
 
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import lombok.*;
 
-import java.time.ZonedDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "provider_id", nullable = false, unique = true)
+    @Column(nullable = false)
     private Long providerId;
 
-    @Column(name = "provider", nullable = false, length = 10)
+    @Column(length = 10, nullable = false)
     private String provider;
 
-    @Column(name = "image_url", length = 255)
-    private String imageUrl;
-
-    @Column(name = "introduction", length = 70)
-    private String introduction;
-
-    @Column(name = "username", nullable = false, unique = true, length = 10)
+    @Column(length = 10, nullable = false, unique = true)
     private String username;
 
-    @Column(name = "is_location_agreed", nullable = false)
-    private boolean isLocationAgreed = false;
+    @Column(length = 255)
+    private String imageUrl;
 
-    @Column(name = "is_privacy_agreed", nullable = false)
-    private boolean isPrivacyAgreed = false;
+    @Column(length = 70)
+    private String introduction;
 
-    @Column(name = "privacy_agreed_at")
-    private ZonedDateTime privacyAgreedAt;
+    @Column(nullable = false)
+    private boolean isPrivacyAgreed;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private ZonedDateTime createdAt;
+    @Column(nullable = false)
+    private boolean isLocationAgreed;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private ZonedDateTime updatedAt;
+    @Column
+    private LocalDateTime privacyAgreedAt;
 
-    @Builder
-    public User(Long providerId, String provider, String username) {
-        this.providerId = providerId;
-        this.provider = provider;
-        this.username = username;
-        this.isLocationAgreed = false;
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    // 생성 전 이벤트
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
         this.isPrivacyAgreed = false;
+        this.isLocationAgreed = false;
     }
 
+    // 수정 전 이벤트
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    // 프로필 업데이트 메서드
     public void updateProfile(String username, String imageUrl, String introduction) {
-        this.username = username;
+        if (username != null && !username.isEmpty()) {
+            this.username = username;
+        }
         this.imageUrl = imageUrl;
         this.introduction = introduction;
     }
 
+    // 개인정보 동의 설정 메서드
     public void agreeToTerms(boolean isPrivacyAgreed, boolean isLocationAgreed) {
         this.isPrivacyAgreed = isPrivacyAgreed;
         this.isLocationAgreed = isLocationAgreed;
+
         if (isPrivacyAgreed) {
-            this.privacyAgreedAt = ZonedDateTime.now();
+            this.privacyAgreedAt = LocalDateTime.now();
         }
     }
 }
