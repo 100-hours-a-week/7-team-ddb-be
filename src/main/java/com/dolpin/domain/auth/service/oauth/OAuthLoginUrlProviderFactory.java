@@ -1,6 +1,7 @@
 package com.dolpin.domain.auth.service.oauth;
 
 import com.dolpin.domain.auth.entity.enums.OAuthProvider;
+import com.dolpin.global.exception.auth.OAuthProviderNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +17,6 @@ public class OAuthLoginUrlProviderFactory {
         return providers.stream()
                 .filter(p -> p.getOAuthProvider() == provider)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 OAuth 제공자입니다: " + provider.getName())); //customexception 만들면 수정해야함
+                .orElseThrow(() -> new OAuthProviderNotFoundException(provider.getName()));
     }
 }
