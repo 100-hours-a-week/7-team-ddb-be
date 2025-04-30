@@ -1,7 +1,6 @@
 package com.dolpin.domain.auth.controller;
 
 import com.dolpin.domain.auth.dto.response.OAuthUrlResponse;
-import com.dolpin.domain.auth.dto.response.TokenResponse;
 import com.dolpin.domain.auth.service.auth.AuthService;
 import com.dolpin.global.response.ApiResponse;
 import com.dolpin.global.response.ResponseStatus;
