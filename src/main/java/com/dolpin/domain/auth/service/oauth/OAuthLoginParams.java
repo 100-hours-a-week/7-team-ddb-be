@@ -10,4 +10,5 @@ public interface OAuthLoginParams {
     OAuthProvider oauthProvider();
     MultiValueMap<String, String> makeBody();
     String getAuthorizationCode();
+    String getRedirectUri();
 }
