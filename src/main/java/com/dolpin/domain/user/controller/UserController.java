@@ -1,6 +1,8 @@
 package com.dolpin.domain.user.controller;
 
 import com.dolpin.domain.user.dto.request.AgreementRequest;
+import com.dolpin.domain.user.dto.request.UserRegisterRequest;
+import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.response.ApiResponse;
@@ -23,10 +25,10 @@ public class UserController {
     private final UserQueryService userQueryService;
 
     @PostMapping("/agreement")
-    public ResponseEntity<ApiResponse<Void>> saveAgreement (
+    public ResponseEntity<ApiResponse<Void>> saveAgreement(
             @CurrentUser UserDetails userDetails,
             @Valid @RequestBody AgreementRequest request
-            ) {
+    ) {
         Long userId = Long.parseLong(userDetails.getUsername());
         userCommandService.agreeToTerms(
                 userId,
@@ -38,4 +40,24 @@ public class UserController {
                 .body(ApiResponse.success("agreement_saved", null));
     }
 
+    @PostMapping
+    public ResponseEntity<ApiResponse<Void>> registerUser(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody UserRegisterRequest request) {
+
+        // 현재 인증된 사용자 ID 추출
+        Long userId = Long.parseLong(userDetails.getUsername());
+        log.info("Registering user profile for user {}: nickname={}", userId, request.getNickname());
+
+        // 사용자 등록 처리
+        userCommandService.registerUser(
+                userId,
+                request.getNickname(),
+                request.getProfile_image(),
+                request.getIntroduction()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("user_info_saved", null));
+    }
 }

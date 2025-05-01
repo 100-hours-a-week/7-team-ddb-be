@@ -1,9 +1,9 @@
 package com.dolpin.domain.user.service;
 
+import com.dolpin.domain.auth.repository.TokenRepository;
 import com.dolpin.domain.auth.service.oauth.OAuthInfoResponse;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.repository.UserRepository;
-import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +18,7 @@ public class UserCommandServiceImpl implements UserCommandService {
 
     private final UserRepository userRepository;
     private final UserQueryService userQueryService;
+    private final TokenRepository tokenRepository;
 
     @Override
     @Transactional
@@ -25,24 +26,55 @@ public class UserCommandServiceImpl implements UserCommandService {
         log.info("Creating new user with provider: {}, providerId: {}",
                 oAuthInfo.getProvider(), oAuthInfo.getProviderId());
 
-        String username = generateUniqueUsername(oAuthInfo.getNickname());
+        // 유효한 providerId 확인
+        if (oAuthInfo.getProviderId() == null || oAuthInfo.getProviderId().isEmpty()) {
+            throw new BusinessException(ResponseStatus.INVALID_PARAMETER.withMessage("유효하지 않은 소셜 로그인 정보"));
+        }
+
+        // 임시 사용자명 생성 (나중에 사용자가 설정 가능)
+        String tempUsername = "user" + oAuthInfo.getProviderId().substring(0, Math.min(4, oAuthInfo.getProviderId().length()));
+        String username = generateUniqueUsername(tempUsername);
 
         User user = User.builder()
                 .providerId(Long.parseLong(oAuthInfo.getProviderId()))
                 .provider(oAuthInfo.getProvider())
                 .username(username)
+                // 이미지 URL은 생략하거나 null로 설정
                 .build();
 
-        // 프로필 정보 업데이트
-        user.updateProfile(username, oAuthInfo.getProfileImageUrl(), null);
+        user.updateProfile(username, null, null);
 
         return userRepository.save(user);
     }
+
+    @Transactional
+    public void registerUser(Long userId, String nickname, String profileImage, String introduction) {
+        User user = userQueryService.getUserById(userId);
+
+        // 닉네임 중복 검사
+        if (userRepository.existsByUsername(nickname) && !user.getUsername().equals(nickname)) {
+            throw new BusinessException(ResponseStatus.NICKNAME_DUPLICATE);
+        }
+
+        // 프로필 정보 업데이트
+        user.updateProfile(nickname, profileImage, introduction);
+        userRepository.save(user);
+        log.info("User registered and profile updated: userId={}, nickname={}", userId, nickname);
+    }
+
 
     @Override
     @Transactional
     public void updateProfile(Long userId, String username, String imageUrl, String introduction) {
         User user = userQueryService.getUserById(userId);
+
+        // 닉네임 변경 시 중복 검사
+        if (username != null && !username.equals(user.getUsername()) &&
+                userRepository.existsByUsername(username)) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER.withMessage("이미 존재하는 닉네임입니다."));
+        }
+
         user.updateProfile(username, imageUrl, introduction);
         userRepository.save(user);
     }
@@ -59,6 +91,11 @@ public class UserCommandServiceImpl implements UserCommandService {
     @Transactional
     public void deleteUser(Long userId) {
         User user = userQueryService.getUserById(userId);
+
+        // 사용자 관련 토큰 삭제
+        tokenRepository.deleteAllByUser(user);
+
+        // 사용자 삭제
         userRepository.delete(user);
     }
 
