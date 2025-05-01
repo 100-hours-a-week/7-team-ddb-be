@@ -65,18 +65,20 @@ public class UserCommandServiceImpl implements UserCommandService {
 
     @Override
     @Transactional
-    public void updateProfile(Long userId, String username, String imageUrl, String introduction) {
+    public User updateProfile(Long userId, String username, String imageUrl, String introduction) {
         User user = userQueryService.getUserById(userId);
 
         // 닉네임 변경 시 중복 검사
         if (username != null && !username.equals(user.getUsername()) &&
                 userRepository.existsByUsername(username)) {
             throw new BusinessException(
-                    ResponseStatus.INVALID_PARAMETER.withMessage("이미 존재하는 닉네임입니다."));
+                    ResponseStatus.NICKNAME_DUPLICATE.withMessage("이미 존재하는 닉네임입니다."));
         }
 
         user.updateProfile(username, imageUrl, introduction);
         userRepository.save(user);
+
+        return user;
     }
 
     @Override

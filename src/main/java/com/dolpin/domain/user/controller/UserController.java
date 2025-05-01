@@ -1,6 +1,7 @@
 package com.dolpin.domain.user.controller;
 
 import com.dolpin.domain.user.dto.request.AgreementRequest;
+import com.dolpin.domain.user.dto.request.UserProfileUpdateRequest;
 import com.dolpin.domain.user.dto.request.UserRegisterRequest;
 import com.dolpin.domain.user.dto.response.MyProfileResponse;
 import com.dolpin.domain.user.dto.response.UserProfileResponse;
@@ -85,15 +86,50 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("retrieve_user_info_success", response));
     }
 
-    @GetMapping("/test/{userId}")
-    public ResponseEntity<ApiResponse<UserProfileResponse>> testGetUserProfile(
-            @PathVariable Long userId) {
+    @PatchMapping
+    public ResponseEntity<ApiResponse<UserProfileResponse>> updateUserProfile(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody UserProfileUpdateRequest request) {
 
-        log.info("Test getting profile for user: {}", userId);
+        // 현재 인증된 사용자 ID 추출
+        Long userId = Long.parseLong(userDetails.getUsername());
+        log.info("Updating profile for user {}: nickname={}", userId, request.getNickname());
 
-        User user = userQueryService.getUserById(userId);
-        UserProfileResponse response = UserProfileResponse.from(user);
+        // 프로필 업데이트 (서비스에서 닉네임 중복 확인 및 업데이트 처리)
+        User updatedUser = userCommandService.updateProfile(
+                userId,
+                request.getNickname(),
+                request.getProfile_image(),
+                request.getIntroduction()
+        );
 
-        return ResponseEntity.ok(ApiResponse.success("retrieve_user_info_success", response));
+        // DTO로 변환하여 응답 생성
+        UserProfileResponse response = UserProfileResponse.from(updatedUser);
+
+        return ResponseEntity.ok(ApiResponse.success("user_info_updated", response));
+    }
+
+    /**
+     * 테스트용 프로필 수정 API
+     */
+    @PatchMapping("/test")
+    public ResponseEntity<ApiResponse<UserProfileResponse>> testUpdateUserProfile(
+            @RequestParam Long userId,
+            @Valid @RequestBody UserProfileUpdateRequest request) {
+
+        log.info("Test updating profile for user {}: nickname={}", userId, request.getNickname());
+
+        // 프로필 업데이트 (서비스에서 닉네임 중복 확인 및 업데이트 처리)
+        User updatedUser = userCommandService.updateProfile(
+                userId,
+                request.getNickname(),
+                request.getProfile_image(),
+                request.getIntroduction()
+        );
+
+        // DTO로 변환하여 응답 생성
+        UserProfileResponse response = UserProfileResponse.from(updatedUser);
+
+        return ResponseEntity.ok(ApiResponse.success("user_info_updated", response));
     }
 }
