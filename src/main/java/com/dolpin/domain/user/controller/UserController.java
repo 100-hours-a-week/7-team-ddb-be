@@ -2,6 +2,7 @@ package com.dolpin.domain.user.controller;
 
 import com.dolpin.domain.user.dto.request.AgreementRequest;
 import com.dolpin.domain.user.dto.request.UserRegisterRequest;
+import com.dolpin.domain.user.dto.response.MyProfileResponse;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
@@ -59,5 +60,29 @@ public class UserController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("user_info_saved", null));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<MyProfileResponse>> getMyProfile(
+            @CurrentUser UserDetails userDetails) {
+        Long userId = Long.parseLong(userDetails.getUsername());
+        log.info("Getting profile for current user {}", userId);
+
+        User user= userQueryService.getUserById(userId);
+        MyProfileResponse response = MyProfileResponse.from(user);
+
+        return ResponseEntity.ok(ApiResponse.success("retrieve_user_info_success", response));
+    }
+
+    @GetMapping("/test/me")
+    public ResponseEntity<ApiResponse<MyProfileResponse>> testGetMyProfile(
+            @RequestParam Long userId) {
+
+        log.info("Test getting profile for user: {}", userId);
+
+        User user = userQueryService.getUserById(userId);
+        MyProfileResponse response = MyProfileResponse.from(user);
+
+        return ResponseEntity.ok(ApiResponse.success("retrieve_user_info_success", response));
     }
 }
