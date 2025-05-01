@@ -8,7 +8,6 @@ import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.response.ApiResponse;
-import com.dolpin.global.security.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +27,7 @@ public class UserController {
 
     @PostMapping("/agreement")
     public ResponseEntity<ApiResponse<Void>> saveAgreement(
-            @CurrentUser UserDetails userDetails,
+            @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody AgreementRequest request
     ) {
         Long userId = Long.parseLong(userDetails.getUsername());
@@ -65,7 +64,7 @@ public class UserController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<MyProfileResponse>> getMyProfile(
-            @CurrentUser UserDetails userDetails) {
+            @AuthenticationPrincipal UserDetails userDetails) {
         Long userId = Long.parseLong(userDetails.getUsername());
         log.info("Getting profile for current user {}", userId);
 
