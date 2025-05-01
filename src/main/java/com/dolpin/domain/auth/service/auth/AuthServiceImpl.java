@@ -69,7 +69,20 @@ public class AuthServiceImpl implements AuthService {
         OAuthInfoResponse userInfo = apiClient.requestUserInfo(oauthAccessToken);
 
         // 3. 사용자 정보로 회원 찾기 또는 새로 생성
-        User user = findOrCreateUser(userInfo);
+        boolean isNewUser = false;
+        User user;
+
+        Optional<User> existingUser = userQueryService.findByProviderAndProviderId(
+                userInfo.getProvider(),
+                Long.parseLong(userInfo.getProviderId())
+        );
+
+        if (existingUser.isPresent()) {
+            user = existingUser.get();
+        } else {
+            user = userCommandService.createUser(userInfo);
+            isNewUser = true;  // 신규 사용자로 표시
+        }
 
         // 4. JWT 토큰 생성 (액세스 토큰)
         String accessToken = jwtTokenProvider.generateToken(user.getId());
@@ -80,10 +93,10 @@ public class AuthServiceImpl implements AuthService {
         // 6. 토큰 응답 생성 및 반환
         return TokenResponse.of(
                 accessToken,
-                jwtTokenProvider.getExpirationMs() / 1000,
                 refreshToken.getToken(),
-                "Bearer",
-                user
+                jwtTokenProvider.getExpirationMs() / 1000,
+                user,
+                isNewUser
         );
     }
 
