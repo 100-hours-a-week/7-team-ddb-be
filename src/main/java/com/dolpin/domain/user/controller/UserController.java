@@ -109,27 +109,20 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("user_info_updated", response));
     }
 
-    /**
-     * 테스트용 프로필 수정 API
-     */
-    @PatchMapping("/test")
-    public ResponseEntity<ApiResponse<UserProfileResponse>> testUpdateUserProfile(
-            @RequestParam Long userId,
-            @Valid @RequestBody UserProfileUpdateRequest request) {
 
-        log.info("Test updating profile for user {}: nickname={}", userId, request.getNickname());
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<Void>> deleteUser(
+            @AuthenticationPrincipal UserDetails userDetails) {
 
-        // 프로필 업데이트 (서비스에서 닉네임 중복 확인 및 업데이트 처리)
-        User updatedUser = userCommandService.updateProfile(
-                userId,
-                request.getNickname(),
-                request.getProfile_image(),
-                request.getIntroduction()
-        );
+        // 현재 인증된 사용자 ID 추출
+        Long userId = Long.parseLong(userDetails.getUsername());
+        log.info("Deleting user: {}", userId);
 
-        // DTO로 변환하여 응답 생성
-        UserProfileResponse response = UserProfileResponse.from(updatedUser);
+        // 사용자 삭제
+        userCommandService.deleteUser(userId);
 
-        return ResponseEntity.ok(ApiResponse.success("user_info_updated", response));
+        return ResponseEntity.status(HttpStatus.NO_CONTENT)
+                .body(ApiResponse.success("user_delete_success", null));
     }
+
 }

@@ -94,8 +94,9 @@ public class UserCommandServiceImpl implements UserCommandService {
     public void deleteUser(Long userId) {
         User user = userQueryService.getUserById(userId);
 
-        // 사용자 관련 토큰 삭제
-        tokenRepository.deleteAllByUser(user);
+        if (tokenRepository != null) {
+            tokenRepository.deleteAllByUser(user);
+        }
 
         // 사용자 삭제
         userRepository.delete(user);
