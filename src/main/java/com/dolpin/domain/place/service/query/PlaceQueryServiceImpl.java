@@ -1,9 +1,11 @@
-package com.dolpin.domain.place.service;
+package com.dolpin.domain.place.service.query;
 
 import com.dolpin.domain.place.client.PlaceAiClient;
 import com.dolpin.domain.place.dto.response.PlaceAiResponse;
+import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.entity.Place;
+import com.dolpin.domain.place.entity.PlaceHours;
 import com.dolpin.domain.place.repository.PlaceRepository;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
@@ -28,6 +30,26 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     // 기본 검색 반경: 700m
     private static final double DEFAULT_SEARCH_RADIUS = 700.0;
+
+    private static final Map<String, String> DAY_OF_WEEK_MAP = Map.of(
+            "mon", "월",
+            "tue", "화",
+            "wed", "수",
+            "thu", "목",
+            "fri", "금",
+            "sat", "토",
+            "sun", "일"
+    );
+
+    private static final Map<String, String> REVERSE_DAY_OF_WEEK_MAP = Map.of(
+            "월", "mon",
+            "화", "tue",
+            "수", "wed",
+            "목", "thu",
+            "금", "fri",
+            "토", "sat",
+            "일", "sun"
+    );
 
     @Override
     @Transactional(readOnly = true)
@@ -115,6 +137,57 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PlaceDetailResponse getPlaceDetail(Long placeId) {
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.INVALID_PARAMETER.withMessage("장소를 찾을 수 없습니다.")));
+
+        // 위치 정보 변환
+        Point location = place.getLocation();
+        Map<String, Object> locationMap = new HashMap<>();
+        locationMap.put("type", "Point");
+        locationMap.put("coordinates", new double[]{location.getX(), location.getY()});
+
+        // 태그(키워드) 정보
+        List<String> keywords = place.getKeywords().stream()
+                .map(pk -> pk.getKeyword().getKeyword())
+                .collect(Collectors.toList());
+
+        // 메뉴 정보
+        List<PlaceDetailResponse.Menu> menuList = place.getMenus().stream()
+                .map(menu -> PlaceDetailResponse.Menu.builder()
+                        .name(menu.getMenuName())
+                        .price(menu.getPrice())
+                        .build())
+                .collect(Collectors.toList());
+
+        // 영업시간 정보
+        List<PlaceDetailResponse.Schedule> schedules = place.getHours().stream()
+                .map(this::convertToSchedule)
+                .collect(Collectors.toList());
+
+        // 영업상태 설정
+        String status = schedules.isEmpty() ? "영업 여부 확인 필요" : "영업 중";
+
+        PlaceDetailResponse.OpeningHours openingHours = PlaceDetailResponse.OpeningHours.builder()
+                .status(status)
+                .schedules(schedules)
+                .build();
+
+        return PlaceDetailResponse.builder()
+                .id(place.getId())
+                .name(place.getName())
+                .address(place.getRoadAddress())
+                .location(locationMap)
+                .keywords(keywords)
+                .description(place.getDescription())
+                .openingHours(openingHours)
+                .phone(place.getPhone())
+                .menu(menuList)
+                .build();
+    }
+
     /**
      * 거리 포맷팅 (m 또는 km 단위)
      */
@@ -130,5 +203,22 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     .setScale(1, RoundingMode.HALF_UP);
             return km.toString() + "km";
         }
+    }
+
+    private PlaceDetailResponse.Schedule convertToSchedule(PlaceHours hours) {
+        String day = REVERSE_DAY_OF_WEEK_MAP.getOrDefault(hours.getDayOfWeek(), hours.getDayOfWeek().toLowerCase());
+
+        PlaceDetailResponse.Schedule.ScheduleBuilder builder = PlaceDetailResponse.Schedule.builder()
+                .day(day);
+
+        if (hours.getOpenTime() != null && hours.getCloseTime() != null) {
+            String hoursString = hours.getOpenTime() + "~" + hours.getCloseTime();
+            builder.hours(hoursString);
+        } else {
+            String koreanDay = DAY_OF_WEEK_MAP.getOrDefault(day, hours.getDayOfWeek());
+            builder.note("정기휴무 (매주 " + koreanDay + "요일)");
+        }
+
+        return builder.build();
     }
 }
