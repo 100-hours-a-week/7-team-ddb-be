@@ -8,13 +8,26 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
-    /**
-     * 지정된 ID 목록 중에서 특정 반경 내에 있는 장소만 조회
-     */
+
+    @Query("SELECT p FROM Place p " +
+            "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
+            "LEFT JOIN FETCH p.menus " +
+            "LEFT JOIN FETCH p.hours " +
+            "WHERE p.id = :id")
+    Optional<Place> findByIdWithDetails(@Param("id") Long id);
+
+
+    @Query("SELECT p FROM Place p " +
+            "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
+            "WHERE p.id IN :ids")
+    List<Place> findByIdsWithKeywords(@Param("ids") List<Long> ids);
+
+
     @Query(value =
             "SELECT p as place, ST_Distance(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326)) as distance " +
                     "FROM place p " +
@@ -27,6 +40,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radius") Double radius);
+
 
     @Query(value = "SELECT p as place, " +
             "ST_Distance(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326)) as distance " +
