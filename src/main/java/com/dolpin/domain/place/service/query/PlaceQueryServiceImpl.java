@@ -10,10 +10,12 @@ import com.dolpin.domain.place.entity.PlaceHours;
 import com.dolpin.domain.place.repository.PlaceRepository;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
+import com.dolpin.global.util.DayOfWeek;
 import com.dolpin.global.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Point;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,28 +32,8 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     private final PlaceRepository placeRepository;
     private final PlaceAiClient placeAiClient;
 
-    // 기본 검색 반경: 700m
-    private static final double DEFAULT_SEARCH_RADIUS = 700.0;
-
-    private static final Map<String, String> DAY_OF_WEEK_MAP = Map.of(
-            "mon", "월",
-            "tue", "화",
-            "wed", "수",
-            "thu", "목",
-            "fri", "금",
-            "sat", "토",
-            "sun", "일"
-    );
-
-    private static final Map<String, String> REVERSE_DAY_OF_WEEK_MAP = Map.of(
-            "월", "mon",
-            "화", "tue",
-            "수", "wed",
-            "목", "thu",
-            "금", "fri",
-            "토", "sat",
-            "일", "sun"
-    );
+    @Value("${place.search.default-radius}")
+    private double defaultSearchRadius;
 
     @Override
     @Transactional(readOnly = true)
@@ -122,20 +104,20 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
         // PostGIS를 사용하여 반경 내 장소 조회 및 거리 계산
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
-                placeIds, lat, lng, DEFAULT_SEARCH_RADIUS);
+                placeIds, lat, lng, defaultSearchRadius);
 
         // DTO 변환
         List<PlaceSearchResponse.PlaceDto> placeDtos = nearbyPlaces.stream()
                 .map(placeWithDistance -> {
                     Place place = placeWithDistance.getPlace();
                     Double distance = placeWithDistance.getDistance();
-                    Double similarityScore = similarityScores.getOrDefault(place.getId(), 0.0);
+                    Double similarityScore = similarityScores.get(place.getId());
 
                     return convertToPlaceDto(place, distance, similarityScore);
                 })
                 .collect(Collectors.toList());
 
-        // 유사도 점수 기준 정렬
+        // 유사도 점수 기준 정렬 (null 값은 이제 걱정할 필요 없음)
         placeDtos.sort((a, b) -> Double.compare(b.getSimilarityScore(), a.getSimilarityScore()));
 
         return placeDtos;
@@ -144,7 +126,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     private List<PlaceSearchResponse.PlaceDto> searchByCategory(String category, Double lat, Double lng) {
         // 카테고리로 주변 장소 전체 검색 (페이징 없이)
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
-                category, lat, lng, DEFAULT_SEARCH_RADIUS);
+                category, lat, lng, defaultSearchRadius);
 
         // DTO 변환
         return searchResults.stream()
@@ -213,8 +195,8 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .map(this::convertToSchedule)
                 .collect(Collectors.toList());
 
-        // 영업상태 설정
-        String status = schedules.isEmpty() ? "영업 여부 확인 필요" : "영업 중";
+        // 현재 영업 상태 확인 (단순 체크에서 실제 영업 상태 판단으로 변경)
+        String status = determineBusinessStatus(place.getHours());
 
         PlaceDetailResponse.OpeningHours openingHours = PlaceDetailResponse.OpeningHours.builder()
                 .status(status)
@@ -252,7 +234,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     }
 
     private PlaceDetailResponse.Schedule convertToSchedule(PlaceHours hours) {
-        String day = REVERSE_DAY_OF_WEEK_MAP.getOrDefault(hours.getDayOfWeek(), hours.getDayOfWeek().toLowerCase());
+        String dayOfWeek = hours.getDayOfWeek();
+        // 한글 요일을 영어 코드로 변환
+        String day = DayOfWeek.getEnglishCodeByKoreanCode(dayOfWeek);
 
         PlaceDetailResponse.Schedule.ScheduleBuilder builder = PlaceDetailResponse.Schedule.builder()
                 .day(day);
@@ -261,10 +245,82 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             String hoursString = hours.getOpenTime() + "~" + hours.getCloseTime();
             builder.hours(hoursString);
         } else {
-            String koreanDay = DAY_OF_WEEK_MAP.getOrDefault(day, hours.getDayOfWeek());
+            // 영어 코드를 한글 요일로 변환
+            String koreanDay = DayOfWeek.getKoreanCodeByEnglishCode(day);
             builder.note("정기휴무 (매주 " + koreanDay + "요일)");
         }
 
         return builder.build();
+    }
+
+    private String determineBusinessStatus(List<PlaceHours> hours) {
+        if (hours == null || hours.isEmpty()) {
+            return "영업 여부 확인 필요";
+        }
+
+        // 현재 요일 및 시간 확인
+        Calendar calendar = Calendar.getInstance();
+        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
+        int currentHour = calendar.get(Calendar.HOUR_OF_DAY);
+        int currentMinute = calendar.get(Calendar.MINUTE);
+
+        // Calendar.DAY_OF_WEEK는 1(일요일)~7(토요일)
+        // PlaceHours의 요일을 Calendar 형식으로 변환
+        String[] daysOfWeek = {"일", "월", "화", "수", "목", "금", "토"};
+        String koreanDayOfWeek = daysOfWeek[dayOfWeek - 1];
+
+        // 오늘의 영업 시간 찾기
+        Optional<PlaceHours> todayHours = hours.stream()
+                .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek))
+                .findFirst();
+
+        if (todayHours.isEmpty()) {
+            return "영업 정보 없음";
+        }
+
+        PlaceHours today = todayHours.get();
+
+        // 휴무일인 경우
+        if (today.getOpenTime() == null || today.getCloseTime() == null) {
+            return "휴무일";
+        }
+
+        // 영업 시간 파싱 (예: "09:00" -> 시간과 분)
+        int openHour = 0, openMinute = 0, closeHour = 0, closeMinute = 0;
+
+        try {
+            String[] openParts = today.getOpenTime().split(":");
+            String[] closeParts = today.getCloseTime().split(":");
+
+            openHour = Integer.parseInt(openParts[0]);
+            openMinute = Integer.parseInt(openParts[1]);
+            closeHour = Integer.parseInt(closeParts[0]);
+            closeMinute = Integer.parseInt(closeParts[1]);
+        } catch (Exception e) {
+            log.error("영업 시간 파싱 오류: {}", e.getMessage());
+            return "영업 여부 확인 필요";
+        }
+
+        // 현재 시간을 분 단위로 변환
+        int currentTimeInMinutes = currentHour * 60 + currentMinute;
+        int openTimeInMinutes = openHour * 60 + openMinute;
+        int closeTimeInMinutes = closeHour * 60 + closeMinute;
+
+        // 영업 시간 체크 (일반적인 경우: openTime < closeTime)
+        if (openTimeInMinutes < closeTimeInMinutes) {
+            if (currentTimeInMinutes >= openTimeInMinutes && currentTimeInMinutes < closeTimeInMinutes) {
+                return "영업 중";
+            } else {
+                return "영업 종료";
+            }
+        }
+        // 자정을 넘어가는 경우 (예: 21:00 ~ 02:00)
+        else {
+            if (currentTimeInMinutes >= openTimeInMinutes || currentTimeInMinutes < closeTimeInMinutes) {
+                return "영업 중";
+            } else {
+                return "영업 종료";
+            }
+        }
     }
 }
