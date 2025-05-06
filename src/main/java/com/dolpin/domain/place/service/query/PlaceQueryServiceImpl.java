@@ -102,7 +102,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     private List<PlaceSearchResponse.PlaceDto> searchByQuery(String query, Double lat, Double lng) {
         // AI 서비스에 검색 쿼리 전송
-        PlaceAiResponse aiResponse = placeAiClient.searchPlacesByQuery(query);
+        PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query);
 
         if (aiResponse == null || aiResponse.getData() == null || aiResponse.getData().isEmpty()) {
             return Collections.emptyList();
