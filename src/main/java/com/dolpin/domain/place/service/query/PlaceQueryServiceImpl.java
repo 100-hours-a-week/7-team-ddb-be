@@ -102,29 +102,48 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         PlaceAiResponse.PlaceRecommendation::getSimilarityScore
                 ));
 
-        // PostGIS를 사용하여 반경 내 장소 조회 및 거리 계산
+        // 위치 기반으로 필터링된 장소 조회
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
 
+        // 필터링된 장소 ID 목록
+        List<Long> filteredPlaceIds = nearbyPlaces.stream()
+                .map(place -> place.getPlace().getId())
+                .collect(Collectors.toList());
+
+        // 필터링된 ID가 없으면 빈 결과 반환
+        if (filteredPlaceIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 거리 정보 맵 구성
+        Map<Long, Double> distanceMap = nearbyPlaces.stream()
+                .collect(Collectors.toMap(
+                        placeWithDistance -> placeWithDistance.getPlace().getId(),
+                        PlaceWithDistance::getDistance
+                ));
+
+        // 키워드를 포함한 장소 정보 한 번에 조회 (N+1 문제 방지)
+        List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(filteredPlaceIds);
+
         // DTO 변환
-        List<PlaceSearchResponse.PlaceDto> placeDtos = nearbyPlaces.stream()
-                .map(placeWithDistance -> {
-                    Place place = placeWithDistance.getPlace();
-                    Double distance = placeWithDistance.getDistance();
+        List<PlaceSearchResponse.PlaceDto> placeDtos = placesWithKeywords.stream()
+                .map(place -> {
+                    Double distance = distanceMap.get(place.getId());
                     Double similarityScore = similarityScores.get(place.getId());
 
                     return convertToPlaceDto(place, distance, similarityScore);
                 })
                 .collect(Collectors.toList());
 
-        // 유사도 점수 기준 정렬 (null 값은 이제 걱정할 필요 없음)
+        // 유사도 점수 기준 정렬
         placeDtos.sort((a, b) -> Double.compare(b.getSimilarityScore(), a.getSimilarityScore()));
 
         return placeDtos;
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByCategory(String category, Double lat, Double lng) {
-        // 카테고리로 주변 장소 전체 검색 (페이징 없이)
+        // 카테고리로 주변 장소 전체 검색
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
 
@@ -168,8 +187,10 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetail(Long placeId) {
-        Place place = placeRepository.findById(placeId)
-                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND, ("장소를 찾을 수 없습니다."+ placeId)));
+        // 기존 findById 대신 findByIdWithDetails 사용
+        Place place = placeRepository.findByIdWithDetails(placeId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
+                        "장소를 찾을 수 없습니다: " + placeId));
 
         // 위치 정보 변환
         Point location = place.getLocation();
@@ -195,7 +216,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .map(this::convertToSchedule)
                 .collect(Collectors.toList());
 
-        // 현재 영업 상태 확인 (단순 체크에서 실제 영업 상태 판단으로 변경)
+        // 현재 영업 상태 확인
         String status = determineBusinessStatus(place.getHours());
 
         PlaceDetailResponse.OpeningHours openingHours = PlaceDetailResponse.OpeningHours.builder()
