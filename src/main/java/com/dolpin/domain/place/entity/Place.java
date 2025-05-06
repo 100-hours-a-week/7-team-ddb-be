@@ -39,13 +39,16 @@ public class Place {
 
     private String category;
 
-    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    // EAGER에서 LAZY로 변경
+    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<PlaceKeyword> keywords = new ArrayList<>();
 
-    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    // EAGER에서 LAZY로 변경
+    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<PlaceMenu> menus = new ArrayList<>();
 
-    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    // EAGER에서 LAZY로 변경
+    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<PlaceHours> hours = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
