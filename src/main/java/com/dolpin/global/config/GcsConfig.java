@@ -14,9 +14,6 @@ import java.io.IOException;
 @Configuration
 public class GcsConfig {
 
-    @Value("${gcs.project-id:}")
-    private String projectId;
-
     @Value("${gcs.credentials-path:}")
     private String credentialsPath;
 
@@ -32,7 +29,6 @@ public class GcsConfig {
         }
 
         return StorageOptions.newBuilder()
-                .setProjectId(projectId)
                 .setCredentials(credentials)
                 .build()
                 .getService();
