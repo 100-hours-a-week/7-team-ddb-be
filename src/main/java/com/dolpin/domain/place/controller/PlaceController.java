@@ -1,5 +1,6 @@
 package com.dolpin.domain.place.controller;
 
+import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.service.query.PlaceQueryService;
@@ -41,5 +42,14 @@ public class PlaceController {
         PlaceDetailResponse response = placeQueryService.getPlaceDetail(placeId);
 
         return ResponseEntity.ok(ApiResponse.success("get_place_detail_success", response));
+    }
+
+    @GetMapping("/categories")
+    public ResponseEntity<ApiResponse<PlaceCategoryResponse>> getAllCategories() {
+        log.info("Retrieving all categories");
+
+        PlaceCategoryResponse response = placeQueryService.getAllCategories();
+
+        return ResponseEntity.ok(ApiResponse.success("get_categories_success", response));
     }
 }

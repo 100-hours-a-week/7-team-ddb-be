@@ -1,10 +1,7 @@
 package com.dolpin.domain.place.service.query;
 
 import com.dolpin.domain.place.client.PlaceAiClient;
-import com.dolpin.domain.place.dto.response.PlaceAiResponse;
-import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
-import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
-import com.dolpin.domain.place.dto.response.PlaceWithDistance;
+import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.entity.PlaceHours;
 import com.dolpin.domain.place.repository.PlaceRepository;
@@ -34,6 +31,19 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     @Value("${place.search.default-radius}")
     private double defaultSearchRadius;
+
+    @Override
+    @Transactional(readOnly = true)
+    public PlaceCategoryResponse getAllCategories() {
+        List<String> categories = placeRepository.findDistinctCategories();
+
+        log.info("Retrieved {} categories", categories.size());
+
+        return PlaceCategoryResponse.builder()
+                .categories(categories)
+                .build();
+    }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -344,4 +354,5 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             }
         }
     }
+
 }

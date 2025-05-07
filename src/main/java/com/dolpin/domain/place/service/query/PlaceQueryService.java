@@ -1,6 +1,7 @@
 package com.dolpin.domain.place.service.query;
 
 import com.dolpin.domain.place.dto.response.PlaceAiResponse;
+import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.entity.Place;
@@ -17,5 +18,7 @@ public interface PlaceQueryService {
     PlaceSearchResponse searchPlaces(String query, Double lat, Double lng, String category);
 
     PlaceDetailResponse getPlaceDetail(Long placeId);
+
+    PlaceCategoryResponse getAllCategories();
 }
 
