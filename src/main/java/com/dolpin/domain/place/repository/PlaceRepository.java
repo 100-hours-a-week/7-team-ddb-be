@@ -58,4 +58,8 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radius") Double radius);
+
+
+    @Query("SELECT DISTINCT p.category FROM Place p WHERE p.category IS NOT NULL ORDER BY p.category")
+    List<String> findDistinctCategories();
 }
