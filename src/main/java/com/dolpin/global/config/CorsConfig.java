@@ -31,6 +31,8 @@ public class CorsConfig {
         // 노출할 헤더 설정 (쿠키 관련 헤더 포함)
         config.setExposedHeaders(Arrays.asList("Authorization", "Set-Cookie"));
 
+        config.setMaxAge(3600L);
+
         // 모든 API 경로에 CORS 설정 적용
         source.registerCorsConfiguration("/**", config);
 
