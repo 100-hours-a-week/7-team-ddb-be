@@ -10,20 +10,20 @@ public class CookieService {
     public void addAccessTokenCookie(HttpServletResponse response, String accessToken, long expiresIn) {
         Cookie cookie = new Cookie("access_token", accessToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false);
+        cookie.setSecure(false); // HTTP를 위해 false 유지
         cookie.setPath("/");
         cookie.setMaxAge((int) expiresIn);
-        cookie.setAttribute("SameSite", "None");
+        cookie.setAttribute("SameSite", "Lax"); // None에서 Lax로 변경
         response.addCookie(cookie);
     }
 
     public void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         Cookie cookie = new Cookie("refresh_token", refreshToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false);
+        cookie.setSecure(false); // HTTP를 위해 false 유지
         cookie.setPath("/");
-        cookie.setMaxAge(14 * 24 * 60 * 60);  // 14일 유효
-        cookie.setAttribute("SameSite", "None");
+        cookie.setMaxAge(14 * 24 * 60 * 60);
+        cookie.setAttribute("SameSite", "Lax"); // None에서 Lax로 변경
         response.addCookie(cookie);
     }
 
