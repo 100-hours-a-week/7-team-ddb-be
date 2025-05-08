@@ -10,27 +10,27 @@ public class CookieService {
     public void addAccessTokenCookie(HttpServletResponse response, String accessToken, long expiresIn) {
         Cookie cookie = new Cookie("access_token", accessToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false); // HTTP를 위해 false 유지
+        cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge((int) expiresIn);
-        cookie.setAttribute("SameSite", "Lax"); // None에서 Lax로 변경
+        cookie.setAttribute("SameSite", "None");
         response.addCookie(cookie);
     }
 
     public void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         Cookie cookie = new Cookie("refresh_token", refreshToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false); // HTTP를 위해 false 유지
+        cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(14 * 24 * 60 * 60);
-        cookie.setAttribute("SameSite", "Lax"); // None에서 Lax로 변경
+        cookie.setAttribute("SameSite", "None");
         response.addCookie(cookie);
     }
 
     public void deleteAccessTokenCookie(HttpServletResponse response) {
         Cookie cookie = new Cookie("access_token", null);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false);
+        cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(0);
         response.addCookie(cookie);
@@ -39,7 +39,7 @@ public class CookieService {
     public void deleteRefreshTokenCookie(HttpServletResponse response) {
         Cookie cookie = new Cookie("refresh_token", null);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false);
+        cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(0);
         response.addCookie(cookie);
