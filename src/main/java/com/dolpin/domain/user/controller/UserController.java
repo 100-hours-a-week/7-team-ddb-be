@@ -121,8 +121,8 @@ public class UserController {
         // 사용자 삭제
         userCommandService.deleteUser(userId);
 
-        return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                .body(ApiResponse.success("user_delete_success", null));
+        return ResponseEntity.ok(ApiResponse.success("user_delete_success", null));
+
     }
 
 }
