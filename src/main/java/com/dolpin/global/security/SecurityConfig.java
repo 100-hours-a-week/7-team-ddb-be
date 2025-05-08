@@ -25,18 +25,8 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilter(corsFilter)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        // 인증이 필요 없는 공개 API 경로만 지정
-                        .requestMatchers("/api/v1/auth/oauth", "/api/v1/auth/tokens").permitAll()
-                        // 로그아웃과 토큰 리프레시는 인증 필요
-                        .requestMatchers("/api/v1/auth/logout", "/api/v1/auth/token/refresh").authenticated()
-                        // 나머지는 인증 필요
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider),
-                        UsernamePasswordAuthenticationFilter.class
+                        .anyRequest().permitAll()
                 );
 
         return http.build();
