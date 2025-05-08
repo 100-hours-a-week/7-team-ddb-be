@@ -68,23 +68,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String extractToken(HttpServletRequest request) {
-        log.info("Extracting token from request");
+        // 디버그 레벨로 변경하여 필요할 때만 로그가 출력되도록 함
+        if (log.isDebugEnabled()) {
+            log.debug("Extracting token from request");
+        }
 
         // 1. 쿠키에서 토큰 추출
         Cookie[] cookies = request.getCookies();
-        log.info("Cookies found: {}", cookies != null ? cookies.length : "null");
+
+        // 쿠키 개수만 간략히 로깅
+        if (log.isDebugEnabled() && cookies != null) {
+            log.debug("Processing {} cookies", cookies.length);
+        }
 
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                log.info("Cookie: name={}, value={}", cookie.getName(),
-                        cookie.getValue() != null && !cookie.getValue().isEmpty() ? "exists" : "empty");
-
+                // 접근 토큰 쿠키를 찾았을 때만 로그 출력
                 if ("access_token".equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isEmpty()) {
                     return cookie.getValue();
                 }
             }
         }
-        log.warn("No token found in cookies or headers");
+
+        // 경고 로그는 유지 (토큰을 찾지 못한 경우는 중요한 정보이므로)
+        log.warn("No token found in cookies");
         return null;
     }
 }
