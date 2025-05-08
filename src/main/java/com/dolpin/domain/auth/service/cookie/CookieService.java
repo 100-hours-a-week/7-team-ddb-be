@@ -13,7 +13,7 @@ public class CookieService {
         cookie.setSecure(false);
         cookie.setPath("/");
         cookie.setMaxAge((int) expiresIn);
-        cookie.setAttribute("SameSite", "None");
+        cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
     }
 
@@ -23,7 +23,7 @@ public class CookieService {
         cookie.setSecure(false);
         cookie.setPath("/");
         cookie.setMaxAge(14 * 24 * 60 * 60);  // 14일 유효
-        cookie.setAttribute("SameSite", "None");
+        cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
     }
 
