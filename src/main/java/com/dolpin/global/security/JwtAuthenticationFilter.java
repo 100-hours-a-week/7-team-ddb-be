@@ -30,20 +30,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        log.info("JwtAuthenticationFilter processing: {}", request.getRequestURI());
+
         try {
             String token = extractToken(request);
+            log.info("Token extracted: {}", token != null ? "exists" : "null");
 
             if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
                 Long userId = jwtTokenProvider.getUserIdFromToken(token);
+                log.info("Valid token for user ID: {}", userId);
 
-                // UserDetails 생성 (Spring Security 인증을 위한 객체)
+                // UserDetails 생성
                 UserDetails userDetails = new User(
                         userId.toString(),
                         "",
                         Collections.emptyList()
                 );
 
-                // Authentication 객체 생성
+                // Authentication 객체 생성 및 저장
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 userDetails,
@@ -51,26 +55,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 userDetails.getAuthorities()
                         );
 
-                // SecurityContext에 Authentication 저장
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-                log.debug("Set Authentication for user: {}", userId);
+                log.info("Authentication set for user ID: {}", userId);
+            } else {
+                log.warn("No valid token found");
             }
         } catch (Exception e) {
-            log.error("JWT Authentication failed: {}", e.getMessage());
+            log.error("JWT Authentication failed: {}", e.getMessage(), e);
         }
 
         filterChain.doFilter(request, response);
     }
 
     private String extractToken(HttpServletRequest request) {
+        log.info("Extracting token from request");
+
+        // 1. 쿠키에서 토큰 추출
         Cookie[] cookies = request.getCookies();
+        log.info("Cookies found: {}", cookies != null ? cookies.length : "null");
+
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                if ("access_token".equals(cookie.getName())) {
+                log.info("Cookie: name={}, value={}", cookie.getName(),
+                        cookie.getValue() != null && !cookie.getValue().isEmpty() ? "exists" : "empty");
+
+                if ("access_token".equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isEmpty()) {
                     return cookie.getValue();
                 }
             }
         }
+        log.warn("No token found in cookies or headers");
         return null;
     }
 }
