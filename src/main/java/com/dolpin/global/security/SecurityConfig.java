@@ -27,12 +27,8 @@ public class SecurityConfig {
                 .addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        // 인증이 필요 없는 경로들
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/users/**", "/api/v1/oauth/**").permitAll()
-                        // 카카오 콜백 처리를 위한 엔드포인트도 추가
-                        .requestMatchers("/oauth/kakao/callback").permitAll()
-                        // 나머지는 인증 필요
-                        .anyRequest().authenticated()
+                        .anyRequest().permitAll()
+
                 )
                 .addFilterBefore(
                         new JwtAuthenticationFilter(jwtTokenProvider),
