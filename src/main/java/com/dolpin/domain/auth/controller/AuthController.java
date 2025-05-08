@@ -73,8 +73,7 @@ public class AuthController {
         cookieService.deleteRefreshTokenCookie(response);
         cookieService.deleteAccessTokenCookie(response);
 
-        return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                .body(ApiResponse.success("logout_success", null));
+        return ResponseEntity.ok(ApiResponse.success("logout_success", null));
     }
 
     @PostMapping("/token/refresh")

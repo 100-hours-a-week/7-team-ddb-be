@@ -48,7 +48,7 @@ public class TokenResponse {
         return TokenResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .tokenType("Bearer")
+                .tokenType("Cookie")
                 .expiresIn(expiresIn)
                 .user(UserInfo.from(user))
                 .isNewUser(isNewUser)
