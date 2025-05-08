@@ -6,6 +6,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
+import java.util.Arrays;
+
 @Configuration
 public class CorsConfig {
 
@@ -25,6 +27,9 @@ public class CorsConfig {
 
         // 인증 정보(쿠키) 허용
         config.setAllowCredentials(true);
+
+        // 노출할 헤더 설정 (쿠키 관련 헤더 포함)
+        config.setExposedHeaders(Arrays.asList("Authorization", "Set-Cookie"));
 
         // 모든 API 경로에 CORS 설정 적용
         source.registerCorsConfiguration("/**", config);
