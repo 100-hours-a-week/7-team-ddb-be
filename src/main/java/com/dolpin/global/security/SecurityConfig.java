@@ -27,7 +27,7 @@ public class SecurityConfig {
                 .addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class) // 필터 순서 변경
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/users/**").permitAll()
                         .anyRequest().authenticated() // 나머지는 인증 필요
                 )
                 .addFilterBefore(
