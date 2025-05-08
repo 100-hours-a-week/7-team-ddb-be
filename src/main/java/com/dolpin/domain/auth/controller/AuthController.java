@@ -26,6 +26,17 @@ public class AuthController {
     private final AuthService authService;
     private final CookieService cookieService;
 
+    @GetMapping("/oauth")
+    public ResponseEntity<ApiResponse<OAuthUrlResponse>> getOAuthLoginUrl(
+            @RequestParam(defaultValue = "kakao") String provider) {
+        log.info("oauthProvider : {}", provider);
+        OAuthUrlResponse response = authService.getOAuthLoginUrl(provider);
+        return ResponseEntity.ok(ApiResponse.success(
+                ResponseStatus.SUCCESS.withMessage("소셜 로그인 URL 조회에 성공하였습니다."),
+                response
+        ));
+    }
+
     @PostMapping("/tokens")
     public ResponseEntity<ApiResponse<TokenResponse>> getTokens(
             @RequestBody TokenRequest request,
