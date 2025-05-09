@@ -2,27 +2,32 @@ package com.dolpin.domain.place.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-@Getter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class PlaceAiResponse {
 
-    private List<PlaceRecommendation> data;
+    @JsonProperty("recommendations")
+    private List<PlaceRecommendation> recommendations;
 
-    @Getter
+    @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class PlaceRecommendation {
-
-        @JsonProperty("place_id")
-        private Long placeId;
+        @JsonProperty("id")
+        private Long id;
 
         @JsonProperty("similarity_score")
         private Double similarityScore;
+    }
+
+    // 기존 메서드 호환성을 위한 메서드
+    public List<PlaceRecommendation> getData() {
+        return recommendations;
     }
 }
