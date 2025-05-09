@@ -13,7 +13,6 @@ import java.util.Optional;
 @Repository
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
-
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
             "LEFT JOIN FETCH p.menus " +
@@ -21,18 +20,20 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             "WHERE p.id = :id")
     Optional<Place> findByIdWithDetails(@Param("id") Long id);
 
-
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
             "WHERE p.id IN :ids")
     List<Place> findByIdsWithKeywords(@Param("ids") List<Long> ids);
 
-
     @Query(value =
-            "SELECT p as place, ST_Distance(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326)) as distance " +
+            "SELECT p.id as id, p.name as name, p.category as category, " +
+                    "p.road_address as roadAddress, p.lot_address as lotAddress, " +
+                    "ST_X(p.location) as longitude, " +
+                    "ST_Y(p.location) as latitude, " +
+                    "ST_Distance(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography) as distance " +
                     "FROM place p " +
                     "WHERE p.id IN :placeIds " +
-                    "AND ST_DWithin(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326), :radius) " +
+                    "AND ST_DWithin(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography, :radius) " +
                     "ORDER BY distance",
             nativeQuery = true)
     List<PlaceWithDistance> findPlacesWithinRadiusByIds(
@@ -41,8 +42,10 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lng") Double lng,
             @Param("radius") Double radius);
 
-
-    @Query(value = "SELECT p as place, " +
+    @Query(value = "SELECT p.id as id, p.name as name, p.category as category, " +
+            "p.road_address as roadAddress, p.lot_address as lotAddress, " +
+            "ST_X(p.location) as longitude, " +  // 경도(X) 좌표 추가
+            "ST_Y(p.location) as latitude, " +   // 위도(Y) 좌표 추가
             "ST_Distance(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326)) as distance " +
             "FROM place p " +
             "WHERE p.category = :category " +
@@ -58,7 +61,6 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radius") Double radius);
-
 
     @Query("SELECT DISTINCT p.category FROM Place p WHERE p.category IS NOT NULL ORDER BY p.category")
     List<String> findDistinctCategories();
