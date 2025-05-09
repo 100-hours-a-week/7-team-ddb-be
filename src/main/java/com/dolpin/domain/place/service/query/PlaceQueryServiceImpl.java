@@ -96,40 +96,48 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         // AI 서비스에 검색 쿼리 전송
         PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query);
 
-        if (aiResponse == null || aiResponse.getData() == null || aiResponse.getData().isEmpty()) {
+        if (aiResponse == null || aiResponse.getRecommendations() == null || aiResponse.getRecommendations().isEmpty()) {
+            log.info("AI service returned no results");
             return Collections.emptyList();
         }
 
         // 추천된 장소 ID 목록 추출
-        List<Long> placeIds = aiResponse.getData().stream()
-                .map(PlaceAiResponse.PlaceRecommendation::getPlaceId)
+        List<Long> placeIds = aiResponse.getRecommendations().stream()
+                .map(PlaceAiResponse.PlaceRecommendation::getId)
                 .collect(Collectors.toList());
 
         // 유사도 점수 매핑 (장소 ID -> 유사도 점수)
-        Map<Long, Double> similarityScores = aiResponse.getData().stream()
+        Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
                 .collect(Collectors.toMap(
-                        PlaceAiResponse.PlaceRecommendation::getPlaceId,
+                        PlaceAiResponse.PlaceRecommendation::getId,
                         PlaceAiResponse.PlaceRecommendation::getSimilarityScore
                 ));
 
-        // 위치 기반으로 필터링된 장소 조회
+        // PostGIS를 활용한 위치 기반 필터링 및 거리 계산 (geography 타입 사용)
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
 
-        // 필터링된 장소 ID 목록
-        List<Long> filteredPlaceIds = nearbyPlaces.stream()
-                .map(place -> place.getPlace().getId())
-                .collect(Collectors.toList());
+        // 거리 계산 결과 로깅 (디버깅용)
+        nearbyPlaces.forEach(place ->
+                log.info("Place ID: {}, Name: {}, Distance: {}",
+                        place.getId(), place.getName(), place.getDistance())
+        );
 
         // 필터링된 ID가 없으면 빈 결과 반환
-        if (filteredPlaceIds.isEmpty()) {
+        if (nearbyPlaces.isEmpty()) {
+            log.info("No places found within radius");
             return Collections.emptyList();
         }
+
+        // 필터링된 장소 ID 목록
+        List<Long> filteredPlaceIds = nearbyPlaces.stream()
+                .map(PlaceWithDistance::getId)
+                .collect(Collectors.toList());
 
         // 거리 정보 맵 구성
         Map<Long, Double> distanceMap = nearbyPlaces.stream()
                 .collect(Collectors.toMap(
-                        placeWithDistance -> placeWithDistance.getPlace().getId(),
+                        PlaceWithDistance::getId,
                         PlaceWithDistance::getDistance
                 ));
 
@@ -157,14 +165,37 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
 
-        // DTO 변환
+        // DTO 변환 (수정된 부분)
         return searchResults.stream()
-                .map(placeWithDistance -> convertToPlaceDto(
-                        placeWithDistance.getPlace(),
-                        placeWithDistance.getDistance(),
-                        null))
+                .map(placeWithDistance -> convertToPlaceDtoFromProjection(placeWithDistance, lat, lng))
                 .collect(Collectors.toList());
     }
+
+    private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(PlaceWithDistance placeWithDistance, Double lat, Double lng) {
+        // 거리 포맷팅
+        String formattedDistance = formatDistance(placeWithDistance.getDistance());
+
+        // 실제 장소의 위치 정보 사용
+        Map<String, Object> locationMap = new HashMap<>();
+        locationMap.put("type", "Point");
+        locationMap.put("coordinates", new double[]{
+                placeWithDistance.getLongitude(),  // 실제 경도(X) 좌표
+                placeWithDistance.getLatitude()    // 실제 위도(Y) 좌표
+        });
+
+        // DTO 생성
+        return PlaceSearchResponse.PlaceDto.builder()
+                .id(placeWithDistance.getId())
+                .name(placeWithDistance.getName())
+                .thumbnail(null) // 이미지 정보 없음
+                .distance(formattedDistance)
+                .momentCount("0")  // 추후 연동 필요
+                .keywords(List.of()) // 키워드 정보 없음
+                .location(locationMap)
+                .similarityScore(null) // 유사도 점수 없음
+                .build();
+    }
+
 
     private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore) {
         // 거리 포맷팅
