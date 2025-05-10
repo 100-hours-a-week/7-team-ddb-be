@@ -29,8 +29,11 @@ public class GcsStorageServiceImpl implements StorageService {
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
 
-    @Value("${gcs.bucket-name}") // 기본값 설정
+    @Value("${gcs.bucket-name}") // 실제 GCS 버킷 이름
     private String bucketName;
+
+    @Value("${gcs.custom-domain}") // 커스텀 도메인
+    private String customDomain;
 
     private static final int EXPIRATION_TIME_MINUTES = 15;
 
@@ -44,10 +47,12 @@ public class GcsStorageServiceImpl implements StorageService {
 
         String objectPath = generateObjectPath(request, userId);
 
+        // 실제 버킷 이름으로 BlobInfo 생성
         BlobInfo blobInfo = BlobInfo.newBuilder(bucketName, objectPath)
                 .setContentType(request.getContentType())
                 .build();
 
+        // 실제 버킷 이름으로 서명된 URL 생성
         URL signedUrl = storage.signUrl(
                 blobInfo,
                 EXPIRATION_TIME_MINUTES,
@@ -56,7 +61,8 @@ public class GcsStorageServiceImpl implements StorageService {
                 Storage.SignUrlOption.withV4Signature()
         );
 
-        String objectUrl = String.format("https://%s/%s", bucketName, objectPath);
+        // 커스텀 도메인으로 객체 URL 생성
+        String objectUrl = String.format("https://%s/%s", customDomain, objectPath);
 
         log.info("파일 경로: {}에 대한 서명된 URL 생성 완료", objectPath);
 
