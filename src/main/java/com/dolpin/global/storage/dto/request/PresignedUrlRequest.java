@@ -19,7 +19,5 @@ public class PresignedUrlRequest {
     private String contentType;
 
     @NotBlank(message = "업로드 타입은 필수입니다.")
-    private String uploadType; // "profile", "moment", "place" 등
-
-    private Long userId; // 사용자 프로필 사진의 경우
+    private String uploadType; // "profile"만 지원
 }
