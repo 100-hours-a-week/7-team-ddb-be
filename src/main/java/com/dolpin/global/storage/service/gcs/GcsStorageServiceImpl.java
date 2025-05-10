@@ -29,7 +29,7 @@ public class GcsStorageServiceImpl implements StorageService {
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
 
-    @Value("${gcs.bucket-name:dolpin-image-dev}") // 기본값 설정
+    @Value("${gcs.bucket-name}") // 기본값 설정
     private String bucketName;
 
     private static final int EXPIRATION_TIME_MINUTES = 15;
