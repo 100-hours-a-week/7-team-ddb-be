@@ -162,7 +162,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
 
-        // DTO 변환 (수정된 부분)
+        // DTO 변환
         return searchResults.stream()
                 .map(placeWithDistance -> convertToPlaceDtoFromProjection(placeWithDistance, lat, lng))
                 .collect(Collectors.toList());
@@ -176,20 +176,20 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         Map<String, Object> locationMap = new HashMap<>();
         locationMap.put("type", "Point");
         locationMap.put("coordinates", new double[]{
-                placeWithDistance.getLongitude(),  // 실제 경도(X) 좌표
-                placeWithDistance.getLatitude()    // 실제 위도(Y) 좌표
+                placeWithDistance.getLongitude(),
+                placeWithDistance.getLatitude()
         });
 
-        // DTO 생성
+        // DTO 생성 - 이미지 URL 사용
         return PlaceSearchResponse.PlaceDto.builder()
                 .id(placeWithDistance.getId())
                 .name(placeWithDistance.getName())
-                .thumbnail(null) // 이미지 정보 없음
+                .thumbnail(placeWithDistance.getImageUrl()) // null 대신 이미지 URL 사용
                 .distance(formattedDistance)
-                .momentCount("0")  // 추후 연동 필요
-                .keywords(List.of()) // 키워드 정보 없음
+                .momentCount("0")
+                .keywords(List.of())
                 .location(locationMap)
-                .similarityScore(null) // 유사도 점수 없음
+                .similarityScore(null)
                 .build();
     }
 
