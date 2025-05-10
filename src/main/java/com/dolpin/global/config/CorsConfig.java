@@ -19,6 +19,7 @@ public class CorsConfig {
         // 프론트엔드 애플리케이션의 도메인 허용
         config.addAllowedOrigin("http://localhost:3000");
         config.addAllowedOrigin("https://dolpin.site");
+        config.addAllowedOrigin("https://fe.dev.dolpin.site");
 
         // 필요한 HTTP 메서드 허용
         config.addAllowedMethod("*");
