@@ -39,7 +39,6 @@ public class UserCommandServiceImpl implements UserCommandService {
                 .providerId(Long.parseLong(oAuthInfo.getProviderId()))
                 .provider(oAuthInfo.getProvider())
                 .username(username)
-                // 이미지 URL은 생략하거나 null로 설정
                 .build();
 
         user.updateProfile(username, null, null);

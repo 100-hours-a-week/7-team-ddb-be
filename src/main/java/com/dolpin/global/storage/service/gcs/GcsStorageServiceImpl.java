@@ -1,5 +1,6 @@
 package com.dolpin.global.storage.service.gcs;
 
+import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.storage.service.StorageService;
@@ -29,10 +30,10 @@ public class GcsStorageServiceImpl implements StorageService {
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
 
-    @Value("${gcs.bucket-name}") // 실제 GCS 버킷 이름
+    @Value("${gcs.bucket-name}")
     private String bucketName;
 
-    @Value("${gcs.custom-domain}") // 커스텀 도메인
+    @Value("${gcs.custom-domain}")
     private String customDomain;
 
     private static final int EXPIRATION_TIME_MINUTES = 15;
@@ -68,7 +69,10 @@ public class GcsStorageServiceImpl implements StorageService {
 
         // 프로필 이미지 업데이트
         if ("profile".equalsIgnoreCase(request.getUploadType())) {
-            userCommandService.updateProfile(userId, null, objectUrl, null);
+            // 현재 사용자 정보 가져오기
+            User user = userQueryService.getUserById(userId);
+            // 기존 username과 introduction은 유지하면서 이미지 URL만 업데이트
+            userCommandService.updateProfile(userId, user.getUsername(), objectUrl, user.getIntroduction());
             log.info("사용자 ID: {}의 프로필 이미지 업데이트 완료", userId);
         }
 
@@ -79,6 +83,7 @@ public class GcsStorageServiceImpl implements StorageService {
                 .build();
     }
 
+    // 나머지 메서드는 그대로 유지
     private void validateRequest(PresignedUrlRequest request) {
         // 업로드 타입 검증
         String uploadType = request.getUploadType().toLowerCase();

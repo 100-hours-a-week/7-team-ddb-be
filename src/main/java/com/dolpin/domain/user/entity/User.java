@@ -64,12 +64,17 @@ public class User {
     }
 
     // 프로필 업데이트 메서드
+    // 프로필 업데이트 메서드
     public void updateProfile(String username, String imageUrl, String introduction) {
         if (username != null && !username.isEmpty()) {
             this.username = username;
         }
-        this.imageUrl = imageUrl;
-        this.introduction = introduction;
+        if (imageUrl != null) {  // imageUrl이 null이 아닐 때만 업데이트
+            this.imageUrl = imageUrl;
+        }
+        if (introduction != null) {  // introduction도 동일하게 처리
+            this.introduction = introduction;
+        }
     }
 
     // 개인정보 동의 설정 메서드
