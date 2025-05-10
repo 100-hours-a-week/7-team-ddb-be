@@ -1,5 +1,7 @@
 package com.dolpin.global.storage.service.gcs;
 
+import com.dolpin.domain.user.service.UserCommandService;
+import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.storage.service.StorageService;
 import com.dolpin.global.storage.dto.request.PresignedUrlRequest;
 import com.dolpin.global.storage.dto.reseponse.PresignedUrlResponse;
@@ -11,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URL;
 import java.util.UUID;
@@ -23,15 +26,23 @@ import java.util.concurrent.TimeUnit;
 public class GcsStorageServiceImpl implements StorageService {
 
     private final Storage storage;
+    private final UserQueryService userQueryService;
+    private final UserCommandService userCommandService;
 
-    @Value("${gcs.bucket-name}")
+    @Value("${gcs.bucket-name:dolpin-image-dev}") // 기본값 설정
     private String bucketName;
 
     private static final int EXPIRATION_TIME_MINUTES = 15;
 
     @Override
-    public PresignedUrlResponse generateSignedUrl(PresignedUrlRequest request) {
-        String objectPath = generateObjectPath(request);
+    @Transactional
+    public PresignedUrlResponse generateSignedUrl(PresignedUrlRequest request, Long userId) {
+        validateRequest(request);
+
+        // 사용자 존재 확인
+        userQueryService.getUserById(userId);
+
+        String objectPath = generateObjectPath(request, userId);
 
         BlobInfo blobInfo = BlobInfo.newBuilder(bucketName, objectPath)
                 .setContentType(request.getContentType())
@@ -47,13 +58,28 @@ public class GcsStorageServiceImpl implements StorageService {
 
         String objectUrl = String.format("https://storage.googleapis.com/%s/%s", bucketName, objectPath);
 
-        log.info("Generated signed URL for file: {}", objectPath);
+        log.info("파일 경로: {}에 대한 서명된 URL 생성 완료", objectPath);
+
+        // 프로필 이미지 업데이트
+        if ("profile".equalsIgnoreCase(request.getUploadType())) {
+            userCommandService.updateProfile(userId, null, objectUrl, null);
+            log.info("사용자 ID: {}의 프로필 이미지 업데이트 완료", userId);
+        }
 
         return PresignedUrlResponse.builder()
                 .signedUrl(signedUrl.toString())
                 .objectUrl(objectUrl)
                 .expiresIn(EXPIRATION_TIME_MINUTES * 60)
                 .build();
+    }
+
+    private void validateRequest(PresignedUrlRequest request) {
+        // 업로드 타입 검증
+        String uploadType = request.getUploadType().toLowerCase();
+        if (!uploadType.equals("profile")) {
+            throw new IllegalArgumentException("잘못된 업로드 타입: " + request.getUploadType() +
+                    ". 현재 'profile' 타입만 지원합니다.");
+        }
     }
 
     @Override
@@ -64,33 +90,22 @@ public class GcsStorageServiceImpl implements StorageService {
     @Override
     public void deleteFile(String path) {
         storage.delete(bucketName, path);
-        log.info("Deleted file: {}", path);
+        log.info("파일 삭제 완료: {}", path);
     }
 
-    private String generateObjectPath(PresignedUrlRequest request) {
+    private String generateObjectPath(PresignedUrlRequest request, Long userId) {
         String uniqueFileName = generateUniqueFileName(request.getFileName());
 
-        switch (request.getUploadType().toLowerCase()) {
-            case "profile":
-                if (request.getUserId() == null) {
-                    throw new IllegalArgumentException("userId is required for profile upload");
-                }
-                return String.format("profiles/%d/%s", request.getUserId(), uniqueFileName);
-            case "moment":
-                if (request.getUserId() == null) {
-                    throw new IllegalArgumentException("userId is required for moment upload");
-                }
-                return String.format("moments/%d/%s", request.getUserId(), uniqueFileName);
-            case "place":
-                return String.format("places/%s", uniqueFileName);
-            default:
-                return String.format("misc/%s", uniqueFileName);
+        if ("profile".equalsIgnoreCase(request.getUploadType())) {
+            return String.format("profile/u%d/%s", userId, uniqueFileName);
+        } else {
+            throw new IllegalArgumentException("잘못된 업로드 타입: " + request.getUploadType());
         }
     }
 
     private String generateUniqueFileName(String originalFileName) {
         String extension = getFileExtension(originalFileName);
-        String uuid = UUID.randomUUID().toString();
+        String uuid = UUID.randomUUID().toString().substring(0, 8); // 짧은 UUID
         return uuid + extension;
     }
 
