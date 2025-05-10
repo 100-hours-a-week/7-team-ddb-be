@@ -56,7 +56,7 @@ public class GcsStorageServiceImpl implements StorageService {
                 Storage.SignUrlOption.withV4Signature()
         );
 
-        String objectUrl = String.format("https://storage.googleapis.com/%s/%s", bucketName, objectPath);
+        String objectUrl = String.format("https://%s/%s", bucketName, objectPath);
 
         log.info("파일 경로: {}에 대한 서명된 URL 생성 완료", objectPath);
 
@@ -80,11 +80,6 @@ public class GcsStorageServiceImpl implements StorageService {
             throw new IllegalArgumentException("잘못된 업로드 타입: " + request.getUploadType() +
                     ". 현재 'profile' 타입만 지원합니다.");
         }
-    }
-
-    @Override
-    public String getFileUrl(String path) {
-        return String.format("https://storage.googleapis.com/%s/%s", bucketName, path);
     }
 
     @Override
