@@ -252,10 +252,8 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         .build())
                 .collect(Collectors.toList());
 
-        // 영업시간 정보
-        List<PlaceDetailResponse.Schedule> schedules = place.getHours().stream()
-                .map(this::convertToSchedule)
-                .collect(Collectors.toList());
+        // 모든 요일에 대한 스케줄 생성
+        List<PlaceDetailResponse.Schedule> schedules = buildDaySchedules(place.getHours());
 
         // 현재 영업 상태 확인
         String status = determineBusinessStatus(place.getHours());
@@ -269,6 +267,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .id(place.getId())
                 .name(place.getName())
                 .address(place.getRoadAddress())
+                .thumbnail(place.getImageUrl()) // 썸네일 이미지 추가
                 .location(locationMap)
                 .keywords(keywords)
                 .description(place.getDescription())
@@ -278,9 +277,41 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-    /**
-     * 거리 포맷팅 (m 또는 km 단위)
-     */
+
+    private List<PlaceDetailResponse.Schedule> buildDaySchedules(List<PlaceHours> placeHours) {
+        // 모든 요일 코드 (영어)
+        String[] dayCodesEn = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
+
+        // 요일별 맵 생성
+        Map<String, PlaceHours> hoursByDay = new HashMap<>();
+        for (PlaceHours hour : placeHours) {
+            // 한글 요일 코드를 영어 코드로 변환
+            String englishDay = DayOfWeek.getEnglishCodeByKoreanCode(hour.getDayOfWeek());
+            hoursByDay.put(englishDay, hour);
+        }
+
+        // 모든 요일에 대한 스케줄 생성
+        List<PlaceDetailResponse.Schedule> schedules = new ArrayList<>();
+        for (String dayCode : dayCodesEn) {
+            PlaceHours dayHours = hoursByDay.get(dayCode);
+
+            PlaceDetailResponse.Schedule.ScheduleBuilder builder =
+                    PlaceDetailResponse.Schedule.builder().day(dayCode);
+
+            if (dayHours != null && dayHours.getOpenTime() != null && dayHours.getCloseTime() != null) {
+                builder.hours(dayHours.getOpenTime() + "~" + dayHours.getCloseTime());
+            } else {
+                // 휴무일이거나 정보가 없는 경우 hours를 null로 설정
+                builder.hours(null);
+            }
+
+            schedules.add(builder.build());
+        }
+
+        return schedules;
+    }
+
+
     private String formatDistance(Double distanceInMeters) {
         if (distanceInMeters == null) return "0";
 
@@ -293,26 +324,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     .setScale(1, RoundingMode.HALF_UP);
             return km.toString() + "km";
         }
-    }
-
-    private PlaceDetailResponse.Schedule convertToSchedule(PlaceHours hours) {
-        String dayOfWeek = hours.getDayOfWeek();
-        // 한글 요일을 영어 코드로 변환
-        String day = DayOfWeek.getEnglishCodeByKoreanCode(dayOfWeek);
-
-        PlaceDetailResponse.Schedule.ScheduleBuilder builder = PlaceDetailResponse.Schedule.builder()
-                .day(day);
-
-        if (hours.getOpenTime() != null && hours.getCloseTime() != null) {
-            String hoursString = hours.getOpenTime() + "~" + hours.getCloseTime();
-            builder.hours(hoursString);
-        } else {
-            // 영어 코드를 한글 요일로 변환
-            String koreanDay = DayOfWeek.getKoreanCodeByEnglishCode(day);
-            builder.note("정기휴무 (매주 " + koreanDay + "요일)");
-        }
-
-        return builder.build();
     }
 
     private String determineBusinessStatus(List<PlaceHours> hours) {
@@ -385,5 +396,4 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             }
         }
     }
-
 }
