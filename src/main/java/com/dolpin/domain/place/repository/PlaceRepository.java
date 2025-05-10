@@ -13,12 +13,35 @@ import java.util.Optional;
 @Repository
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
+    // 기본 장소 정보만 조회 (컬렉션 없이)
+    @Query("SELECT p FROM Place p WHERE p.id = :id")
+    Optional<Place> findBasicPlaceById(@Param("id") Long id);
+
+    // 장소 + 키워드 정보 조회
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
+            "WHERE p.id = :id")
+    Optional<Place> findByIdWithKeywords(@Param("id") Long id);
+
+    // 장소 + 메뉴 정보 조회
+    @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.menus " +
+            "WHERE p.id = :id")
+    Optional<Place> findByIdWithMenus(@Param("id") Long id);
+
+    // 장소 + 영업시간 정보 조회
+    @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.hours " +
             "WHERE p.id = :id")
-    Optional<Place> findByIdWithDetails(@Param("id") Long id);
+    Optional<Place> findByIdWithHours(@Param("id") Long id);
+
+    // 기존 메서드는 주석 처리 또는 제거
+    // @Query("SELECT p FROM Place p " +
+    //        "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
+    //        "LEFT JOIN FETCH p.menus " +
+    //        "LEFT JOIN FETCH p.hours " +
+    //        "WHERE p.id = :id")
+    // Optional<Place> findByIdWithDetails(@Param("id") Long id);
 
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
