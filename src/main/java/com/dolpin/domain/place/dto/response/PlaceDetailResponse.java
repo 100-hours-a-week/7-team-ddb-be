@@ -18,14 +18,15 @@ public class PlaceDetailResponse {
     private Long id;
     private String name;
     private String address;
+    private String thumbnail;
     private Map<String, Object> location;
     private List<String> keywords;
     private String description;
+    private String phone;
 
     @JsonProperty("opening_hours")
     private OpeningHours openingHours;
 
-    private String phone;
     private List<Menu> menu;
 
     @Getter
@@ -44,7 +45,6 @@ public class PlaceDetailResponse {
     public static class Schedule {
         private String day;
         private String hours;
-        private String note;
     }
 
     @Getter
