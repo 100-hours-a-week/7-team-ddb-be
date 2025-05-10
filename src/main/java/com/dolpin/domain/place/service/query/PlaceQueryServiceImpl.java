@@ -44,14 +44,12 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-
     @Override
     @Transactional(readOnly = true)
     public PlaceSearchResponse searchPlaces(String query, Double lat, Double lng, String category) {
 
         boolean hasQuery = StringUtils.isNotBlank(query);
         boolean hasCategory = StringUtils.isNotBlank(category);
-
 
         // query와 category가 동시에 있으면 에러
         if (hasQuery && hasCategory) {
@@ -73,7 +71,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     ResponseStatus.INVALID_PARAMETER,
                     "위치 정보가 필요합니다");
         }
-
 
         List<PlaceSearchResponse.PlaceDto> placeDtos;
 
@@ -196,7 +193,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-
     private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore) {
         // 거리 포맷팅
         String formattedDistance = formatDistance(distance);
@@ -228,10 +224,35 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetail(Long placeId) {
-        // 기존 findById 대신 findByIdWithDetails 사용
-        Place place = placeRepository.findByIdWithDetails(placeId)
+        // 기본 장소 정보 조회
+        Place place = placeRepository.findBasicPlaceById(placeId)
                 .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
                         "장소를 찾을 수 없습니다: " + placeId));
+
+        // 키워드 정보 조회
+        Place placeWithKeywords = placeRepository.findByIdWithKeywords(placeId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
+                        "장소를 찾을 수 없습니다: " + placeId));
+        List<String> keywords = placeWithKeywords.getKeywords().stream()
+                .map(pk -> pk.getKeyword().getKeyword())
+                .collect(Collectors.toList());
+
+        // 메뉴 정보 조회
+        Place placeWithMenus = placeRepository.findByIdWithMenus(placeId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
+                        "장소를 찾을 수 없습니다: " + placeId));
+        List<PlaceDetailResponse.Menu> menuList = placeWithMenus.getMenus().stream()
+                .map(menu -> PlaceDetailResponse.Menu.builder()
+                        .name(menu.getMenuName())
+                        .price(menu.getPrice())
+                        .build())
+                .collect(Collectors.toList());
+
+        // 영업시간 정보 조회
+        Place placeWithHours = placeRepository.findByIdWithHours(placeId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
+                        "장소를 찾을 수 없습니다: " + placeId));
+        List<PlaceHours> hours = placeWithHours.getHours();
 
         // 위치 정보 변환
         Point location = place.getLocation();
@@ -239,24 +260,11 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         locationMap.put("type", "Point");
         locationMap.put("coordinates", new double[]{location.getX(), location.getY()});
 
-        // 태그(키워드) 정보
-        List<String> keywords = place.getKeywords().stream()
-                .map(pk -> pk.getKeyword().getKeyword())
-                .collect(Collectors.toList());
-
-        // 메뉴 정보
-        List<PlaceDetailResponse.Menu> menuList = place.getMenus().stream()
-                .map(menu -> PlaceDetailResponse.Menu.builder()
-                        .name(menu.getMenuName())
-                        .price(menu.getPrice())
-                        .build())
-                .collect(Collectors.toList());
-
-        // 모든 요일에 대한 스케줄 생성
-        List<PlaceDetailResponse.Schedule> schedules = buildDaySchedules(place.getHours());
+        // 요일별 스케줄 구성
+        List<PlaceDetailResponse.Schedule> schedules = buildDaySchedules(hours);
 
         // 현재 영업 상태 확인
-        String status = determineBusinessStatus(place.getHours());
+        String status = determineBusinessStatus(hours);
 
         PlaceDetailResponse.OpeningHours openingHours = PlaceDetailResponse.OpeningHours.builder()
                 .status(status)
@@ -276,7 +284,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .menu(menuList)
                 .build();
     }
-
 
     private List<PlaceDetailResponse.Schedule> buildDaySchedules(List<PlaceHours> placeHours) {
         // 모든 요일 코드 (영어)
@@ -310,7 +317,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
         return schedules;
     }
-
 
     private String formatDistance(Double distanceInMeters) {
         if (distanceInMeters == null) return "0";
