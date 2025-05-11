@@ -11,7 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,24 +30,25 @@ public class PlaceAiClient {
     private String aiServiceUrl;
 
     public PlaceAiResponse recommendPlaces(String query) {
-        String url = aiServiceUrl + "/v1/recommend";
+        // 변경된 엔드포인트
+        String url = aiServiceUrl + "/api/v1/recommend";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
 
-        // text 필드 사용
-        Map<String, String> request = new HashMap<>();
-        request.put("text", query);
-
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(request, headers);
+        // GET 요청이므로 파라미터를 URL에 추가
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                .queryParam("text", query);
 
         log.info("Requesting AI service for query: {}", query);
+        log.info("Request URL: {}", builder.toUriString());
 
         try {
+            // GET 메서드로 변경하고 요청 본문은 필요 없음
             ResponseEntity<String> response = restTemplate.exchange(
-                    url,
+                    builder.toUriString(),
                     HttpMethod.GET,
-                    requestEntity,
+                    new HttpEntity<>(headers),
                     String.class
             );
 
@@ -53,7 +56,7 @@ public class PlaceAiClient {
             PlaceAiResponse responseBody = objectMapper.readValue(response.getBody(), PlaceAiResponse.class);
             return responseBody;
 
-        } catch (HttpClientErrorException e) {
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
             log.error("Error from AI service: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 에러가 발생했습니다");
         } catch (JsonProcessingException e) {
