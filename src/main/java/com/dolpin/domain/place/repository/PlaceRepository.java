@@ -68,18 +68,18 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     @Query(value = "SELECT p.id as id, p.name as name, p.category as category, " +
             "p.road_address as roadAddress, p.lot_address as lotAddress, " +
-            "p.image_url as imageUrl, " +  // 이미지 URL 필드 추가
+            "p.image_url as imageUrl, " +
             "ST_X(p.location) as longitude, " +
             "ST_Y(p.location) as latitude, " +
-            "ST_Distance(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326)) as distance " +
+            "ST_Distance(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography) as distance " +
             "FROM place p " +
             "WHERE p.category = :category " +
-            "AND ST_DWithin(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326), :radius) " +
+            "AND ST_DWithin(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography, :radius) " +
             "ORDER BY distance",
             countQuery = "SELECT COUNT(*) " +
                     "FROM place p " +
                     "WHERE p.category = :category " +
-                    "AND ST_DWithin(p.location, ST_SetSRID(ST_Point(:lng, :lat), 4326), :radius)",
+                    "AND ST_DWithin(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography, :radius)",
             nativeQuery = true)
     List<PlaceWithDistance> findPlacesByCategoryWithinRadius(
             @Param("category") String category,
