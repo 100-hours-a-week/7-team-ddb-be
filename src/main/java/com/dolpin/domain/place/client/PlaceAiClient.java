@@ -28,7 +28,7 @@ public class PlaceAiClient {
     private String aiServiceUrl;
 
     public PlaceAiResponse recommendPlaces(String query) {
-        String url = aiServiceUrl + "/v1/recommend/recommend";
+        String url = aiServiceUrl + "/v1/recommend";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
@@ -44,7 +44,7 @@ public class PlaceAiClient {
         try {
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
-                    HttpMethod.POST,
+                    HttpMethod.GET,
                     requestEntity,
                     String.class
             );
