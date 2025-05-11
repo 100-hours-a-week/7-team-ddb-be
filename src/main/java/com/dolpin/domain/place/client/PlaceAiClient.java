@@ -31,7 +31,7 @@ public class PlaceAiClient {
 
     public PlaceAiResponse recommendPlaces(String query) {
         // 변경된 엔드포인트
-        String url = aiServiceUrl + "/api/v1/recommend";
+        String url = aiServiceUrl + "/v1/recommend";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
