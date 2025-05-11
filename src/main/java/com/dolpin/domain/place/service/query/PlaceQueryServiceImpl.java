@@ -289,27 +289,47 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         // 모든 요일 코드 (영어)
         String[] dayCodesEn = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
 
-        // 요일별 맵 생성
-        Map<String, PlaceHours> hoursByDay = new HashMap<>();
+        // 요일별, 영업 유형별 맵 생성
+        Map<String, Map<Boolean, PlaceHours>> hoursByDayAndType = new HashMap<>();
+
+        // 데이터 정리: 요일별로 일반 영업시간과 브레이크 타임 분류
         for (PlaceHours hour : placeHours) {
-            // 한글 요일 코드를 영어 코드로 변환
             String englishDay = DayOfWeek.getEnglishCodeByKoreanCode(hour.getDayOfWeek());
-            hoursByDay.put(englishDay, hour);
+
+            if (!hoursByDayAndType.containsKey(englishDay)) {
+                hoursByDayAndType.put(englishDay, new HashMap<>());
+            }
+
+            // isBreakTime으로 구분: true면 브레이크 타임, false면 일반 영업시간
+            hoursByDayAndType.get(englishDay).put(hour.getIsBreakTime(), hour);
         }
 
         // 모든 요일에 대한 스케줄 생성
         List<PlaceDetailResponse.Schedule> schedules = new ArrayList<>();
         for (String dayCode : dayCodesEn) {
-            PlaceHours dayHours = hoursByDay.get(dayCode);
+            Map<Boolean, PlaceHours> dayHoursMap = hoursByDayAndType.getOrDefault(dayCode, new HashMap<>());
+
+            // 일반 영업시간 (isBreakTime = false)
+            PlaceHours regularHours = dayHoursMap.get(false);
+
+            // 브레이크 타임 (isBreakTime = true)
+            PlaceHours breakHours = dayHoursMap.get(true);
 
             PlaceDetailResponse.Schedule.ScheduleBuilder builder =
                     PlaceDetailResponse.Schedule.builder().day(dayCode);
 
-            if (dayHours != null && dayHours.getOpenTime() != null && dayHours.getCloseTime() != null) {
-                builder.hours(dayHours.getOpenTime() + "~" + dayHours.getCloseTime());
+            // 일반 영업시간 설정
+            if (regularHours != null && regularHours.getOpenTime() != null && regularHours.getCloseTime() != null) {
+                builder.hours(regularHours.getOpenTime() + "~" + regularHours.getCloseTime());
             } else {
-                // 휴무일이거나 정보가 없는 경우 hours를 null로 설정
-                builder.hours(null);
+                builder.hours(null); // 휴무일이거나 정보가 없는 경우 hours를 null로 설정
+            }
+
+            // 브레이크 타임 설정
+            if (breakHours != null && breakHours.getOpenTime() != null && breakHours.getCloseTime() != null) {
+                builder.breakTime(breakHours.getOpenTime() + "~" + breakHours.getCloseTime());
+            } else {
+                builder.breakTime(null);
             }
 
             schedules.add(builder.build());
@@ -344,50 +364,59 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         int currentMinute = calendar.get(Calendar.MINUTE);
 
         // Calendar.DAY_OF_WEEK는 1(일요일)~7(토요일)
-        // PlaceHours의 요일을 Calendar 형식으로 변환
         String[] daysOfWeek = {"일", "월", "화", "수", "목", "금", "토"};
         String koreanDayOfWeek = daysOfWeek[dayOfWeek - 1];
 
-        // 오늘의 영업 시간 찾기
-        Optional<PlaceHours> todayHours = hours.stream()
-                .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek))
+        // 오늘의 영업 시간 찾기 - 일반 영업시간 (isBreakTime = false)
+        Optional<PlaceHours> todayRegularHours = hours.stream()
+                .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && !h.getIsBreakTime())
                 .findFirst();
 
-        if (todayHours.isEmpty()) {
+        // 오늘의 브레이크 타임 찾기 (isBreakTime = true)
+        Optional<PlaceHours> todayBreakHours = hours.stream()
+                .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && h.getIsBreakTime())
+                .findFirst();
+
+        // 영업 정보가 없는 경우
+        if (todayRegularHours.isEmpty()) {
             return "영업 정보 없음";
         }
 
-        PlaceHours today = todayHours.get();
+        PlaceHours regular = todayRegularHours.get();
 
         // 휴무일인 경우
-        if (today.getOpenTime() == null || today.getCloseTime() == null) {
+        if (regular.getOpenTime() == null || regular.getCloseTime() == null) {
             return "휴무일";
-        }
-
-        // 영업 시간 파싱 (예: "09:00" -> 시간과 분)
-        int openHour = 0, openMinute = 0, closeHour = 0, closeMinute = 0;
-
-        try {
-            String[] openParts = today.getOpenTime().split(":");
-            String[] closeParts = today.getCloseTime().split(":");
-
-            openHour = Integer.parseInt(openParts[0]);
-            openMinute = Integer.parseInt(openParts[1]);
-            closeHour = Integer.parseInt(closeParts[0]);
-            closeMinute = Integer.parseInt(closeParts[1]);
-        } catch (Exception e) {
-            log.error("영업 시간 파싱 오류: {}", e.getMessage());
-            return "영업 여부 확인 필요";
         }
 
         // 현재 시간을 분 단위로 변환
         int currentTimeInMinutes = currentHour * 60 + currentMinute;
-        int openTimeInMinutes = openHour * 60 + openMinute;
-        int closeTimeInMinutes = closeHour * 60 + closeMinute;
 
-        // 영업 시간 체크 (일반적인 경우: openTime < closeTime)
-        if (openTimeInMinutes < closeTimeInMinutes) {
-            if (currentTimeInMinutes >= openTimeInMinutes && currentTimeInMinutes < closeTimeInMinutes) {
+        // 일반 영업시간 분 단위 변환
+        int regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
+        int regularCloseTimeInMinutes = parseTimeToMinutes(regular.getCloseTime());
+
+        // 브레이크 타임 분 단위 변환 (존재하는 경우)
+        int breakStartTimeInMinutes = -1;
+        int breakEndTimeInMinutes = -1;
+
+        if (todayBreakHours.isPresent()) {
+            PlaceHours breakTime = todayBreakHours.get();
+            if (breakTime.getOpenTime() != null && breakTime.getCloseTime() != null) {
+                breakStartTimeInMinutes = parseTimeToMinutes(breakTime.getOpenTime());
+                breakEndTimeInMinutes = parseTimeToMinutes(breakTime.getCloseTime());
+            }
+        }
+
+        // 브레이크 타임 중인지 확인
+        if (breakStartTimeInMinutes != -1 && breakEndTimeInMinutes != -1 &&
+                currentTimeInMinutes >= breakStartTimeInMinutes && currentTimeInMinutes < breakEndTimeInMinutes) {
+            return "브레이크 타임";
+        }
+
+        // 일반 영업시간 체크 (일반적인 경우: openTime < closeTime)
+        if (regularOpenTimeInMinutes < regularCloseTimeInMinutes) {
+            if (currentTimeInMinutes >= regularOpenTimeInMinutes && currentTimeInMinutes < regularCloseTimeInMinutes) {
                 return "영업 중";
             } else {
                 return "영업 종료";
@@ -395,11 +424,24 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         }
         // 자정을 넘어가는 경우 (예: 21:00 ~ 02:00)
         else {
-            if (currentTimeInMinutes >= openTimeInMinutes || currentTimeInMinutes < closeTimeInMinutes) {
+            if (currentTimeInMinutes >= regularOpenTimeInMinutes || currentTimeInMinutes < regularCloseTimeInMinutes) {
                 return "영업 중";
             } else {
                 return "영업 종료";
             }
+        }
+    }
+
+    // 시간 문자열을 분 단위로 변환하는 헬퍼 메서드
+    private int parseTimeToMinutes(String timeString) {
+        try {
+            String[] parts = timeString.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int minute = Integer.parseInt(parts[1]);
+            return hour * 60 + minute;
+        } catch (Exception e) {
+            log.error("시간 파싱 오류: {}", e.getMessage());
+            return 0;
         }
     }
 }
