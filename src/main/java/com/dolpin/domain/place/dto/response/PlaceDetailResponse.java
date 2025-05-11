@@ -45,6 +45,9 @@ public class PlaceDetailResponse {
     public static class Schedule {
         private String day;
         private String hours;
+
+        @JsonProperty("break_time")
+        private String breakTime;
     }
 
     @Getter
