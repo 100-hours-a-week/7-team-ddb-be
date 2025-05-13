@@ -390,7 +390,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         }
 
         // 현재 시간을 분 단위로 변환
-        int currentTimeInMinutes = currentHour * 60 + currentMinute;
+        int currentTimeInMinutes = (currentHour + 9) * 60 + currentMinute;
 
         // 일반 영업시간 분 단위 변환
         int regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
