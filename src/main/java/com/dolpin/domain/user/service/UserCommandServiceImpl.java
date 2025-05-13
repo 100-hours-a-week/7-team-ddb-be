@@ -2,6 +2,7 @@ package com.dolpin.domain.user.service;
 
 import com.dolpin.domain.auth.repository.TokenRepository;
 import com.dolpin.domain.auth.service.oauth.OAuthInfoResponse;
+import com.dolpin.domain.auth.service.token.TokenService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.repository.UserRepository;
 import com.dolpin.global.exception.BusinessException;
@@ -19,6 +20,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final UserRepository userRepository;
     private final UserQueryService userQueryService;
     private final TokenRepository tokenRepository;
+    private final TokenService tokenService;
 
     @Override
     @Transactional
@@ -93,12 +95,13 @@ public class UserCommandServiceImpl implements UserCommandService {
     public void deleteUser(Long userId) {
         User user = userQueryService.getUserById(userId);
 
-        if (tokenRepository != null) {
-            tokenRepository.deleteAllByUser(user);
-        }
+        tokenService.invalidateUserTokens(user);
 
-        // 사용자 삭제
+        tokenRepository.deleteAllByUser(user);
+
         userRepository.delete(user);
+
+        log.info("User deleted with all related tokens: userId={}", userId);
     }
 
     private String generateUniqueUsername(String nickname) {

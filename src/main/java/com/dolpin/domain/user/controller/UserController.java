@@ -5,10 +5,12 @@ import com.dolpin.domain.user.dto.request.UserProfileUpdateRequest;
 import com.dolpin.domain.user.dto.request.UserRegisterRequest;
 import com.dolpin.domain.user.dto.response.MyProfileResponse;
 import com.dolpin.domain.user.dto.response.UserProfileResponse;
+import com.dolpin.domain.auth.service.cookie.CookieService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.response.ApiResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
     private final UserCommandService userCommandService;
     private final UserQueryService userQueryService;
+    private final CookieService cookieService;
 
     @PostMapping("/agreement")
     public ResponseEntity<ApiResponse<Void>> saveAgreement(
@@ -112,17 +115,24 @@ public class UserController {
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> deleteUser(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserDetails userDetails,
+            @CookieValue(name = "refresh_token", required = false) String refreshToken,
+            HttpServletResponse response) {
 
         // 현재 인증된 사용자 ID 추출
         Long userId = Long.parseLong(userDetails.getUsername());
         log.info("Deleting user: {}", userId);
 
-        // 사용자 삭제
+        // 1. 사용자 삭제 (서비스에서 토큰 무효화 로직이 포함됨)
         userCommandService.deleteUser(userId);
 
-        return ResponseEntity.ok(ApiResponse.success("user_delete_success", null));
+        // 2. 쿠키 삭제
+        cookieService.deleteAccessTokenCookie(response);
+        cookieService.deleteRefreshTokenCookie(response);
 
+        log.info("User deleted and cookies removed: userId={}", userId);
+
+        return ResponseEntity.ok(ApiResponse.success("user_delete_success", null));
     }
 
 }
