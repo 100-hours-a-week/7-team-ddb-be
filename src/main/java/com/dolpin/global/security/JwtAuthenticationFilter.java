@@ -17,12 +17,15 @@ import jakarta.servlet.http.Cookie;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Set;
+import java.util.HashSet;
 
 @Slf4j
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private static final Set<String> NOISY_ENDPOINTS = new HashSet<>(Collections.singletonList("/api/v1/health"));
 
     @Override
     protected void doFilterInternal(
@@ -30,15 +33,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        log.info("JwtAuthenticationFilter processing: {}", request.getRequestURI());
+        String path = request.getRequestURI();
+        boolean isNoisyEndpoint = NOISY_ENDPOINTS.contains(path);
+
+        // Only log non-noisy endpoints at INFO level
+        if (!isNoisyEndpoint) {
+            log.info("JwtAuthenticationFilter processing: {}", path);
+        } else if (log.isDebugEnabled()) {
+            // Log noisy endpoints only at DEBUG level
+            log.debug("JwtAuthenticationFilter processing health check: {}", path);
+        }
 
         try {
-            String token = extractToken(request);
-            log.info("Token extracted: {}", token != null ? "exists" : "null");
+            String token = extractToken(request, isNoisyEndpoint);
 
             if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
                 Long userId = jwtTokenProvider.getUserIdFromToken(token);
-                log.info("Valid token for user ID: {}", userId);
+
+                if (!isNoisyEndpoint) {
+                    log.info("Valid token for user ID: {}", userId);
+                }
 
                 // UserDetails 생성
                 UserDetails userDetails = new User(
@@ -56,9 +70,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         );
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-                log.info("Authentication set for user ID: {}", userId);
+
+                if (!isNoisyEndpoint) {
+                    log.info("Authentication set for user ID: {}", userId);
+                }
             } else {
-                log.warn("No valid token found");
+                if (!isNoisyEndpoint) {
+                    log.warn("No valid token found");
+                } else if (log.isDebugEnabled()) {
+                    log.debug("No valid token found for health check");
+                }
             }
         } catch (Exception e) {
             log.error("JWT Authentication failed: {}", e.getMessage(), e);
@@ -67,31 +88,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String extractToken(HttpServletRequest request) {
-        // 디버그 레벨로 변경하여 필요할 때만 로그가 출력되도록 함
-        if (log.isDebugEnabled()) {
-            log.debug("Extracting token from request");
-        }
-
+    private String extractToken(HttpServletRequest request, boolean isNoisyEndpoint) {
         // 1. 쿠키에서 토큰 추출
         Cookie[] cookies = request.getCookies();
 
-        // 쿠키 개수만 간략히 로깅
-        if (log.isDebugEnabled() && cookies != null) {
-            log.debug("Processing {} cookies", cookies.length);
-        }
-
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                // 접근 토큰 쿠키를 찾았을 때만 로그 출력
                 if ("access_token".equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isEmpty()) {
                     return cookie.getValue();
                 }
             }
         }
 
-        // 경고 로그는 유지 (토큰을 찾지 못한 경우는 중요한 정보이므로)
-        log.warn("No token found in cookies");
+        // Only log at WARN level for non-health check endpoints
+        if (!isNoisyEndpoint) {
+            log.warn("No token found in cookies");
+        } else if (log.isDebugEnabled()) {
+            log.debug("No token found in cookies for health check");
+        }
+
         return null;
     }
 }
