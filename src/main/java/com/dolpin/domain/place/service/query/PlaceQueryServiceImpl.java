@@ -18,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -357,23 +360,36 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             return "영업 여부 확인 필요";
         }
 
-        // 현재 요일 및 시간 확인
-        Calendar calendar = Calendar.getInstance();
-        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
-        int currentHour = calendar.get(Calendar.HOUR_OF_DAY);
-        int currentMinute = calendar.get(Calendar.MINUTE);
+        // 한국 시간대 기준으로 현재 시간 가져오기
+        var koreaZoneId = ZoneId.of("Asia/Seoul");
+        var now = ZonedDateTime.now(koreaZoneId);
 
-        // Calendar.DAY_OF_WEEK는 1(일요일)~7(토요일)
-        String[] daysOfWeek = {"일", "월", "화", "수", "목", "금", "토"};
-        String koreanDayOfWeek = daysOfWeek[dayOfWeek - 1];
+        // 현재 요일 (한글)
+        var koreanDayOfWeek = switch (now.getDayOfWeek()) {
+            case MONDAY -> "월";
+            case TUESDAY -> "화";
+            case WEDNESDAY -> "수";
+            case THURSDAY -> "목";
+            case FRIDAY -> "금";
+            case SATURDAY -> "토";
+            case SUNDAY -> "일";
+        };
 
-        // 오늘의 영업 시간 찾기 - 일반 영업시간 (isBreakTime = false)
-        Optional<PlaceHours> todayRegularHours = hours.stream()
+        // 현재 시간 정보
+        var currentHour = now.getHour();
+        var currentMinute = now.getMinute();
+
+        // 디버깅용 로그
+        log.info("현재 한국 시간: {}, 요일: {}",
+                now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                koreanDayOfWeek);
+
+        // 오늘의 영업 시간 및 브레이크 타임 찾기 (Java 17의 stream API 활용)
+        var todayRegularHours = hours.stream()
                 .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && !h.getIsBreakTime())
                 .findFirst();
 
-        // 오늘의 브레이크 타임 찾기 (isBreakTime = true)
-        Optional<PlaceHours> todayBreakHours = hours.stream()
+        var todayBreakHours = hours.stream()
                 .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && h.getIsBreakTime())
                 .findFirst();
 
@@ -382,54 +398,50 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             return "영업 정보 없음";
         }
 
-        PlaceHours regular = todayRegularHours.get();
+        var regular = todayRegularHours.get();
 
         // 휴무일인 경우
         if (regular.getOpenTime() == null || regular.getCloseTime() == null) {
             return "휴무일";
         }
 
-        // 현재 시간을 분 단위로 변환
-        int currentTimeInMinutes = currentHour * 60 + currentMinute;
+        // 시간을 분 단위로 변환
+        var currentTimeInMinutes = currentHour * 60 + currentMinute;
+        var regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
+        var regularCloseTimeInMinutes = parseTimeToMinutes(regular.getCloseTime());
 
-        // 일반 영업시간 분 단위 변환
-        int regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
-        int regularCloseTimeInMinutes = parseTimeToMinutes(regular.getCloseTime());
+        // 디버깅 로그
+        log.info("현재(분): {}, 오픈(분): {}, 마감(분): {}",
+                currentTimeInMinutes, regularOpenTimeInMinutes, regularCloseTimeInMinutes);
 
-        // 브레이크 타임 분 단위 변환 (존재하는 경우)
-        int breakStartTimeInMinutes = -1;
-        int breakEndTimeInMinutes = -1;
+        // 브레이크 타임 정보 (Optional 활용)
+        record BreakTime(int start, int end) {}
+        var breakTime = todayBreakHours
+                .filter(b -> b.getOpenTime() != null && b.getCloseTime() != null)
+                .map(b -> new BreakTime(
+                        parseTimeToMinutes(b.getOpenTime()),
+                        parseTimeToMinutes(b.getCloseTime())
+                ));
 
-        if (todayBreakHours.isPresent()) {
-            PlaceHours breakTime = todayBreakHours.get();
-            if (breakTime.getOpenTime() != null && breakTime.getCloseTime() != null) {
-                breakStartTimeInMinutes = parseTimeToMinutes(breakTime.getOpenTime());
-                breakEndTimeInMinutes = parseTimeToMinutes(breakTime.getCloseTime());
-            }
-        }
+        // 브레이크 타임 로깅
+        breakTime.ifPresent(bt ->
+                log.info("브레이크 시작(분): {}, 종료(분): {}", bt.start, bt.end));
 
-        // 브레이크 타임 중인지 확인
-        if (breakStartTimeInMinutes != -1 && breakEndTimeInMinutes != -1 &&
-                currentTimeInMinutes >= breakStartTimeInMinutes && currentTimeInMinutes < breakEndTimeInMinutes) {
+        // 브레이크 타임 체크
+        if (breakTime.isPresent() &&
+                currentTimeInMinutes >= breakTime.get().start &&
+                currentTimeInMinutes < breakTime.get().end) {
             return "브레이크 타임";
         }
 
-        // 일반 영업시간 체크 (일반적인 경우: openTime < closeTime)
-        if (regularOpenTimeInMinutes < regularCloseTimeInMinutes) {
-            if (currentTimeInMinutes >= regularOpenTimeInMinutes && currentTimeInMinutes < regularCloseTimeInMinutes) {
-                return "영업 중";
-            } else {
-                return "영업 종료";
-            }
-        }
-        // 자정을 넘어가는 경우 (예: 21:00 ~ 02:00)
-        else {
-            if (currentTimeInMinutes >= regularOpenTimeInMinutes || currentTimeInMinutes < regularCloseTimeInMinutes) {
-                return "영업 중";
-            } else {
-                return "영업 종료";
-            }
-        }
+        // 영업 상태 확인 (삼항 연산자로 간결하게)
+        return regularOpenTimeInMinutes < regularCloseTimeInMinutes
+                ? (currentTimeInMinutes >= regularOpenTimeInMinutes &&
+                currentTimeInMinutes < regularCloseTimeInMinutes)
+                ? "영업 중" : "영업 종료"
+                : (currentTimeInMinutes >= regularOpenTimeInMinutes ||
+                currentTimeInMinutes < regularCloseTimeInMinutes)
+                ? "영업 중" : "영업 종료";
     }
 
     // 시간 문자열을 분 단위로 변환하는 헬퍼 메서드
