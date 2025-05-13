@@ -10,9 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 @RestController
 @RequestMapping("/api/v1/places")
 @RequiredArgsConstructor
@@ -40,11 +37,7 @@ public class PlaceController {
     public ResponseEntity<ApiResponse<PlaceDetailResponse>> getPlaceDetail(
             @PathVariable("place_id") Long placeId) {
 
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String currentTime = now.format(formatter);
-
-        log.info("Fetching place detail for placeId: {} at time: {}", placeId, currentTime);
+        log.info("Fetching place detail for placeId: {}", placeId);
 
         PlaceDetailResponse response = placeQueryService.getPlaceDetail(placeId);
 
