@@ -29,13 +29,11 @@ public class PlaceSearchResponse {
         private String thumbnail;
         private String distance;
 
-        @JsonProperty("moment_count")
         private String momentCount;
 
         private List<String> keywords;
         private Map<String, Object> location;
 
-        @JsonProperty("similarity_score")
         private Double similarityScore;
     }
 }

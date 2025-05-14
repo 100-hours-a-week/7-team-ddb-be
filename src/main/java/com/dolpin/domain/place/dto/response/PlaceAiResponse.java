@@ -12,17 +12,14 @@ import java.util.List;
 @AllArgsConstructor
 public class PlaceAiResponse {
 
-    @JsonProperty("recommendations")
     private List<PlaceRecommendation> recommendations;
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class PlaceRecommendation {
-        @JsonProperty("id")
         private Long id;
 
-        @JsonProperty("similarity_score")
         private Double similarityScore;
     }
 
