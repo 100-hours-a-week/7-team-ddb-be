@@ -14,32 +14,24 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MyProfileResponse {
-    @JsonProperty("user_id")
     private Long id;
 
-    @JsonProperty("provider_id")
     private Long providerId;
 
-    private String username;  // 프론트엔드에서도 username으로 사용
+    private String username;
 
-    @JsonProperty("profile_image")
-    private String profileImage;  // JSON 변환 시 profile_image로
+    private String profileImage;
 
     private String introduction;
 
-    @JsonProperty("privacy_agreed")
     private Boolean isPrivacyAgreed;
 
-    @JsonProperty("location_agreed")
     private Boolean isLocationAgreed;
 
-    @JsonProperty("privacy_agreed_at")
     private LocalDateTime privacyAgreedAt;
 
-    @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
-    @JsonProperty("updated_at")
     private LocalDateTime updatedAt;
 
     public static MyProfileResponse from(User user) {

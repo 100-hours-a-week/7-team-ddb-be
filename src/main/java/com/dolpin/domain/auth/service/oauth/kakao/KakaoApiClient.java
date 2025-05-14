@@ -81,7 +81,6 @@ public class KakaoApiClient implements OAuthApiClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class KakaoTokenResponse {
-        @JsonProperty("access_token")
         private String accessToken;
 
         public String getAccessToken() {
