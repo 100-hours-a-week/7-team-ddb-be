@@ -14,6 +14,7 @@ public class CookieService {
         cookie.setPath("/");
         cookie.setMaxAge((int) expiresIn);
         cookie.setAttribute("SameSite", "None");
+        cookie.setDomain(".dolpin.site");
         response.addCookie(cookie);
     }
 
@@ -24,6 +25,7 @@ public class CookieService {
         cookie.setPath("/");
         cookie.setMaxAge(14 * 24 * 60 * 60);
         cookie.setAttribute("SameSite", "None");
+        cookie.setDomain(".dolpin.site");
         response.addCookie(cookie);
     }
 
@@ -33,6 +35,7 @@ public class CookieService {
         cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(0);
+        cookie.setDomain(".dolpin.site");
         response.addCookie(cookie);
     }
 
@@ -42,6 +45,7 @@ public class CookieService {
         cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(0);
+        cookie.setDomain(".dolpin.site");
         response.addCookie(cookie);
     }
 }
