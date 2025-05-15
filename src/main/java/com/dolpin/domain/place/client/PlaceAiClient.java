@@ -3,8 +3,10 @@ package com.dolpin.domain.place.client;
 import com.dolpin.domain.place.dto.response.PlaceAiResponse;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
+import com.dolpin.global.ratelimit.RateLimiter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,9 +17,6 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.HashMap;
-import java.util.Map;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -25,18 +24,36 @@ public class PlaceAiClient {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final RateLimiter rateLimiter;
 
     @Value("${ai.service.url}")
     private String aiServiceUrl;
 
+    @Value("${ai.service.rate-limit.enabled:true}")
+    private boolean rateLimitEnabled;
+
+    @PostConstruct
+    public void init() {
+        rateLimiter.init();
+    }
+
     public PlaceAiResponse recommendPlaces(String query) {
-        // 변경된 엔드포인트
+        // 레이트 리밋 검사
+        if (rateLimitEnabled && !rateLimiter.allowRequest("ai-service")) {
+            int remainingTime = 60;
+
+            log.warn("AI service request rate limit exceeded");
+            throw new BusinessException(
+                    ResponseStatus.TOO_MANY_REQUESTS,
+                    "AI 서비스 요청 한도를 초과했습니다. " + remainingTime + "초 후에 다시 시도해주세요."
+            );
+        }
+
         String url = aiServiceUrl + "/v1/recommend";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
 
-        // GET 요청이므로 파라미터를 URL에 추가
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
                 .queryParam("text", query);
 
@@ -44,7 +61,6 @@ public class PlaceAiClient {
         log.info("Request URL: {}", builder.toUriString());
 
         try {
-            // GET 메서드로 변경하고 요청 본문은 필요 없음
             ResponseEntity<String> response = restTemplate.exchange(
                     builder.toUriString(),
                     HttpMethod.GET,
@@ -52,7 +68,6 @@ public class PlaceAiClient {
                     String.class
             );
 
-            // 응답 본문을 PlaceAiResponse로 변환
             PlaceAiResponse responseBody = objectMapper.readValue(response.getBody(), PlaceAiResponse.class);
             return responseBody;
 
@@ -66,5 +81,10 @@ public class PlaceAiClient {
             log.error("Error while calling AI service: {}", e.getMessage());
             throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 연결 중 오류가 발생했습니다");
         }
+    }
+
+    // 남은 API 호출 횟수를 확인하는 메서드
+    public int getRemainingRequests() {
+        return rateLimiter.getRemainingRequests("ai-service");
     }
 }
