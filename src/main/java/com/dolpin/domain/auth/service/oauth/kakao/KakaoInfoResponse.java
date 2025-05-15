@@ -10,7 +10,6 @@ import lombok.Getter;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class KakaoInfoResponse implements OAuthInfoResponse {
 
-    @JsonProperty("id")
     private Long id;
 
 

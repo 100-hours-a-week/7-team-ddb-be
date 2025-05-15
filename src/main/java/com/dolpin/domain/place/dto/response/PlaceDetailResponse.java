@@ -24,7 +24,6 @@ public class PlaceDetailResponse {
     private String description;
     private String phone;
 
-    @JsonProperty("opening_hours")
     private OpeningHours openingHours;
 
     private List<Menu> menu;
@@ -46,7 +45,6 @@ public class PlaceDetailResponse {
         private String day;
         private String hours;
 
-        @JsonProperty("break_time")
         private String breakTime;
     }
 
