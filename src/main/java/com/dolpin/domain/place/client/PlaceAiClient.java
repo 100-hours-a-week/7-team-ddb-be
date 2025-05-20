@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @Slf4j
 @Component
@@ -49,20 +48,14 @@ public class PlaceAiClient {
             );
         }
 
-        String url = aiServiceUrl + "/v1/recommend";
+        String requestUrl = String.format("%s/v1/recommend?text=%s", aiServiceUrl, query);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("text", query);
-
-        log.info("Requesting AI service for query: {}", query);
-        log.info("Request URL: {}", builder.toUriString());
-
         try {
             ResponseEntity<String> response = restTemplate.exchange(
-                    builder.toUriString(),
+                    requestUrl,
                     HttpMethod.GET,
                     new HttpEntity<>(headers),
                     String.class
@@ -83,7 +76,6 @@ public class PlaceAiClient {
         }
     }
 
-    // 남은 API 호출 횟수를 확인하는 메서드
     public int getRemainingRequests() {
         return rateLimiter.getRemainingRequests("ai-service");
     }
