@@ -47,7 +47,6 @@ public class KakaoApiClient implements OAuthApiClient {
     @Override
     public String requestAccessToken(OAuthLoginParams loginParams) {
         String tokenUrl = authorizationUri.replace("/oauth/authorize", "/oauth/token");
-        log.info("Requesting Kakao AccessToken from URL: {}", tokenUrl);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -66,7 +65,6 @@ public class KakaoApiClient implements OAuthApiClient {
     @Override
     public OAuthInfoResponse requestUserInfo(String accessToken) {
         String url = apiUrl + "/v2/user/me";
-        log.info("Requesting Kakao UserInfo from URL: {}", url);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);

@@ -30,14 +30,11 @@ public class RateLimiter {
     public void registerLimit(String serviceName, int maxRequests, Duration period) {
         limitConfigs.put(serviceName, new LimitConfig(maxRequests, period));
         counters.put(serviceName, new ServiceCounter(Instant.now()));
-        log.info("Rate limit registered for {}: {} requests per {}",
-                serviceName, maxRequests, period);
     }
 
     public boolean allowRequest(String serviceName) {
         LimitConfig config = limitConfigs.get(serviceName);
         if (config == null) {
-            log.warn("No rate limit config found for service: {}", serviceName);
             return true;
         }
 
@@ -48,17 +45,12 @@ public class RateLimiter {
         if (Duration.between(counter.resetTime, now).compareTo(config.period) > 0) {
             counter.count.set(0);
             counter.resetTime = now;
-            log.debug("Reset counter for service: {}", serviceName);
         }
 
         // 현재 카운트가 최대 요청 수보다 작으면 허용
         if (counter.count.incrementAndGet() <= config.maxRequests) {
-            log.debug("Request allowed for {}: {}/{}",
-                    serviceName, counter.count.get(), config.maxRequests);
             return true;
         } else {
-            log.warn("Request denied for {}: Rate limit exceeded ({}/{})",
-                    serviceName, counter.count.get(), config.maxRequests);
             return false;
         }
     }

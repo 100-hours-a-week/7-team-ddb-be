@@ -25,9 +25,6 @@ public class PlaceController {
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) String category) {
 
-        log.info("Searching places with query: {}, lat: {}, lng: {}, category: {}",
-                query, lat, lng, category);
-
         PlaceSearchResponse response = placeQueryService.searchPlaces(query, lat, lng, category);
 
         return ResponseEntity.ok(ApiResponse.success("get_place_success", response));
@@ -37,8 +34,6 @@ public class PlaceController {
     public ResponseEntity<ApiResponse<PlaceDetailResponse>> getPlaceDetail(
             @PathVariable("place_id") Long placeId) {
 
-        log.info("Fetching place detail for placeId: {}", placeId);
-
         PlaceDetailResponse response = placeQueryService.getPlaceDetail(placeId);
 
         return ResponseEntity.ok(ApiResponse.success("get_place_detail_success", response));
@@ -46,7 +41,6 @@ public class PlaceController {
 
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<PlaceCategoryResponse>> getAllCategories() {
-        log.info("Retrieving all categories");
 
         PlaceCategoryResponse response = placeQueryService.getAllCategories();
 

@@ -25,8 +25,6 @@ public class UserCommandServiceImpl implements UserCommandService {
     @Override
     @Transactional
     public User createUser(OAuthInfoResponse oAuthInfo) {
-        log.info("Creating new user with provider: {}, providerId: {}",
-                oAuthInfo.getProvider(), oAuthInfo.getProviderId());
 
         // 유효한 providerId 확인
         if (oAuthInfo.getProviderId() == null || oAuthInfo.getProviderId().isEmpty()) {
@@ -60,7 +58,6 @@ public class UserCommandServiceImpl implements UserCommandService {
         // 프로필 정보 업데이트
         user.updateProfile(nickname, profileImage, introduction);
         userRepository.save(user);
-        log.info("User registered and profile updated: userId={}, nickname={}", userId, nickname);
     }
 
 
@@ -100,8 +97,6 @@ public class UserCommandServiceImpl implements UserCommandService {
         tokenRepository.deleteAllByUser(user);
 
         userRepository.delete(user);
-
-        log.info("User deleted with all related tokens: userId={}", userId);
     }
 
     private String generateUniqueUsername(String nickname) {

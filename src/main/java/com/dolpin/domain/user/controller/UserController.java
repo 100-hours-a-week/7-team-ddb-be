@@ -52,7 +52,6 @@ public class UserController {
 
         // 현재 인증된 사용자 ID 추출
         Long userId = Long.parseLong(userDetails.getUsername());
-        log.info("Registering user profile for user {}: nickname={}", userId, request.getNickname());
 
         // 사용자 등록 처리
         userCommandService.registerUser(
@@ -70,7 +69,6 @@ public class UserController {
     public ResponseEntity<ApiResponse<MyProfileResponse>> getMyProfile(
             @AuthenticationPrincipal UserDetails userDetails) {
         Long userId = Long.parseLong(userDetails.getUsername());
-        log.info("Getting profile for current user {}", userId);
 
         User user= userQueryService.getUserById(userId);
         MyProfileResponse response = MyProfileResponse.from(user);
@@ -81,7 +79,6 @@ public class UserController {
     @GetMapping("/{userId}")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getUserProfile(
             @PathVariable Long userId) {
-        log.info("Getting profile for user {}", userId);
 
         User user = userQueryService.getUserById(userId);
         UserProfileResponse response = UserProfileResponse.from(user);
@@ -96,7 +93,6 @@ public class UserController {
 
         // 현재 인증된 사용자 ID 추출
         Long userId = Long.parseLong(userDetails.getUsername());
-        log.info("Updating profile for user {}: nickname={}", userId, request.getNickname());
 
         // 프로필 업데이트 (서비스에서 닉네임 중복 확인 및 업데이트 처리)
         User updatedUser = userCommandService.updateProfile(
@@ -121,7 +117,6 @@ public class UserController {
 
         // 현재 인증된 사용자 ID 추출
         Long userId = Long.parseLong(userDetails.getUsername());
-        log.info("Deleting user: {}", userId);
 
         // 1. 사용자 삭제 (서비스에서 토큰 무효화 로직이 포함됨)
         userCommandService.deleteUser(userId);
@@ -129,8 +124,6 @@ public class UserController {
         // 2. 쿠키 삭제
         cookieService.deleteAccessTokenCookie(response);
         cookieService.deleteRefreshTokenCookie(response);
-
-        log.info("User deleted and cookies removed: userId={}", userId);
 
         return ResponseEntity.ok(ApiResponse.success("user_delete_success", null));
     }

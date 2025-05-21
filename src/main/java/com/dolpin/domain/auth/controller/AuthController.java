@@ -29,7 +29,6 @@ public class AuthController {
     @GetMapping("/oauth")
     public ResponseEntity<ApiResponse<OAuthUrlResponse>> getOAuthLoginUrl(
             @RequestParam(defaultValue = "kakao") String provider) {
-        log.info("oauthProvider : {}", provider);
         OAuthUrlResponse response = authService.getOAuthLoginUrl(provider);
         return ResponseEntity.ok(ApiResponse.success(
                 ResponseStatus.SUCCESS.withMessage("소셜 로그인 URL 조회에 성공하였습니다."),
@@ -41,7 +40,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<TokenResponse>> getTokens(
             @RequestBody TokenRequest request,
             HttpServletResponse response) {
-        log.info("Authorization code received in POST request: {}", request.getAuthorizationCode());
         TokenResponse tokenResponse = authService.generateTokenByAuthorizationCode(request.getAuthorizationCode());
 
         cookieService.addAccessTokenCookie(response, tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
@@ -66,7 +64,6 @@ public class AuthController {
             HttpServletResponse response) {
 
         if (refreshToken != null && !refreshToken.isEmpty()) {
-            log.info("Logout requested with refresh token from cookie");
             authService.logout(refreshToken);
         }
 
@@ -85,7 +82,6 @@ public class AuthController {
             throw new BusinessException(ResponseStatus.UNAUTHORIZED.withMessage("리프레시 토큰이 없습니다."));
         }
 
-        log.info("Refresh token received from cookie");
         RefreshTokenResponse tokenResponse = authService.refreshToken(refreshToken);
 
         cookieService.addAccessTokenCookie(response, tokenResponse.getNewAccessToken(), tokenResponse.getExpiresIn());
