@@ -111,6 +111,14 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         PlaceAiResponse.PlaceRecommendation::getSimilarityScore
                 ));
 
+        // 키워드 매핑 (장소 ID -> 키워드 리스트)
+        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
+                .filter(rec -> rec.getKeyword() != null && !rec.getKeyword().isEmpty())
+                .collect(Collectors.toMap(
+                        PlaceAiResponse.PlaceRecommendation::getId,
+                        PlaceAiResponse.PlaceRecommendation::getKeyword
+                ));
+
         // PostGIS를 활용한 위치 기반 필터링 및 거리 계산 (geography 타입 사용)
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
@@ -143,7 +151,14 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     Double distance = distanceMap.get(place.getId());
                     Double similarityScore = similarityScores.get(place.getId());
 
-                    return convertToPlaceDto(place, distance, similarityScore);
+                    // AI에서 제공된 키워드 리스트 가져오기 (없으면 기존 DB 키워드 사용)
+                    List<String> keywords = keywordsByPlaceId.getOrDefault(place.getId(),
+                            place.getKeywords().stream()
+                                    .map(pk -> pk.getKeyword().getKeyword())
+                                    .collect(Collectors.toList())
+                    );
+
+                    return convertToPlaceDto(place, distance, similarityScore, keywords);
                 })
                 .collect(Collectors.toList());
 
@@ -189,14 +204,21 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore) {
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
         // 거리 포맷팅
         String formattedDistance = formatDistance(distance);
 
         // 키워드 추출
-        List<String> keywordList = place.getKeywords().stream()
-                .map(pk -> pk.getKeyword().getKeyword())
-                .collect(Collectors.toList());
+        List<String> keywords;
+        if (aiKeywords != null && !aiKeywords.isEmpty()) {
+            // AI 제공 키워드 사용
+            keywords = aiKeywords;
+        } else {
+            // DB 키워드 사용
+            keywords = place.getKeywords().stream()
+                    .map(pk -> pk.getKeyword().getKeyword())
+                    .collect(Collectors.toList());
+        }
 
         // 위치 정보 변환
         Point location = place.getLocation();
@@ -211,7 +233,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .thumbnail(place.getImageUrl())
                 .distance(formattedDistance)
                 .momentCount("0")  // 추후 연동 필요
-                .keywords(keywordList)
+                .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(similarityScore)
                 .build();
