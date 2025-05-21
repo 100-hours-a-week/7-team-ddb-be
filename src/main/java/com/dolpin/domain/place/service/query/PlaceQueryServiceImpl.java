@@ -40,8 +40,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     public PlaceCategoryResponse getAllCategories() {
         List<String> categories = placeRepository.findDistinctCategories();
 
-        log.info("Retrieved {} categories", categories.size());
-
         return PlaceCategoryResponse.builder()
                 .categories(categories)
                 .build();
@@ -117,11 +115,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
 
-        // 거리 계산 결과 로깅 (디버깅용)
-        nearbyPlaces.forEach(place ->
-                log.info("Place ID: {}, Name: {}, Distance: {}",
-                        place.getId(), place.getName(), place.getDistance())
-        );
 
         // 필터링된 ID가 없으면 빈 결과 반환
         if (nearbyPlaces.isEmpty()) {
@@ -379,11 +372,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         var currentHour = now.getHour();
         var currentMinute = now.getMinute();
 
-        // 디버깅용 로그
-        log.info("현재 한국 시간: {}, 요일: {}",
-                now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                koreanDayOfWeek);
-
         // 오늘의 영업 시간 및 브레이크 타임 찾기 (Java 17의 stream API 활용)
         var todayRegularHours = hours.stream()
                 .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && !h.getIsBreakTime())
@@ -410,10 +398,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         var regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
         var regularCloseTimeInMinutes = parseTimeToMinutes(regular.getCloseTime());
 
-        // 디버깅 로그
-        log.info("현재(분): {}, 오픈(분): {}, 마감(분): {}",
-                currentTimeInMinutes, regularOpenTimeInMinutes, regularCloseTimeInMinutes);
-
         // 브레이크 타임 정보 (Optional 활용)
         record BreakTime(int start, int end) {}
         var breakTime = todayBreakHours
@@ -422,10 +406,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         parseTimeToMinutes(b.getOpenTime()),
                         parseTimeToMinutes(b.getCloseTime())
                 ));
-
-        // 브레이크 타임 로깅
-        breakTime.ifPresent(bt ->
-                log.info("브레이크 시작(분): {}, 종료(분): {}", bt.start, bt.end));
 
         // 브레이크 타임 체크
         if (breakTime.isPresent() &&
@@ -452,7 +432,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             int minute = Integer.parseInt(parts[1]);
             return hour * 60 + minute;
         } catch (Exception e) {
-            log.error("시간 파싱 오류: {}", e.getMessage());
             return 0;
         }
     }

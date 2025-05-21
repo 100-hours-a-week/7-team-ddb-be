@@ -39,7 +39,7 @@ dependencies {
 	implementation 'org.postgresql:postgresql'
 	implementation 'org.hibernate.orm:hibernate-spatial'
 
-	// Lombok (Java 코드용)
+	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 
@@ -49,6 +49,10 @@ dependencies {
 
 	//환경변수
 	implementation 'me.paulschwarz:spring-dotenv:3.0.0'
+
+	// Actuator
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
 }
 
 // QueryDSL 설정
@@ -66,7 +70,7 @@ tasks.withType(Test) {
 
 // QueryDSL 설정
 tasks.withType(JavaCompile) {
-	options.annotationProcessorGeneratedSourcesDirectory = querydslGeneratedDir
+	options.generatedSourceOutputDirectory = querydslGeneratedDir
 }
 
 // Q클래스 자동 삭제 설정

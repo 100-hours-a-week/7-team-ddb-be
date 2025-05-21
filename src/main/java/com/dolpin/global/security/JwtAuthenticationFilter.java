@@ -33,26 +33,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String path = request.getRequestURI();
-        boolean isNoisyEndpoint = NOISY_ENDPOINTS.contains(path);
-
-        // Only log non-noisy endpoints at INFO level
-        if (!isNoisyEndpoint) {
-            log.info("JwtAuthenticationFilter processing: {}", path);
-        } else if (log.isDebugEnabled()) {
-            // Log noisy endpoints only at DEBUG level
-            log.debug("JwtAuthenticationFilter processing health check: {}", path);
-        }
 
         try {
-            String token = extractToken(request, isNoisyEndpoint);
+            String token = extractToken(request);
 
             if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
                 Long userId = jwtTokenProvider.getUserIdFromToken(token);
-
-                if (!isNoisyEndpoint) {
-                    log.info("Valid token for user ID: {}", userId);
-                }
 
                 // UserDetails 생성
                 UserDetails userDetails = new User(
@@ -70,16 +56,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         );
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                if (!isNoisyEndpoint) {
-                    log.info("Authentication set for user ID: {}", userId);
-                }
-            } else {
-                if (!isNoisyEndpoint) {
-                    log.warn("No valid token found");
-                } else if (log.isDebugEnabled()) {
-                    log.debug("No valid token found for health check");
-                }
             }
         } catch (Exception e) {
             log.error("JWT Authentication failed: {}", e.getMessage(), e);
@@ -88,8 +64,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String extractToken(HttpServletRequest request, boolean isNoisyEndpoint) {
-        // 1. 쿠키에서 토큰 추출
+    private String extractToken(HttpServletRequest request) {
+        // 쿠키에서 토큰 추출
         Cookie[] cookies = request.getCookies();
 
         if (cookies != null) {
@@ -99,14 +75,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         }
-
-        // Only log at WARN level for non-health check endpoints
-        if (!isNoisyEndpoint) {
-            log.warn("No token found in cookies");
-        } else if (log.isDebugEnabled()) {
-            log.debug("No token found in cookies for health check");
-        }
-
         return null;
     }
 }

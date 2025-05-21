@@ -29,11 +29,9 @@ public class JwtTokenProvider {
             // 비밀키가 최소 32바이트(256비트) 이상이 되도록 보장
             if (secretKey.length() < 32) {
                 secretKey = String.format("%-32s", secretKey).replace(' ', 'x');
-                log.warn("JWT secret key is too short. It has been padded to at least 32 bytes.");
             }
             // SecretKey로 변환
             this.key = Keys.hmacShaKeyFor(secretKey.getBytes());
-            log.info("JWT token provider initialized");
         } catch (Exception e) {
             log.error("JWT token provider initialization failed: {}", e.getMessage(), e);
             throw new RuntimeException("JWT token provider initialization failed", e);
