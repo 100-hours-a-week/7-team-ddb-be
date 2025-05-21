@@ -41,7 +41,6 @@ public class PlaceAiClient {
         if (rateLimitEnabled && !rateLimiter.allowRequest("ai-service")) {
             int remainingTime = 60;
 
-            log.warn("AI service request rate limit exceeded");
             throw new BusinessException(
                     ResponseStatus.TOO_MANY_REQUESTS,
                     "AI 서비스 요청 한도를 초과했습니다. " + remainingTime + "초 후에 다시 시도해주세요."

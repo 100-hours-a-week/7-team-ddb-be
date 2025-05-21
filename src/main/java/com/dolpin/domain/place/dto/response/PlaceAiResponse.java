@@ -21,6 +21,8 @@ public class PlaceAiResponse {
         private Long id;
 
         private Double similarityScore;
+
+        private List<String> keyword;
     }
 
     // 기존 메서드 호환성을 위한 메서드

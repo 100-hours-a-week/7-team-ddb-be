@@ -14,7 +14,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException e) {
-        log.error("Business exception occurred: {}", e.getMessage());
+        // HTTP 상태 코드에 따라 로그 레벨 차별화
+        HttpStatus status = e.getResponseStatus().getHttpStatus();
+
+        if (status.is5xxServerError()) {
+            // 서버 오류는 ERROR 레벨 유지
+            log.error("Business exception occurred: {}", e.getMessage());
+        } else if (status.is4xxClientError()) {
+            // 클라이언트 오류는 WARN으로 변경 (BadRequest, NotFound 등)
+            log.warn("Business exception occurred: {}", e.getMessage());
+        } else {
+            // 그 외는 INFO로 처리
+            log.info("Business exception occurred: {}", e.getMessage());
+        }
+
         return ResponseEntity
                 .status(e.getResponseStatus().getHttpStatus())
                 .body(ApiResponse.error(e.getResponseStatus()));
@@ -22,7 +35,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException e) {
-        log.error("Illegal argument exception occurred: {}", e.getMessage());
+        log.warn("Illegal argument exception occurred: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(e.getMessage())));

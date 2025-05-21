@@ -40,8 +40,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     public PlaceCategoryResponse getAllCategories() {
         List<String> categories = placeRepository.findDistinctCategories();
 
-        log.info("Retrieved {} categories", categories.size());
-
         return PlaceCategoryResponse.builder()
                 .categories(categories)
                 .build();
@@ -113,15 +111,18 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         PlaceAiResponse.PlaceRecommendation::getSimilarityScore
                 ));
 
+        // 키워드 매핑 (장소 ID -> 키워드 리스트)
+        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
+                .filter(rec -> rec.getKeyword() != null && !rec.getKeyword().isEmpty())
+                .collect(Collectors.toMap(
+                        PlaceAiResponse.PlaceRecommendation::getId,
+                        PlaceAiResponse.PlaceRecommendation::getKeyword
+                ));
+
         // PostGIS를 활용한 위치 기반 필터링 및 거리 계산 (geography 타입 사용)
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
 
-        // 거리 계산 결과 로깅 (디버깅용)
-        nearbyPlaces.forEach(place ->
-                log.info("Place ID: {}, Name: {}, Distance: {}",
-                        place.getId(), place.getName(), place.getDistance())
-        );
 
         // 필터링된 ID가 없으면 빈 결과 반환
         if (nearbyPlaces.isEmpty()) {
@@ -150,7 +151,14 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     Double distance = distanceMap.get(place.getId());
                     Double similarityScore = similarityScores.get(place.getId());
 
-                    return convertToPlaceDto(place, distance, similarityScore);
+                    // AI에서 제공된 키워드 리스트 가져오기 (없으면 기존 DB 키워드 사용)
+                    List<String> keywords = keywordsByPlaceId.getOrDefault(place.getId(),
+                            place.getKeywords().stream()
+                                    .map(pk -> pk.getKeyword().getKeyword())
+                                    .collect(Collectors.toList())
+                    );
+
+                    return convertToPlaceDto(place, distance, similarityScore, keywords);
                 })
                 .collect(Collectors.toList());
 
@@ -196,14 +204,21 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore) {
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
         // 거리 포맷팅
         String formattedDistance = formatDistance(distance);
 
         // 키워드 추출
-        List<String> keywordList = place.getKeywords().stream()
-                .map(pk -> pk.getKeyword().getKeyword())
-                .collect(Collectors.toList());
+        List<String> keywords;
+        if (aiKeywords != null && !aiKeywords.isEmpty()) {
+            // AI 제공 키워드 사용
+            keywords = aiKeywords;
+        } else {
+            // DB 키워드 사용
+            keywords = place.getKeywords().stream()
+                    .map(pk -> pk.getKeyword().getKeyword())
+                    .collect(Collectors.toList());
+        }
 
         // 위치 정보 변환
         Point location = place.getLocation();
@@ -218,7 +233,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .thumbnail(place.getImageUrl())
                 .distance(formattedDistance)
                 .momentCount("0")  // 추후 연동 필요
-                .keywords(keywordList)
+                .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(similarityScore)
                 .build();
@@ -379,11 +394,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         var currentHour = now.getHour();
         var currentMinute = now.getMinute();
 
-        // 디버깅용 로그
-        log.info("현재 한국 시간: {}, 요일: {}",
-                now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                koreanDayOfWeek);
-
         // 오늘의 영업 시간 및 브레이크 타임 찾기 (Java 17의 stream API 활용)
         var todayRegularHours = hours.stream()
                 .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && !h.getIsBreakTime())
@@ -410,10 +420,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         var regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
         var regularCloseTimeInMinutes = parseTimeToMinutes(regular.getCloseTime());
 
-        // 디버깅 로그
-        log.info("현재(분): {}, 오픈(분): {}, 마감(분): {}",
-                currentTimeInMinutes, regularOpenTimeInMinutes, regularCloseTimeInMinutes);
-
         // 브레이크 타임 정보 (Optional 활용)
         record BreakTime(int start, int end) {}
         var breakTime = todayBreakHours
@@ -422,10 +428,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         parseTimeToMinutes(b.getOpenTime()),
                         parseTimeToMinutes(b.getCloseTime())
                 ));
-
-        // 브레이크 타임 로깅
-        breakTime.ifPresent(bt ->
-                log.info("브레이크 시작(분): {}, 종료(분): {}", bt.start, bt.end));
 
         // 브레이크 타임 체크
         if (breakTime.isPresent() &&
@@ -452,7 +454,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             int minute = Integer.parseInt(parts[1]);
             return hour * 60 + minute;
         } catch (Exception e) {
-            log.error("시간 파싱 오류: {}", e.getMessage());
             return 0;
         }
     }

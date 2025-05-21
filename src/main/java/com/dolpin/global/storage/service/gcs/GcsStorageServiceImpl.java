@@ -65,15 +65,12 @@ public class GcsStorageServiceImpl implements StorageService {
         // 커스텀 도메인으로 객체 URL 생성
         String objectUrl = String.format("https://%s/%s", customDomain, objectPath);
 
-        log.info("파일 경로: {}에 대한 서명된 URL 생성 완료", objectPath);
-
         // 프로필 이미지 업데이트
         if ("profile".equalsIgnoreCase(request.getUploadType())) {
             // 현재 사용자 정보 가져오기
             User user = userQueryService.getUserById(userId);
             // 기존 username과 introduction은 유지하면서 이미지 URL만 업데이트
             userCommandService.updateProfile(userId, user.getUsername(), objectUrl, user.getIntroduction());
-            log.info("사용자 ID: {}의 프로필 이미지 업데이트 완료", userId);
         }
 
         return PresignedUrlResponse.builder()
@@ -96,7 +93,6 @@ public class GcsStorageServiceImpl implements StorageService {
     @Override
     public void deleteFile(String path) {
         storage.delete(bucketName, path);
-        log.info("파일 삭제 완료: {}", path);
     }
 
     private String generateObjectPath(PresignedUrlRequest request, Long userId) {
