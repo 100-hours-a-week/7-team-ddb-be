@@ -28,8 +28,9 @@ public class AuthController {
 
     @GetMapping("/oauth")
     public ResponseEntity<ApiResponse<OAuthUrlResponse>> getOAuthLoginUrl(
-            @RequestParam(defaultValue = "kakao") String provider) {
-        OAuthUrlResponse response = authService.getOAuthLoginUrl(provider);
+            @RequestParam(defaultValue = "kakao") String provider,
+            @RequestParam(required = false) String redirect_uri) {
+        OAuthUrlResponse response = authService.getOAuthLoginUrl(provider, redirect_uri);
         return ResponseEntity.ok(ApiResponse.success(
                 ResponseStatus.SUCCESS.withMessage("소셜 로그인 URL 조회에 성공하였습니다."),
                 response
