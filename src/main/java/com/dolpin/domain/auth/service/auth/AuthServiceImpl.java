@@ -39,10 +39,10 @@ public class AuthServiceImpl implements AuthService {
     private final JwtTokenProvider jwtTokenProvider;
 
     @Override
-    public OAuthUrlResponse getOAuthLoginUrl(String provider) {
+    public OAuthUrlResponse getOAuthLoginUrl(String provider, String redirectUri) {
         OAuthProvider oAuthProvider = OAuthProvider.fromString(provider);
         OAuthLoginUrlProvider urlProvider = oAuthLoginUrlProviderFactory.getProvider(oAuthProvider);
-        return new OAuthUrlResponse(urlProvider.getLoginUrl());
+        return new OAuthUrlResponse(urlProvider.getLoginUrl(redirectUri));
     }
 
     @Override
