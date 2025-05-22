@@ -20,7 +20,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -119,10 +118,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         PlaceAiResponse.PlaceRecommendation::getKeyword
                 ));
 
-        // PostGIS를 활용한 위치 기반 필터링 및 거리 계산 (geography 타입 사용)
+        // PostGIS를 활용한 위치 기반 필터링 및 거리 계산
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
-
 
         // 필터링된 ID가 없으면 빈 결과 반환
         if (nearbyPlaces.isEmpty()) {
@@ -151,7 +149,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     Double distance = distanceMap.get(place.getId());
                     Double similarityScore = similarityScores.get(place.getId());
 
-                    // AI에서 제공된 키워드 리스트 가져오기 (없으면 기존 DB 키워드 사용)
+                    // AI에서 제공된 키워드 리스트 가져오기
                     List<String> keywords = keywordsByPlaceId.getOrDefault(place.getId(),
                             place.getKeywords().stream()
                                     .map(pk -> pk.getKeyword().getKeyword())
@@ -173,13 +171,39 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
 
+        // 장소 ID 목록 추출
+        List<Long> placeIds = searchResults.stream()
+                .map(PlaceWithDistance::getId)
+                .collect(Collectors.toList());
+
+        // 키워드를 포함한 장소 정보 조회
+        List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
+
+        // Place ID -> Place 매핑
+        Map<Long, Place> placeMap = placesWithKeywords.stream()
+                .collect(Collectors.toMap(Place::getId, place -> place));
+
         // DTO 변환
         return searchResults.stream()
-                .map(placeWithDistance -> convertToPlaceDtoFromProjection(placeWithDistance, lat, lng))
+                .map(placeWithDistance -> {
+                    Place place = placeMap.get(placeWithDistance.getId());
+                    if (place != null) {
+                        // DB 키워드 사용
+                        List<String> keywords = place.getKeywords().stream()
+                                .map(pk -> pk.getKeyword().getKeyword())
+                                .collect(Collectors.toList());
+
+                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords);
+                    } else {
+                        // Place 정보가 없는 경우 빈 키워드로 처리
+                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList());
+                    }
+                })
                 .collect(Collectors.toList());
     }
 
-    private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(PlaceWithDistance placeWithDistance, Double lat, Double lng) {
+    private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
+            PlaceWithDistance placeWithDistance, List<String> keywords) {
         // 거리 포맷팅
         String formattedDistance = formatDistance(placeWithDistance.getDistance());
 
@@ -191,14 +215,14 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 placeWithDistance.getLatitude()
         });
 
-        // DTO 생성 - 이미지 URL 사용
+        // DTO 생성 - 키워드 포함
         return PlaceSearchResponse.PlaceDto.builder()
                 .id(placeWithDistance.getId())
                 .name(placeWithDistance.getName())
-                .thumbnail(placeWithDistance.getImageUrl()) // null 대신 이미지 URL 사용
+                .thumbnail(placeWithDistance.getImageUrl())
                 .distance(formattedDistance)
                 .momentCount("0")
-                .keywords(List.of())
+                .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(null)
                 .build();
@@ -293,7 +317,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .id(place.getId())
                 .name(place.getName())
                 .address(place.getRoadAddress())
-                .thumbnail(place.getImageUrl()) // 썸네일 이미지 추가
+                .thumbnail(place.getImageUrl())
                 .location(locationMap)
                 .keywords(keywords)
                 .description(place.getDescription())
