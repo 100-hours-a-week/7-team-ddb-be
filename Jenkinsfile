@@ -72,7 +72,7 @@ pipeline {
                     DB_PASSWORD=\$(gcloud secrets versions access latest --secret="cloudsql-dolpinuser-password-${env.ENV_LABEL}")
                     DB_HOST=\$(gcloud secrets versions access latest --secret="cloudsql-public-ip-${env.ENV_LABEL}")
 
-                    printf 'DB_PASSWORD="%s"\n' "\$DB_PASSWORD" > .env.db
+                    printf 'DB_PASSWORD=%s\n' "\$DB_PASSWORD" > .env.db
                     printf 'DATASOURCE_URL=%s:5432\n' "\$DB_HOST" >> .env.db
                 """
             }
