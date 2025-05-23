@@ -35,36 +35,29 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             "WHERE p.id = :id")
     Optional<Place> findByIdWithHours(@Param("id") Long id);
 
-    // 기존 메서드는 주석 처리 또는 제거
-    // @Query("SELECT p FROM Place p " +
-    //        "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
-    //        "LEFT JOIN FETCH p.menus " +
-    //        "LEFT JOIN FETCH p.hours " +
-    //        "WHERE p.id = :id")
-    // Optional<Place> findByIdWithDetails(@Param("id") Long id);
-
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
             "WHERE p.id IN :ids")
     List<Place> findByIdsWithKeywords(@Param("ids") List<Long> ids);
 
+
     @Query(value =
             "SELECT p.id as id, p.name as name, p.category as category, " +
                     "p.road_address as roadAddress, p.lot_address as lotAddress, " +
-                    "p.image_url as imageUrl, " +  // 이미지 URL 필드 추가
+                    "p.image_url as imageUrl, " +
                     "ST_X(p.location) as longitude, " +
                     "ST_Y(p.location) as latitude, " +
                     "ST_Distance(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography) as distance " +
                     "FROM place p " +
                     "WHERE p.id IN :placeIds " +
-                    "AND ST_DWithin(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography, :radius) " +
-                    "ORDER BY distance",
+                    "AND ST_DWithin(p.location::geography, ST_SetSRID(ST_Point(:lng, :lat), 4326)::geography, :radius)",
             nativeQuery = true)
     List<PlaceWithDistance> findPlacesWithinRadiusByIds(
             @Param("placeIds") List<Long> placeIds,
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radius") Double radius);
+
 
     @Query(value = "SELECT p.id as id, p.name as name, p.category as category, " +
             "p.road_address as roadAddress, p.lot_address as lotAddress, " +
