@@ -41,3 +41,16 @@ out/
 
 ### queryDSL
 src/main/generated/
+
+# 로그 파일들
+logs/
+*.log
+*.log.*
+*.gz
+
+# 임시 로그 파일들
+*.tmp
+*.temp
+
+# 백업 로그 파일들
+*.bak
