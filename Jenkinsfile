@@ -38,6 +38,21 @@ pipeline {
             }
         }
 
+        stage('Notify Before Start') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                        discordSend(
+                            description: "🚀 배포가 곧 시작됩니다: ${env.SERVICE_NAME} - ${env.BRANCH} 브랜치",
+                            link: env.BUILD_URL,
+                            title: "배포 시작",
+                            webhookURL: "$DISCORD"
+                        )
+                    }
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -72,7 +87,7 @@ pipeline {
                     DB_PASSWORD=\$(gcloud secrets versions access latest --secret="cloudsql-dolpinuser-password-${env.ENV_LABEL}")
                     DB_HOST=\$(gcloud secrets versions access latest --secret="cloudsql-public-ip-${env.ENV_LABEL}")
 
-                    printf 'DB_PASSWORD=%s\n' "\$DB_PASSWORD" > .env.db
+                    printf 'DB_PASSWORD="%s"\n' "\$DB_PASSWORD" > .env.db
                     printf 'DATASOURCE_URL=%s:5432\n' "\$DB_HOST" >> .env.db
                 """
             }
@@ -145,6 +160,33 @@ ssh -tt -i ${env.SSH_KEY_PATH} -o StrictHostKeyChecking=no ${env.SSH_USER}@${env
                         """
                     }
                 }
+            }
+        }
+    }
+    
+    post {
+        success {
+            withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                discordSend description: """
+                제목 : ${currentBuild.displayName}
+                결과 : ${currentBuild.result}
+                실행 시간 : ${currentBuild.duration / 1000}s
+                """,
+                link: env.BUILD_URL, result: currentBuild.currentResult,
+                title: "${env.JOB_NAME} : ${currentBuild.displayName} 성공",
+                webhookURL: "$DISCORD"
+            }
+        }
+        failure {
+            withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                discordSend description: """
+                제목 : ${currentBuild.displayName}
+                결과 : ${currentBuild.result}
+                실행 시간 : ${currentBuild.duration / 1000}s
+                """,
+                link: env.BUILD_URL, result: currentBuild.currentResult,
+                title: "${env.JOB_NAME} : ${currentBuild.displayName} 실패",
+                webhookURL: "$DISCORD"
             }
         }
     }
