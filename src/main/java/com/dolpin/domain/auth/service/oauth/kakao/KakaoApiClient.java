@@ -55,12 +55,16 @@ public class KakaoApiClient implements OAuthApiClient {
         body.add("grant_type", "authorization_code");
         body.add("client_id", clientId);
 
-        // 실제 OAuth 로그인에서 사용된 redirect_uri 사용 (loginParams에서 가져오거나 환경변수 기본값)
-        String actualRedirectUri = (loginParams.getRedirectUri() != null && !loginParams.getRedirectUri().isEmpty())
-                ? loginParams.getRedirectUri()
-                : redirectUri;
-        body.add("redirect_uri", actualRedirectUri);
+        String actualRedirectUri;
+        String requestedUri = loginParams.getRedirectUri();
 
+        if (requestedUri != null && !requestedUri.isEmpty()) {
+            actualRedirectUri = requestedUri;
+        } else {
+            actualRedirectUri = redirectUri;
+        }
+
+        body.add("redirect_uri", actualRedirectUri);
         body.add("code", loginParams.getAuthorizationCode());
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);

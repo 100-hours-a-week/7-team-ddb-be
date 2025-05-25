@@ -47,7 +47,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public TokenResponse generateTokenByAuthorizationCode(String code) {
+    public TokenResponse generateTokenByAuthorizationCode(String code, String redirectUri) {
         // 임시적으로 Kakao로 설정 (향후 제공자 감지 로직 추가 필요)
         OAuthProvider provider = OAuthProvider.KAKAO;
 
@@ -58,7 +58,7 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new BusinessException(ResponseStatus.OAUTH_PROVIDER_NOT_EXIST));
 
         // 1. 인증 코드로 OAuth 액세스 토큰 요청
-        OAuthLoginParams loginParams = createLoginParams(code, provider);
+        OAuthLoginParams loginParams = createLoginParams(code, provider, redirectUri);
         String oauthAccessToken = apiClient.requestAccessToken(loginParams);
 
         if (oauthAccessToken == null || oauthAccessToken.isEmpty()) {
@@ -123,10 +123,10 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // OAuth 로그인 파라미터 생성 (내부 메서드)
-    private OAuthLoginParams createLoginParams(String code, OAuthProvider provider) {
+    private OAuthLoginParams createLoginParams(String code, OAuthProvider provider, String redirectUri) {
         // Kakao 전용 구현 (향후 확장 필요)
         if (provider == OAuthProvider.KAKAO) {
-            return new KakaoLoginParams(code, null);
+            return new KakaoLoginParams(code, redirectUri);
         }
 
         throw new BusinessException(ResponseStatus.OAUTH_PROVIDER_NOT_EXIST);
