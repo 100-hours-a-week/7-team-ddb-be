@@ -46,6 +46,8 @@ public class KakaoApiClient implements OAuthApiClient {
 
     @Override
     public String requestAccessToken(OAuthLoginParams loginParams) {
+        System.out.println("🔥🔥🔥 KakaoApiClient.requestAccessToken 호출됨! 🔥🔥🔥");
+
         String tokenUrl = authorizationUri.replace("/oauth/authorize", "/oauth/token");
 
         HttpHeaders headers = new HttpHeaders();
@@ -55,14 +57,21 @@ public class KakaoApiClient implements OAuthApiClient {
         body.add("grant_type", "authorization_code");
         body.add("client_id", clientId);
 
+        // 디버깅 로그 추가
         String actualRedirectUri;
         String requestedUri = loginParams.getRedirectUri();
+
+        System.out.println("=== 카카오 토큰 요청 디버깅 ===");
+        System.out.println("loginParams.getRedirectUri(): " + requestedUri);
+        System.out.println("환경변수 redirectUri: " + redirectUri);
 
         if (requestedUri != null && !requestedUri.isEmpty()) {
             actualRedirectUri = requestedUri;
         } else {
             actualRedirectUri = redirectUri;
         }
+
+        System.out.println("실제 사용할 redirectUri: " + actualRedirectUri);
 
         body.add("redirect_uri", actualRedirectUri);
         body.add("code", loginParams.getAuthorizationCode());
