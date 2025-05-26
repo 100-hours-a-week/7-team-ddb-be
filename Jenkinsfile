@@ -138,6 +138,7 @@ docker pull ${env.GAR_IMAGE}
 sudo docker run -d --name ${env.CONTAINER_NAME} \
   --env-file /home/${env.SSH_USER}/.env \
   -v /home/${env.SSH_USER}/gcp-key.json:/home/${env.SSH_USER}/gcp-key.json \
+  -v /home/${env.SSH_USER}/logs:/logs \
   -p ${env.PORT}:${env.PORT} -p 8081:8081 \
   ${env.GAR_IMAGE}
 
