@@ -38,7 +38,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Transactional(readOnly = true)
     public PlaceCategoryResponse getAllCategories() {
         List<String> categories = placeRepository.findDistinctCategories();
-
         return PlaceCategoryResponse.builder()
                 .categories(categories)
                 .build();
@@ -47,30 +46,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceSearchResponse searchPlaces(String query, Double lat, Double lng, String category) {
-
-        boolean hasQuery = StringUtils.isNotBlank(query);
-        boolean hasCategory = StringUtils.isNotBlank(category);
-
-        // query와 category가 동시에 있으면 에러
-        if (hasQuery && hasCategory) {
-            throw new BusinessException(
-                    ResponseStatus.INVALID_PARAMETER,
-                    "검색어와 카테고리 중 하나만 선택해주세요");
-        }
-
-        // 검색어와 카테고리 둘 다 없으면 에러
-        if (!hasQuery && !hasCategory) {
-            throw new BusinessException(
-                    ResponseStatus.INVALID_PARAMETER,
-                    "검색어 또는 카테고리가 필요합니다");
-        }
-
-        // 위치 유효성 검사
-        if (lat == null || lng == null) {
-            throw new BusinessException(
-                    ResponseStatus.INVALID_PARAMETER,
-                    "위치 정보가 필요합니다");
-        }
+        validateSearchParameters(query, category, lat, lng);
 
         List<PlaceSearchResponse.PlaceDto> placeDtos;
 
@@ -89,6 +65,23 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
+    private void validateSearchParameters(String query, String category, Double lat, Double lng) {
+        boolean hasQuery = StringUtils.isNotBlank(query);
+        boolean hasCategory = StringUtils.isNotBlank(category);
+
+        if (hasQuery && hasCategory) {
+            throw new BusinessException(ResponseStatus.INVALID_PARAMETER, "검색어와 카테고리 중 하나만 선택해주세요");
+        }
+
+        if (!hasQuery && !hasCategory) {
+            throw new BusinessException(ResponseStatus.INVALID_PARAMETER, "검색어 또는 카테고리가 필요합니다");
+        }
+
+        if (lat == null || lng == null) {
+            throw new BusinessException(ResponseStatus.INVALID_PARAMETER, "위치 정보가 필요합니다");
+        }
+    }
+
     private List<PlaceSearchResponse.PlaceDto> searchByQuery(String query, Double lat, Double lng) {
         // AI 서비스에 검색 쿼리 전송
         PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query);
@@ -103,14 +96,13 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .map(PlaceAiResponse.PlaceRecommendation::getId)
                 .collect(Collectors.toList());
 
-        // 유사도 점수 매핑 (장소 ID -> 유사도 점수)
+        // 유사도 점수 및 키워드 매핑
         Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
                         PlaceAiResponse.PlaceRecommendation::getSimilarityScore
                 ));
 
-        // 키워드 매핑 (장소 ID -> 키워드 리스트)
         Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
                 .filter(rec -> rec.getKeyword() != null && !rec.getKeyword().isEmpty())
                 .collect(Collectors.toMap(
@@ -118,29 +110,24 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         PlaceAiResponse.PlaceRecommendation::getKeyword
                 ));
 
-        // PostGIS를 활용한 위치 기반 필터링 및 거리 계산
+        // PostGIS를 활용한 위치 기반 필터링
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
 
-        // 필터링된 ID가 없으면 빈 결과 반환
         if (nearbyPlaces.isEmpty()) {
             log.info("No places found within radius");
             return Collections.emptyList();
         }
 
-        // 필터링된 장소 ID 목록
+        // 한 번에 모든 키워드 정보 조회 (N+1 해결)
         List<Long> filteredPlaceIds = nearbyPlaces.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
 
-        // 거리 정보 맵 구성
         Map<Long, Double> distanceMap = nearbyPlaces.stream()
-                .collect(Collectors.toMap(
-                        PlaceWithDistance::getId,
-                        PlaceWithDistance::getDistance
-                ));
+                .collect(Collectors.toMap(PlaceWithDistance::getId, PlaceWithDistance::getDistance));
 
-        // 키워드를 포함한 장소 정보 한 번에 조회 (N+1 문제 방지)
+        // 한 번의 쿼리로 모든 키워드 정보 조회
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(filteredPlaceIds);
 
         // DTO 변환
@@ -149,7 +136,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     Double distance = distanceMap.get(place.getId());
                     Double similarityScore = similarityScores.get(place.getId());
 
-                    // AI에서 제공된 키워드 리스트 가져오기
+                    // AI 키워드 우선, 없으면 DB 키워드 사용
                     List<String> keywords = keywordsByPlaceId.getOrDefault(place.getId(),
                             place.getKeywords().stream()
                                     .map(pk -> pk.getKeyword().getKeyword())
@@ -167,19 +154,16 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByCategory(String category, Double lat, Double lng) {
-        // 카테고리로 주변 장소 전체 검색
+        // 카테고리로 주변 장소 검색
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
 
-        // 장소 ID 목록 추출
         List<Long> placeIds = searchResults.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
 
-        // 키워드를 포함한 장소 정보 조회
+        // 한 번에 키워드 정보 조회
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
-
-        // Place ID -> Place 매핑
         Map<Long, Place> placeMap = placesWithKeywords.stream()
                 .collect(Collectors.toMap(Place::getId, place -> place));
 
@@ -187,114 +171,38 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         return searchResults.stream()
                 .map(placeWithDistance -> {
                     Place place = placeMap.get(placeWithDistance.getId());
-                    if (place != null) {
-                        // DB 키워드 사용
-                        List<String> keywords = place.getKeywords().stream()
-                                .map(pk -> pk.getKeyword().getKeyword())
-                                .collect(Collectors.toList());
+                    List<String> keywords = place != null ?
+                            place.getKeywords().stream()
+                                    .map(pk -> pk.getKeyword().getKeyword())
+                                    .collect(Collectors.toList()) :
+                            Collections.emptyList();
 
-                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords);
-                    } else {
-                        // Place 정보가 없는 경우 빈 키워드로 처리
-                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList());
-                    }
+                    return convertToPlaceDtoFromProjection(placeWithDistance, keywords);
                 })
                 .collect(Collectors.toList());
-    }
-
-    private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
-            PlaceWithDistance placeWithDistance, List<String> keywords) {
-        // 거리 포맷팅
-        String formattedDistance = formatDistance(placeWithDistance.getDistance());
-
-        // 실제 장소의 위치 정보 사용
-        Map<String, Object> locationMap = new HashMap<>();
-        locationMap.put("type", "Point");
-        locationMap.put("coordinates", new double[]{
-                placeWithDistance.getLongitude(),
-                placeWithDistance.getLatitude()
-        });
-
-        // DTO 생성 - 키워드 포함
-        return PlaceSearchResponse.PlaceDto.builder()
-                .id(placeWithDistance.getId())
-                .name(placeWithDistance.getName())
-                .thumbnail(placeWithDistance.getImageUrl())
-                .distance(formattedDistance)
-                .momentCount("0")
-                .keywords(keywords)
-                .location(locationMap)
-                .similarityScore(null)
-                .build();
-    }
-
-    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
-        // 거리 포맷팅
-        String formattedDistance = formatDistance(distance);
-
-        // 키워드 추출
-        List<String> keywords;
-        if (aiKeywords != null && !aiKeywords.isEmpty()) {
-            // AI 제공 키워드 사용
-            keywords = aiKeywords;
-        } else {
-            // DB 키워드 사용
-            keywords = place.getKeywords().stream()
-                    .map(pk -> pk.getKeyword().getKeyword())
-                    .collect(Collectors.toList());
-        }
-
-        // 위치 정보 변환
-        Point location = place.getLocation();
-        Map<String, Object> locationMap = new HashMap<>();
-        locationMap.put("type", "Point");
-        locationMap.put("coordinates", new double[]{location.getX(), location.getY()});
-
-        // DTO 생성
-        return PlaceSearchResponse.PlaceDto.builder()
-                .id(place.getId())
-                .name(place.getName())
-                .thumbnail(place.getImageUrl())
-                .distance(formattedDistance)
-                .momentCount("0")  // 추후 연동 필요
-                .keywords(keywords)
-                .location(locationMap)
-                .similarityScore(similarityScore)
-                .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetail(Long placeId) {
-        // 기본 장소 정보 조회
-        Place place = placeRepository.findBasicPlaceById(placeId)
+        // 한 번의 쿼리로 모든 연관 데이터 조회 (N+1 해결)
+        Place place = placeRepository.findCompleteById(placeId)
                 .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
                         "장소를 찾을 수 없습니다: " + placeId));
 
-        // 키워드 정보 조회
-        Place placeWithKeywords = placeRepository.findByIdWithKeywords(placeId)
-                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
-                        "장소를 찾을 수 없습니다: " + placeId));
-        List<String> keywords = placeWithKeywords.getKeywords().stream()
+        // 이제 모든 데이터가 이미 로드되어 있어 추가 쿼리 없음
+        List<String> keywords = place.getKeywords().stream()
                 .map(pk -> pk.getKeyword().getKeyword())
                 .collect(Collectors.toList());
 
-        // 메뉴 정보 조회
-        Place placeWithMenus = placeRepository.findByIdWithMenus(placeId)
-                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
-                        "장소를 찾을 수 없습니다: " + placeId));
-        List<PlaceDetailResponse.Menu> menuList = placeWithMenus.getMenus().stream()
+        List<PlaceDetailResponse.Menu> menuList = place.getMenus().stream()
                 .map(menu -> PlaceDetailResponse.Menu.builder()
                         .name(menu.getMenuName())
                         .price(menu.getPrice())
                         .build())
                 .collect(Collectors.toList());
 
-        // 영업시간 정보 조회
-        Place placeWithHours = placeRepository.findByIdWithHours(placeId)
-                .orElseThrow(() -> new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
-                        "장소를 찾을 수 없습니다: " + placeId));
-        List<PlaceHours> hours = placeWithHours.getHours();
+        List<PlaceHours> hours = place.getHours();
 
         // 위치 정보 변환
         Point location = place.getLocation();
@@ -327,14 +235,63 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-    private List<PlaceDetailResponse.Schedule> buildDaySchedules(List<PlaceHours> placeHours) {
-        // 모든 요일 코드 (영어)
-        String[] dayCodesEn = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
+    // 기존 메서드들은 그대로 유지
+    private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
+            PlaceWithDistance placeWithDistance, List<String> keywords) {
+        String formattedDistance = formatDistance(placeWithDistance.getDistance());
 
-        // 요일별, 영업 유형별 맵 생성
+        Map<String, Object> locationMap = new HashMap<>();
+        locationMap.put("type", "Point");
+        locationMap.put("coordinates", new double[]{
+                placeWithDistance.getLongitude(),
+                placeWithDistance.getLatitude()
+        });
+
+        return PlaceSearchResponse.PlaceDto.builder()
+                .id(placeWithDistance.getId())
+                .name(placeWithDistance.getName())
+                .thumbnail(placeWithDistance.getImageUrl())
+                .distance(formattedDistance)
+                .momentCount("0")
+                .keywords(keywords)
+                .location(locationMap)
+                .similarityScore(null)
+                .build();
+    }
+
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
+        String formattedDistance = formatDistance(distance);
+
+        List<String> keywords;
+        if (aiKeywords != null && !aiKeywords.isEmpty()) {
+            keywords = aiKeywords;
+        } else {
+            keywords = place.getKeywords().stream()
+                    .map(pk -> pk.getKeyword().getKeyword())
+                    .collect(Collectors.toList());
+        }
+
+        Point location = place.getLocation();
+        Map<String, Object> locationMap = new HashMap<>();
+        locationMap.put("type", "Point");
+        locationMap.put("coordinates", new double[]{location.getX(), location.getY()});
+
+        return PlaceSearchResponse.PlaceDto.builder()
+                .id(place.getId())
+                .name(place.getName())
+                .thumbnail(place.getImageUrl())
+                .distance(formattedDistance)
+                .momentCount("0")
+                .keywords(keywords)
+                .location(locationMap)
+                .similarityScore(similarityScore)
+                .build();
+    }
+
+    private List<PlaceDetailResponse.Schedule> buildDaySchedules(List<PlaceHours> placeHours) {
+        String[] dayCodesEn = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
         Map<String, Map<Boolean, PlaceHours>> hoursByDayAndType = new HashMap<>();
 
-        // 데이터 정리: 요일별로 일반 영업시간과 브레이크 타임 분류
         for (PlaceHours hour : placeHours) {
             String englishDay = DayOfWeek.getEnglishCodeByKoreanCode(hour.getDayOfWeek());
 
@@ -342,32 +299,25 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 hoursByDayAndType.put(englishDay, new HashMap<>());
             }
 
-            // isBreakTime으로 구분: true면 브레이크 타임, false면 일반 영업시간
             hoursByDayAndType.get(englishDay).put(hour.getIsBreakTime(), hour);
         }
 
-        // 모든 요일에 대한 스케줄 생성
         List<PlaceDetailResponse.Schedule> schedules = new ArrayList<>();
         for (String dayCode : dayCodesEn) {
             Map<Boolean, PlaceHours> dayHoursMap = hoursByDayAndType.getOrDefault(dayCode, new HashMap<>());
 
-            // 일반 영업시간 (isBreakTime = false)
             PlaceHours regularHours = dayHoursMap.get(false);
-
-            // 브레이크 타임 (isBreakTime = true)
             PlaceHours breakHours = dayHoursMap.get(true);
 
             PlaceDetailResponse.Schedule.ScheduleBuilder builder =
                     PlaceDetailResponse.Schedule.builder().day(dayCode);
 
-            // 일반 영업시간 설정
             if (regularHours != null && regularHours.getOpenTime() != null && regularHours.getCloseTime() != null) {
                 builder.hours(regularHours.getOpenTime() + "~" + regularHours.getCloseTime());
             } else {
-                builder.hours(null); // 휴무일이거나 정보가 없는 경우 hours를 null로 설정
+                builder.hours(null);
             }
 
-            // 브레이크 타임 설정
             if (breakHours != null && breakHours.getOpenTime() != null && breakHours.getCloseTime() != null) {
                 builder.breakTime(breakHours.getOpenTime() + "~" + breakHours.getCloseTime());
             } else {
@@ -384,10 +334,8 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         if (distanceInMeters == null) return "0";
 
         if (distanceInMeters < 1000) {
-            // 미터 단위로 표시
             return Math.round(distanceInMeters) + "m";
         } else {
-            // 킬로미터 단위로 표시
             BigDecimal km = BigDecimal.valueOf(distanceInMeters / 1000.0)
                     .setScale(1, RoundingMode.HALF_UP);
             return km.toString() + "km";
@@ -399,11 +347,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             return "영업 여부 확인 필요";
         }
 
-        // 한국 시간대 기준으로 현재 시간 가져오기
         var koreaZoneId = ZoneId.of("Asia/Seoul");
         var now = ZonedDateTime.now(koreaZoneId);
 
-        // 현재 요일 (한글)
         var koreanDayOfWeek = switch (now.getDayOfWeek()) {
             case MONDAY -> "월";
             case TUESDAY -> "화";
@@ -414,11 +360,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
             case SUNDAY -> "일";
         };
 
-        // 현재 시간 정보
         var currentHour = now.getHour();
         var currentMinute = now.getMinute();
 
-        // 오늘의 영업 시간 및 브레이크 타임 찾기 (Java 17의 stream API 활용)
         var todayRegularHours = hours.stream()
                 .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && !h.getIsBreakTime())
                 .findFirst();
@@ -427,24 +371,20 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .filter(h -> h.getDayOfWeek().equals(koreanDayOfWeek) && h.getIsBreakTime())
                 .findFirst();
 
-        // 영업 정보가 없는 경우
         if (todayRegularHours.isEmpty()) {
             return "영업 정보 없음";
         }
 
         var regular = todayRegularHours.get();
 
-        // 휴무일인 경우
         if (regular.getOpenTime() == null || regular.getCloseTime() == null) {
             return "휴무일";
         }
 
-        // 시간을 분 단위로 변환
         var currentTimeInMinutes = currentHour * 60 + currentMinute;
         var regularOpenTimeInMinutes = parseTimeToMinutes(regular.getOpenTime());
         var regularCloseTimeInMinutes = parseTimeToMinutes(regular.getCloseTime());
 
-        // 브레이크 타임 정보 (Optional 활용)
         record BreakTime(int start, int end) {}
         var breakTime = todayBreakHours
                 .filter(b -> b.getOpenTime() != null && b.getCloseTime() != null)
@@ -453,14 +393,12 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                         parseTimeToMinutes(b.getCloseTime())
                 ));
 
-        // 브레이크 타임 체크
         if (breakTime.isPresent() &&
                 currentTimeInMinutes >= breakTime.get().start &&
                 currentTimeInMinutes < breakTime.get().end) {
             return "브레이크 타임";
         }
 
-        // 영업 상태 확인 (삼항 연산자로 간결하게)
         return regularOpenTimeInMinutes < regularCloseTimeInMinutes
                 ? (currentTimeInMinutes >= regularOpenTimeInMinutes &&
                 currentTimeInMinutes < regularCloseTimeInMinutes)
@@ -470,7 +408,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 ? "영업 중" : "영업 종료";
     }
 
-    // 시간 문자열을 분 단위로 변환하는 헬퍼 메서드
     private int parseTimeToMinutes(String timeString) {
         try {
             String[] parts = timeString.split(":");

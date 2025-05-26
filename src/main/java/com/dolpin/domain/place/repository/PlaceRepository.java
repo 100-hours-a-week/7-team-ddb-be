@@ -17,30 +17,45 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     @Query("SELECT p FROM Place p WHERE p.id = :id")
     Optional<Place> findBasicPlaceById(@Param("id") Long id);
 
-    // 장소 + 키워드 정보 조회
+    // 한 번에 모든 연관 데이터 조회
+    @Query("SELECT DISTINCT p FROM Place p " +
+            "LEFT JOIN FETCH p.keywords pk LEFT JOIN FETCH pk.keyword " +
+            "LEFT JOIN FETCH p.menus " +
+            "LEFT JOIN FETCH p.hours " +
+            "WHERE p.id = :id")
+    Optional<Place> findCompleteById(@Param("id") Long id);
+
+    // 여러 ID에 대해 한 번에 모든 연관 데이터 조회
+    @Query("SELECT DISTINCT p FROM Place p " +
+            "LEFT JOIN FETCH p.keywords pk LEFT JOIN FETCH pk.keyword " +
+            "LEFT JOIN FETCH p.menus " +
+            "LEFT JOIN FETCH p.hours " +
+            "WHERE p.id IN :ids")
+    List<Place> findCompleteByIds(@Param("ids") List<Long> ids);
+
+    // 검색용 - 키워드만 포함한 조회 (필요한 데이터만)
+    @Query("SELECT DISTINCT p FROM Place p " +
+            "LEFT JOIN FETCH p.keywords pk LEFT JOIN FETCH pk.keyword " +
+            "WHERE p.id IN :ids")
+    List<Place> findByIdsWithKeywords(@Param("ids") List<Long> ids);
+
+    // 기존 메서드들 유지 (하위 호환성)
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
             "WHERE p.id = :id")
     Optional<Place> findByIdWithKeywords(@Param("id") Long id);
 
-    // 장소 + 메뉴 정보 조회
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.menus " +
             "WHERE p.id = :id")
     Optional<Place> findByIdWithMenus(@Param("id") Long id);
 
-    // 장소 + 영업시간 정보 조회
     @Query("SELECT p FROM Place p " +
             "LEFT JOIN FETCH p.hours " +
             "WHERE p.id = :id")
     Optional<Place> findByIdWithHours(@Param("id") Long id);
 
-    @Query("SELECT p FROM Place p " +
-            "LEFT JOIN FETCH p.keywords k LEFT JOIN FETCH k.keyword " +
-            "WHERE p.id IN :ids")
-    List<Place> findByIdsWithKeywords(@Param("ids") List<Long> ids);
-
-
+    // Native Query들은 그대로 유지
     @Query(value =
             "SELECT p.id as id, p.name as name, p.category as category, " +
                     "p.road_address as roadAddress, p.lot_address as lotAddress, " +
@@ -57,7 +72,6 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radius") Double radius);
-
 
     @Query(value = "SELECT p.id as id, p.name as name, p.category as category, " +
             "p.road_address as roadAddress, p.lot_address as lotAddress, " +
@@ -80,10 +94,10 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lng") Double lng,
             @Param("radius") Double radius);
 
-    @Query("SELECT p.category\n" +
-            "FROM Place p\n" +
-            "WHERE p.category IS NOT NULL\n" +
-            "GROUP BY p.category\n" +
+    @Query("SELECT p.category " +
+            "FROM Place p " +
+            "WHERE p.category IS NOT NULL " +
+            "GROUP BY p.category " +
             "ORDER BY COUNT(*) DESC")
     List<String> findDistinctCategories();
 }
