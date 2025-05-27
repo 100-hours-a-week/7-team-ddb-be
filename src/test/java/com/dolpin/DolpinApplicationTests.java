@@ -1,5 +1,6 @@
 package com.dolpin;
 
+import com.dolpin.global.config.TestConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
