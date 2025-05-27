@@ -46,6 +46,7 @@ public class KakaoApiClient implements OAuthApiClient {
 
     @Override
     public String requestAccessToken(OAuthLoginParams loginParams) {
+
         String tokenUrl = authorizationUri.replace("/oauth/authorize", "/oauth/token");
 
         HttpHeaders headers = new HttpHeaders();
@@ -54,7 +55,18 @@ public class KakaoApiClient implements OAuthApiClient {
         MultiValueMap<String, String> body = loginParams.makeBody();
         body.add("grant_type", "authorization_code");
         body.add("client_id", clientId);
-        body.add("redirect_uri", redirectUri);
+
+        String actualRedirectUri;
+        String requestedUri = loginParams.getRedirectUri();
+
+
+        if (requestedUri != null && !requestedUri.isEmpty()) {
+            actualRedirectUri = requestedUri;
+        } else {
+            actualRedirectUri = redirectUri;
+        }
+
+        body.add("redirect_uri", actualRedirectUri);
         body.add("code", loginParams.getAuthorizationCode());
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);

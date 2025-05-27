@@ -8,5 +8,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OAuthUrlResponse {
-    private String redirect_url;
+    private String redirectUrl;
 }

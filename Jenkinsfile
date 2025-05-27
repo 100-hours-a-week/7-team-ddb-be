@@ -38,6 +38,21 @@ pipeline {
             }
         }
 
+        stage('Notify Before Start') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                        discordSend(
+                            description: "🚀 배포가 곧 시작됩니다: ${env.SERVICE_NAME} - ${env.BRANCH} 브랜치",
+                            link: env.BUILD_URL,
+                            title: "배포 시작",
+                            webhookURL: "$DISCORD"
+                        )
+                    }
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -123,7 +138,8 @@ docker pull ${env.GAR_IMAGE}
 sudo docker run -d --name ${env.CONTAINER_NAME} \
   --env-file /home/${env.SSH_USER}/.env \
   -v /home/${env.SSH_USER}/gcp-key.json:/home/${env.SSH_USER}/gcp-key.json \
-  -p ${env.PORT}:${env.PORT} \
+  -v /home/${env.SSH_USER}/logs:/logs \
+  -p ${env.PORT}:${env.PORT} -p 8081:8081 \
   ${env.GAR_IMAGE}
 
 """
@@ -145,6 +161,33 @@ ssh -tt -i ${env.SSH_KEY_PATH} -o StrictHostKeyChecking=no ${env.SSH_USER}@${env
                         """
                     }
                 }
+            }
+        }
+    }
+    
+    post {
+        success {
+            withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                discordSend description: """
+                제목 : ${currentBuild.displayName}
+                결과 : ${currentBuild.result}
+                실행 시간 : ${currentBuild.duration / 1000}s
+                """,
+                link: env.BUILD_URL, result: currentBuild.currentResult,
+                title: "${env.JOB_NAME} : ${currentBuild.displayName} 성공",
+                webhookURL: "$DISCORD"
+            }
+        }
+        failure {
+            withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                discordSend description: """
+                제목 : ${currentBuild.displayName}
+                결과 : ${currentBuild.result}
+                실행 시간 : ${currentBuild.duration / 1000}s
+                """,
+                link: env.BUILD_URL, result: currentBuild.currentResult,
+                title: "${env.JOB_NAME} : ${currentBuild.displayName} 실패",
+                webhookURL: "$DISCORD"
             }
         }
     }

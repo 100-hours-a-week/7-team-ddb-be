@@ -40,8 +40,9 @@ public class AuthController {
     @PostMapping("/tokens")
     public ResponseEntity<ApiResponse<TokenResponse>> getTokens(
             @RequestBody TokenRequest request,
+            @RequestParam(required = false) String redirect_uri,
             HttpServletResponse response) {
-        TokenResponse tokenResponse = authService.generateTokenByAuthorizationCode(request.getAuthorizationCode());
+        TokenResponse tokenResponse = authService.generateTokenByAuthorizationCode(request.getAuthorizationCode(), redirect_uri);
 
         cookieService.addAccessTokenCookie(response, tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
         cookieService.addRefreshTokenCookie(response, tokenResponse.getRefreshToken());
