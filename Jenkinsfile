@@ -13,32 +13,34 @@ pipeline {
     }
 
     stages {
-        stage('Setup Environment by Branch') {
+        stage('Set Branch & Cron Trigger') {
             steps {
                 script {
-                    def branchName = env.GIT_BRANCH.replaceFirst(/^origin\//, '')
+                    def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceFirst(/^origin\//, '')
                     env.BRANCH = branchName
 
-                    // 브랜치에 따라 환경 분기 설정
                     if (branchName == 'main') {
-                        env.BE_PRIVATE_IP = '10.10.30.2'
-                        env.ENV_LABEL = 'prod'
-                        env.REPO_NAME = 'dolpin-docker-image-prod'
+                        properties([pipelineTriggers([cron('30 0 * * 1-5')])])  // 월~금 오전 9:30
                     } else if (branchName == 'dev') {
-                        env.BE_PRIVATE_IP = '10.20.30.2'
-                        env.ENV_LABEL = 'dev'
-                        env.REPO_NAME = 'dolpin-docker-image-dev'
+                        properties([pipelineTriggers([
+                            cron('30 3 * * 1-4'),
+                            cron('30 0 * * 5'),
+                            cron('30 3 * * 6,7')
+                        ])])  // 월~목 12:30 + 금 9:30 + 토~일 12:30
                     } else {
-                        error "⚠️ 지원되지 않는 브랜치입니다: ${branchName}"
+                        properties([pipelineTriggers([])])
+                        echo "⛔ 지원되지 않는 브랜치입니다: ${branchName}. 빌드를 중단합니다."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("Unsupported branch: ${branchName}")
                     }
-
-                    env.TAG = "${env.SERVICE_NAME}:${env.BUILD_NUMBER}"
-                    env.GAR_IMAGE = "${env.GAR_HOST}/${env.PROJECT_ID}/${env.REPO_NAME}/${env.TAG}"
                 }
             }
         }
 
         stage('Notify Before Start') {
+            when {
+                expression { env.BRANCH in ['main', 'dev'] }
+            }
             steps {
                 script {
                     withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
@@ -56,6 +58,26 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Setup Environment by Branch') {
+            steps {
+                script {
+                    // 브랜치에 따라 환경 변수 설정
+                    if (env.BRANCH == 'main') {
+                        env.BE_PRIVATE_IP = '10.10.30.2'
+                        env.ENV_LABEL = 'prod'
+                        env.REPO_NAME = 'dolpin-docker-image-prod'
+                    } else {
+                        env.BE_PRIVATE_IP = '10.20.30.2'
+                        env.ENV_LABEL = 'dev'
+                        env.REPO_NAME = 'dolpin-docker-image-dev'
+                    }
+
+                    env.TAG = "${env.SERVICE_NAME}:${env.BUILD_NUMBER}"
+                    env.GAR_IMAGE = "${env.GAR_HOST}/${env.PROJECT_ID}/${env.REPO_NAME}/${env.TAG}"
+                }
             }
         }
 
@@ -96,16 +118,8 @@ pipeline {
         stage('Deploy to BE via SSH') {
             steps {
                 script {
-                    def saCredId = ''
-                    def envFileId = ''
-
-                    if (env.BRANCH == 'main') {
-                        saCredId = 'be-sa-key-prod'
-                        envFileId = 'be-prod-file'
-                    } else if (env.BRANCH == 'dev') {
-                        saCredId = 'be-sa-key-dev'
-                        envFileId = 'be-dev-file'
-                    }
+                    def saCredId = env.BRANCH == 'main' ? 'be-sa-key-prod' : 'be-sa-key-dev'
+                    def envFileId = env.BRANCH == 'main' ? 'be-prod-file' : 'be-dev-file'
 
                     // GCP Secret Manager에서 서비스 계정 키 다운로드
                     sh """
@@ -167,27 +181,35 @@ ssh -tt -i ${env.SSH_KEY_PATH} -o StrictHostKeyChecking=no ${env.SSH_USER}@${env
     
     post {
         success {
-            withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
-                discordSend description: """
-                제목 : ${currentBuild.displayName}
-                결과 : ${currentBuild.result}
-                실행 시간 : ${currentBuild.duration / 1000}s
-                """,
-                link: env.BUILD_URL, result: currentBuild.currentResult,
-                title: "${env.JOB_NAME} : ${currentBuild.displayName} 성공",
-                webhookURL: "$DISCORD"
+            script {
+                if (env.BRANCH in ['main', 'dev']) {
+                    withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                        discordSend description: """
+                        제목 : ${currentBuild.displayName}
+                        결과 : ${currentBuild.result}
+                        실행 시간 : ${currentBuild.duration / 1000}s
+                        """,
+                        link: env.BUILD_URL, result: currentBuild.currentResult,
+                        title: "${env.JOB_NAME} : ${currentBuild.displayName} 성공",
+                        webhookURL: "$DISCORD"
+                    }
+                }
             }
         }
         failure {
-            withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
-                discordSend description: """
-                제목 : ${currentBuild.displayName}
-                결과 : ${currentBuild.result}
-                실행 시간 : ${currentBuild.duration / 1000}s
-                """,
-                link: env.BUILD_URL, result: currentBuild.currentResult,
-                title: "${env.JOB_NAME} : ${currentBuild.displayName} 실패",
-                webhookURL: "$DISCORD"
+            script {
+                if (env.BRANCH in ['main', 'dev']) {
+                    withCredentials([string(credentialsId: 'Discord-Webhook', variable: 'DISCORD')]) {
+                        discordSend description: """
+                        제목 : ${currentBuild.displayName}
+                        결과 : ${currentBuild.result}
+                        실행 시간 : ${currentBuild.duration / 1000}s
+                        """,
+                        link: env.BUILD_URL, result: currentBuild.currentResult,
+                        title: "${env.JOB_NAME} : ${currentBuild.displayName} 실패",
+                        webhookURL: "$DISCORD"
+                    }
+                }
             }
         }
     }
