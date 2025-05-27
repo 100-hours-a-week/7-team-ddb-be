@@ -1,4 +1,4 @@
-package com.dolpin;
+package com.dolpin.global.config;
 
 import com.dolpin.global.storage.dto.request.PresignedUrlRequest;
 import com.dolpin.global.storage.dto.reseponse.PresignedUrlResponse;
