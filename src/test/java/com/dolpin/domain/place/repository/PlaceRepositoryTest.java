@@ -5,6 +5,7 @@ import com.dolpin.domain.place.entity.Keyword;
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.global.config.TestConfig;
 import com.dolpin.global.fixture.PlaceFixture;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("PlaceRepository 테스트")
 class PlaceRepositoryTest {
 
-    // PostGIS가 포함된 이미지 사용
+    // PostGIS가 포함된 이미지 사용 (PostgreSQL 호환성 명시)
     private static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
             DockerImageName.parse("postgis/postgis:15-3.3-alpine")
                     .asCompatibleSubstituteFor("postgres"))
@@ -44,6 +45,11 @@ class PlaceRepositoryTest {
     @BeforeAll
     static void beforeAll() {
         postgres.start();
+    }
+
+    @AfterAll
+    static void afterAll() {
+        postgres.stop();
     }
 
     static class TestContainerInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
