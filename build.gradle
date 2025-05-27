@@ -37,7 +37,7 @@ dependencies {
 
 	// Database
 	implementation 'org.postgresql:postgresql'
-	implementation 'org.hibernate.orm:hibernate-spatial'
+	implementation 'org.hibernate.orm:hibernate-spatial:6.6.11.Final'
 
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
@@ -53,6 +53,16 @@ dependencies {
 	// Actuator
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.micrometer:micrometer-registry-prometheus'
+
+	// Spring Boot Test (JUnit5)
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+	// Testcontainers
+	testImplementation 'org.testcontainers:junit-jupiter:1.18.3'
+	testImplementation 'org.testcontainers:postgresql:1.18.3'
+
+	// 실제 PostgreSQL 드라이버
+	testImplementation 'org.postgresql:postgresql:42.5.4'
 }
 
 // QueryDSL 설정
