@@ -29,8 +29,7 @@ class DolpinApplicationTests {
             new PostgreSQLContainer<>(POSTGIS_IMAGE)
                     .withDatabaseName("testdb")
                     .withUsername("test")
-                    .withPassword("test")
-                    .withInitScript("init-postgis.sql");
+                    .withPassword("test");
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
