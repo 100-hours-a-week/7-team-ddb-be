@@ -31,7 +31,7 @@ public class PlaceHours {
     private String closeTime;
 
     @Column(name = "is_break_time", nullable = false)
-    private Boolean isBreakTime = false;
+    private Boolean isBreakTime;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
