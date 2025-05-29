@@ -1,5 +1,6 @@
 package com.dolpin;
 
+import com.dolpin.global.config.TestConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,8 +29,7 @@ class DolpinApplicationTests {
             new PostgreSQLContainer<>(POSTGIS_IMAGE)
                     .withDatabaseName("testdb")
                     .withUsername("test")
-                    .withPassword("test")
-                    .withInitScript("init-postgis.sql");
+                    .withPassword("test");
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
