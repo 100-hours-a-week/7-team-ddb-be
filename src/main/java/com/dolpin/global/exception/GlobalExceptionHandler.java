@@ -5,8 +5,10 @@ import com.dolpin.global.response.ResponseStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
@@ -31,6 +33,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(e.getResponseStatus().getHttpStatus())
                 .body(ApiResponse.error(e.getResponseStatus()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("Method argument type mismatch: parameter '{}' with value '{}' could not be converted to type '{}'",
+                e.getName(), e.getValue(), e.getRequiredType().getSimpleName());
+
+        String message = String.format("잘못된 파라미터입니다: %s", e.getName());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(message)));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .findFirst()
+                .orElse("유효하지 않은 입력입니다");
+
+        log.warn("Validation failed: {}", message);
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(message)));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
