@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -25,8 +26,20 @@ public class TokenService {
 
     @Transactional
     public Token createRefreshToken(User user) {
-        // 기존 리프레시 토큰 무효화
-        //invalidateUserTokens(user);
+        // 1. 먼저 유효한 기존 토큰이 있는지 확인
+        List<Token> validTokens = tokenRepository.findValidTokensByUserId(user.getId());
+
+        if (!validTokens.isEmpty()) {
+            // 유효한 토큰이 있으면 재사용
+            Token existingToken = validTokens.get(0);
+            log.info("기존 유효한 리프레시 토큰 재사용 - 사용자: {}, 만료일: {}",
+                    user.getId(), existingToken.getExpiredAt());
+            return existingToken;
+        }
+
+        // 2. 유효한 토큰이 없을 때만 새로 생성
+        // 만료된 토큰들만 정리
+        cleanupExpiredTokens(user);
 
         // 새 리프레시 토큰 생성
         String refreshToken = jwtTokenProvider.generateToken(user.getId());
@@ -42,14 +55,32 @@ public class TokenService {
                 .isRevoked(false)
                 .build();
 
+        log.info("새 리프레시 토큰 생성 - 사용자: {}, 만료일: {}", user.getId(), expiryDate);
         return tokenRepository.save(token);
     }
 
+    // 만료된 토큰만 정리하는 메서드
+    @Transactional
+    public void cleanupExpiredTokens(User user) {
+        List<Token> expiredTokens = tokenRepository.findAllByUser(user)
+                .stream()
+                .filter(Token::isExpired)
+                .collect(Collectors.toList());
+
+        if (!expiredTokens.isEmpty()) {
+            expiredTokens.forEach(Token::revoke);
+            tokenRepository.saveAll(expiredTokens);
+            log.info("만료된 토큰 {}개 정리 완료 - 사용자: {}", expiredTokens.size(), user.getId());
+        }
+    }
+
+    // 모든 토큰 무효화 (로그아웃, 계정 삭제 시에만 사용)
     @Transactional
     public void invalidateUserTokens(User user) {
         List<Token> userTokens = tokenRepository.findAllByUser(user);
         userTokens.forEach(Token::revoke);
         tokenRepository.saveAll(userTokens);
+        log.info("사용자 모든 토큰 무효화 완료 - 사용자: {}, 토큰 수: {}", user.getId(), userTokens.size());
     }
 
     @Transactional
@@ -68,6 +99,7 @@ public class TokenService {
         // 새 액세스 토큰 생성
         String newAccessToken = jwtTokenProvider.generateToken(token.getUser().getId());
 
+        log.info("액세스 토큰 갱신 완료 - 사용자: {}", token.getUser().getId());
         return RefreshTokenResponse.builder()
                 .newAccessToken(newAccessToken)
                 .expiresIn(jwtTokenProvider.getExpirationMs() / 1000)
@@ -82,7 +114,7 @@ public class TokenService {
 
         token.revoke();
         tokenRepository.save(token);
-        log.info("Refresh token invalidated for user: {}", token.getUser().getId());
+        log.info("리프레시 토큰 무효화 완료 - 사용자: {}", token.getUser().getId());
     }
 
     @Transactional(readOnly = true)
