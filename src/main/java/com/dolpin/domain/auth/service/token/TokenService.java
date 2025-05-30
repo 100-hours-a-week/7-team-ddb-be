@@ -26,7 +26,7 @@ public class TokenService {
     @Transactional
     public Token createRefreshToken(User user) {
         // 기존 리프레시 토큰 무효화
-        invalidateUserTokens(user);
+        //invalidateUserTokens(user);
 
         // 새 리프레시 토큰 생성
         String refreshToken = jwtTokenProvider.generateToken(user.getId());
