@@ -472,12 +472,21 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     // 시간 문자열을 분 단위로 변환하는 헬퍼 메서드
     private int parseTimeToMinutes(String timeString) {
+        if (timeString == null || !timeString.contains(":")) {
+            return 0;
+        }
+        String[] parts = timeString.split(":");
+        if (parts.length != 2) {
+            return 0;
+        }
         try {
-            String[] parts = timeString.split(":");
             int hour = Integer.parseInt(parts[0]);
             int minute = Integer.parseInt(parts[1]);
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return 0;
+            }
             return hour * 60 + minute;
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             return 0;
         }
     }
