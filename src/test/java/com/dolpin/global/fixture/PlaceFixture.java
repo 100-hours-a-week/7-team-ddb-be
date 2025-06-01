@@ -1,119 +1,75 @@
 package com.dolpin.global.fixture;
 
 import com.dolpin.domain.place.entity.*;
+import com.dolpin.global.constants.TestConstants;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
 public class PlaceFixture {
 
     private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
 
-    public static Long createAndPersistPlace(TestEntityManager entityManager, String name, double lat, double lng) {
-        entityManager.getEntityManager().createNativeQuery("""
-            INSERT INTO place (name, location, road_address, category, image_url, description, phone, created_at, updated_at)
-            VALUES (?1, ST_SetSRID(ST_Point(?2, ?3), 4326), ?4, ?5, ?6, ?7, ?8, NOW(), NOW())
-            """)
-                .setParameter(1, name)
-                .setParameter(2, lng)
-                .setParameter(3, lat)
-                .setParameter(4, "테스트 주소")
-                .setParameter(5, "카페")
-                .setParameter(6, "test.jpg")
-                .setParameter(7, "테스트 설명")
-                .setParameter(8, "02-1234-5678")
-                .executeUpdate();
+    public static Place createPlace(String name, String category, double lat, double lng) {
+        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat));
 
-        entityManager.flush();
-
-        return (Long) entityManager.getEntityManager()
-                .createNativeQuery("SELECT id FROM place WHERE name = ? ORDER BY id DESC LIMIT 1")
-                .setParameter(1, name)
-                .getSingleResult();
-    }
-
-    public static Long createPlaceWithCategory(TestEntityManager entityManager, String name, String category, double lat, double lng) {
-        entityManager.getEntityManager().createNativeQuery("""
-           INSERT INTO place (name, location, road_address, category, image_url, description, phone, created_at, updated_at)
-            VALUES (?1, ST_SetSRID(ST_Point(?2, ?3), 4326), ?4, ?5, ?6, ?7, ?8, NOW(), NOW())
-            """)
-                .setParameter(1, name)
-                .setParameter(2, lng)
-                .setParameter(3, lat)
-                .setParameter(4, "테스트 주소")
-                .setParameter(5, category)
-                .setParameter(6, "test.jpg")
-                .setParameter(7, "테스트 설명")
-                .setParameter(8, "02-1234-5678")
-                .executeUpdate();
-
-        entityManager.flush();
-
-        return (Long) entityManager.getEntityManager()
-                .createNativeQuery("SELECT id FROM place WHERE name = ? AND category = ? ORDER BY id DESC LIMIT 1")
-                .setParameter(1, name)
-                .setParameter(2, category)
-                .getSingleResult();
-    }
-
-    public static PlaceHours createAndPersistPlaceHours(TestEntityManager entityManager, Long placeId, String dayOfWeek, String openTime, String closeTime) {
-        PlaceHours placeHours = PlaceHours.builder()
-                .dayOfWeek(dayOfWeek)
-                .openTime(openTime)
-                .closeTime(closeTime)
-                .isBreakTime(false)
+        return Place.builder()
+                .name(name)
+                .category(category)
+                .location(location)
+                .roadAddress(TestConstants.DEFAULT_ROAD_ADDRESS)
+                .lotAddress(TestConstants.DEFAULT_LOT_ADDRESS)
+                .imageUrl(TestConstants.DEFAULT_IMAGE_URL)
+                .description(TestConstants.DEFAULT_DESCRIPTION)
+                .phone(TestConstants.DEFAULT_PHONE)
                 .build();
-
-        Place place = entityManager.find(Place.class, placeId);
-
-        try {
-            var field = PlaceHours.class.getDeclaredField("place");
-            field.setAccessible(true);
-            field.set(placeHours, place);
-        } catch (Exception e) {
-            throw new RuntimeException("PlaceHours 생성 실패", e);
-        }
-
-        return entityManager.persistAndFlush(placeHours);
     }
 
-    public static PlaceMenu createAndPersistPlaceMenu(TestEntityManager entityManager, Long placeId, String menuName, Integer price) {
-        PlaceMenu placeMenu = PlaceMenu.builder()
-                .menuName(menuName)
-                .price(price)
-                .build();
-
-        Place place = entityManager.find(Place.class, placeId);
-
-        try {
-            var field = PlaceMenu.class.getDeclaredField("place");
-            field.setAccessible(true);
-            field.set(placeMenu, place);
-        } catch (Exception e) {
-            throw new RuntimeException("PlaceMenu 생성 실패", e);
-        }
-
-        return entityManager.persistAndFlush(placeMenu);
+    public static Place createCafe(String name, double lat, double lng) {
+        return createPlace(name, TestConstants.CAFE_CATEGORY, lat, lng);
     }
 
-    public static Keyword createAndPersistKeyword(TestEntityManager entityManager, String keyword) {
-        Keyword keywordEntity = Keyword.builder()
+    public static Place createRestaurant(String name, double lat, double lng) {
+        return createPlace(name, TestConstants.RESTAURANT_CATEGORY, lat, lng);
+    }
+
+    public static Place createBar(String name, double lat, double lng) {
+        return createPlace(name, TestConstants.BAR_CATEGORY, lat, lng);
+    }
+
+    public static Keyword createKeyword(String keyword) {
+        return Keyword.builder()
                 .keyword(keyword)
                 .build();
-        return entityManager.persistAndFlush(keywordEntity);
     }
 
-    public static PlaceKeyword createAndPersistPlaceKeyword(TestEntityManager entityManager, Long placeId, Long keywordId) {
-        Place place = entityManager.find(Place.class, placeId);
-        Keyword keyword = entityManager.find(Keyword.class, keywordId);
-
-        PlaceKeyword placeKeyword = PlaceKeyword.builder()
+    public static PlaceKeyword createPlaceKeyword(Place place, Keyword keyword) {
+        return PlaceKeyword.builder()
                 .place(place)
                 .keyword(keyword)
                 .build();
+    }
 
-        return entityManager.persistAndFlush(placeKeyword);
+    public static PlaceMenu createPlaceMenu(Place place, String menuName, Integer price) {
+        return PlaceMenu.builder()
+                .place(place)
+                .menuName(menuName)
+                .price(price)
+                .build();
+    }
+
+    public static PlaceHours createPlaceHours(Place place, String dayOfWeek, String openTime, String closeTime) {
+        return createPlaceHours(place, dayOfWeek, openTime, closeTime, false);
+    }
+
+    public static PlaceHours createPlaceHours(Place place, String dayOfWeek, String openTime, String closeTime, boolean isBreakTime) {
+        return PlaceHours.builder()
+                .place(place)
+                .dayOfWeek(dayOfWeek)
+                .openTime(openTime)
+                .closeTime(closeTime)
+                .isBreakTime(isBreakTime)
+                .build();
     }
 }
