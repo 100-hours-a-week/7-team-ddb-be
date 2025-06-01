@@ -1,15 +1,16 @@
 package com.dolpin.domain.place.repository;
 
 import com.dolpin.domain.place.dto.response.PlaceWithDistance;
-import com.dolpin.domain.place.entity.Keyword;
-import com.dolpin.domain.place.entity.Place;
+import com.dolpin.domain.place.entity.*;
 import com.dolpin.global.config.TestConfig;
+import com.dolpin.global.constants.TestConstants;
 import com.dolpin.global.fixture.PlaceFixture;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import com.dolpin.global.helper.PlaceTestHelper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
@@ -34,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("PlaceRepository 테스트")
 class PlaceRepositoryTest {
 
-    // PostGIS가 포함된 이미지 사용 (PostgreSQL 호환성 명시)
     private static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
             DockerImageName.parse("postgis/postgis:15-3.3-alpine")
                     .asCompatibleSubstituteFor("postgres"))
@@ -77,28 +77,26 @@ class PlaceRepositoryTest {
         @Test
         @DisplayName("ID로 기본 장소 정보 조회가 정상 동작한다")
         void findBasicPlaceById_ReturnsPlace() {
-            // given
-            Long placeId = PlaceFixture.createPlaceWithCategory(entityManager, "테스트 카페", "카페", 37.5665, 126.9780);
+            Place place = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place savedPlace = entityManager.persistAndFlush(place);
+            clearPersistenceContext();
 
-            // when
-            Optional<Place> result = placeRepository.findBasicPlaceById(placeId);
+            Optional<Place> result = placeRepository.findBasicPlaceById(savedPlace.getId());
 
-            // then
             assertThat(result).isPresent();
-            assertThat(result.get().getName()).isEqualTo("테스트 카페");
-            assertThat(result.get().getCategory()).isEqualTo("카페");
+            assertThat(result.get().getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
+            assertThat(result.get().getCategory()).isEqualTo(TestConstants.CAFE_CATEGORY);
         }
 
         @Test
         @DisplayName("존재하지 않는 ID로 조회하면 빈 결과를 반환한다")
         void findBasicPlaceById_WithNonExistentId_ReturnsEmpty() {
-            // given
             Long nonExistentId = 999L;
+            clearPersistenceContext();
 
-            // when
             Optional<Place> result = placeRepository.findBasicPlaceById(nonExistentId);
 
-            // then
             assertThat(result).isEmpty();
         }
     }
@@ -110,40 +108,43 @@ class PlaceRepositoryTest {
         @Test
         @DisplayName("키워드를 포함한 장소 정보 조회가 정상 동작한다")
         void findByIdWithKeywords_ReturnsPlaceWithKeywords() {
-            // given
-            Long placeId = PlaceFixture.createPlaceWithCategory(entityManager, "테스트 카페", "카페", 37.5665, 126.9780);
-            Keyword keyword1 = PlaceFixture.createAndPersistKeyword(entityManager, "아늑한");
-            Keyword keyword2 = PlaceFixture.createAndPersistKeyword(entityManager, "맛있는");
+            Place place = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Keyword keyword1 = PlaceFixture.createKeyword(TestConstants.COZY_KEYWORD);
+            Keyword keyword2 = PlaceFixture.createKeyword(TestConstants.DELICIOUS_KEYWORD);
 
-            PlaceFixture.createAndPersistPlaceKeyword(entityManager, placeId, keyword1.getId());
-            PlaceFixture.createAndPersistPlaceKeyword(entityManager, placeId, keyword2.getId());
+            Place savedPlace = entityManager.persistAndFlush(place);
+            Keyword savedKeyword1 = entityManager.persistAndFlush(keyword1);
+            Keyword savedKeyword2 = entityManager.persistAndFlush(keyword2);
 
-            entityManager.flush();
-            entityManager.clear();
+            PlaceKeyword placeKeyword1 = PlaceFixture.createPlaceKeyword(savedPlace, savedKeyword1);
+            PlaceKeyword placeKeyword2 = PlaceFixture.createPlaceKeyword(savedPlace, savedKeyword2);
+            entityManager.persistAndFlush(placeKeyword1);
+            entityManager.persistAndFlush(placeKeyword2);
 
-            // when
-            Optional<Place> result = placeRepository.findByIdWithKeywords(placeId);
+            clearPersistenceContext();
 
-            // then
+            Optional<Place> result = placeRepository.findByIdWithKeywords(savedPlace.getId());
+
             assertThat(result).isPresent();
             assertThat(result.get().getKeywords()).hasSize(2);
 
             List<String> keywords = result.get().getKeywords().stream()
                     .map(pk -> pk.getKeyword().getKeyword())
                     .toList();
-            assertThat(keywords).containsExactlyInAnyOrder("아늑한", "맛있는");
+            assertThat(keywords).containsExactlyInAnyOrder(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
         }
 
         @Test
         @DisplayName("키워드가 없는 장소도 정상 조회된다")
         void findByIdWithKeywords_WithNoKeywords_ReturnsPlace() {
-            // given
-            Long placeId = PlaceFixture.createPlaceWithCategory(entityManager, "키워드 없는 카페", "카페", 37.5665, 126.9780);
+            Place place = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place savedPlace = entityManager.persistAndFlush(place);
+            clearPersistenceContext();
 
-            // when
-            Optional<Place> result = placeRepository.findByIdWithKeywords(placeId);
+            Optional<Place> result = placeRepository.findByIdWithKeywords(savedPlace.getId());
 
-            // then
             assertThat(result).isPresent();
             assertThat(result.get().getKeywords()).isEmpty();
         }
@@ -151,70 +152,78 @@ class PlaceRepositoryTest {
         @Test
         @DisplayName("메뉴를 포함한 장소 정보 조회가 정상 동작한다")
         void findByIdWithMenus_ReturnsPlaceWithMenus() {
-            // given
-            Long placeId = PlaceFixture.createPlaceWithCategory(entityManager, "테스트 카페", "카페", 37.5665, 126.9780);
-            PlaceFixture.createAndPersistPlaceMenu(entityManager, placeId, "아메리카노", 4000);
-            PlaceFixture.createAndPersistPlaceMenu(entityManager, placeId, "라떼", 4500);
+            Place place = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            Place savedPlace = entityManager.persistAndFlush(place);
 
-            // when
-            Optional<Place> result = placeRepository.findByIdWithMenus(placeId);
+            PlaceMenu menu1 = PlaceFixture.createPlaceMenu(savedPlace, TestConstants.AMERICANO_MENU, TestConstants.AMERICANO_PRICE);
+            PlaceMenu menu2 = PlaceFixture.createPlaceMenu(savedPlace, TestConstants.LATTE_MENU, TestConstants.LATTE_PRICE);
+            entityManager.persistAndFlush(menu1);
+            entityManager.persistAndFlush(menu2);
 
-            // then
+            clearPersistenceContext();
+
+            Optional<Place> result = placeRepository.findByIdWithMenus(savedPlace.getId());
+
             assertThat(result).isPresent();
             assertThat(result.get().getMenus()).hasSize(2);
 
             List<String> menuNames = result.get().getMenus().stream()
                     .map(menu -> menu.getMenuName())
                     .toList();
-            assertThat(menuNames).containsExactlyInAnyOrder("아메리카노", "라떼");
+            assertThat(menuNames).containsExactlyInAnyOrder(TestConstants.AMERICANO_MENU, TestConstants.LATTE_MENU);
         }
 
         @Test
         @DisplayName("영업시간을 포함한 장소 정보 조회가 정상 동작한다")
         void findByIdWithHours_ReturnsPlaceWithHours() {
-            // given
-            Long placeId = PlaceFixture.createPlaceWithCategory(entityManager, "테스트 카페", "카페", 37.5665, 126.9780);
-            PlaceFixture.createAndPersistPlaceHours(entityManager, placeId, "월", "09:00", "21:00");
-            PlaceFixture.createAndPersistPlaceHours(entityManager, placeId, "화", "09:00", "21:00");
+            Place place = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            Place savedPlace = entityManager.persistAndFlush(place);
 
-            // when
-            Optional<Place> result = placeRepository.findByIdWithHours(placeId);
+            PlaceHours hours1 = PlaceFixture.createPlaceHours(savedPlace, TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME);
+            PlaceHours hours2 = PlaceFixture.createPlaceHours(savedPlace, TestConstants.TUESDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME);
+            entityManager.persistAndFlush(hours1);
+            entityManager.persistAndFlush(hours2);
 
-            // then
+            clearPersistenceContext();
+
+            Optional<Place> result = placeRepository.findByIdWithHours(savedPlace.getId());
+
             assertThat(result).isPresent();
             assertThat(result.get().getHours()).hasSize(2);
 
             List<String> days = result.get().getHours().stream()
                     .map(hours -> hours.getDayOfWeek())
                     .toList();
-            assertThat(days).containsExactlyInAnyOrder("월", "화");
+            assertThat(days).containsExactlyInAnyOrder(TestConstants.MONDAY, TestConstants.TUESDAY);
         }
 
         @Test
         @DisplayName("여러 ID로 키워드 포함 장소들 조회가 정상 동작한다")
         void findByIdsWithKeywords_ReturnsPlacesWithKeywords() {
-            // given
-            Long place1Id = PlaceFixture.createPlaceWithCategory(entityManager, "카페1", "카페", 37.5665, 126.9780);
-            Long place2Id = PlaceFixture.createPlaceWithCategory(entityManager, "카페2", "카페", 37.5666, 126.9781);
+            Place place1 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "1", TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place place2 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "2", TestConstants.CAFE_CATEGORY,
+                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+            Keyword keyword = PlaceFixture.createKeyword(TestConstants.GOOD_KEYWORD);
 
-            Keyword keyword = PlaceFixture.createAndPersistKeyword(entityManager, "좋은");
-            PlaceFixture.createAndPersistPlaceKeyword(entityManager, place1Id, keyword.getId());
+            Place savedPlace1 = entityManager.persistAndFlush(place1);
+            Place savedPlace2 = entityManager.persistAndFlush(place2);
+            Keyword savedKeyword = entityManager.persistAndFlush(keyword);
 
-            entityManager.flush();
-            entityManager.clear();
+            PlaceKeyword placeKeyword = PlaceFixture.createPlaceKeyword(savedPlace1, savedKeyword);
+            entityManager.persistAndFlush(placeKeyword);
 
-            // when
-            List<Place> results = placeRepository.findByIdsWithKeywords(List.of(place1Id, place2Id));
+            clearPersistenceContext();
 
-            // then
+            List<Place> results = placeRepository.findByIdsWithKeywords(List.of(savedPlace1.getId(), savedPlace2.getId()));
+
             assertThat(results).hasSize(2);
-            assertThat(results.stream().map(Place::getName)).containsExactlyInAnyOrder("카페1", "카페2");
+            assertThat(results.stream().map(Place::getName))
+                    .containsExactlyInAnyOrder(TestConstants.TEST_CAFE_NAME + "1", TestConstants.TEST_CAFE_NAME + "2");
         }
     }
 
@@ -225,121 +234,127 @@ class PlaceRepositoryTest {
         @Test
         @DisplayName("반경 내 특정 장소들 검색이 정상 동작한다")
         void findPlacesWithinRadiusByIds_ReturnsNearbyPlaces() {
-            // given
-            Long nearPlaceId = PlaceFixture.createPlaceWithCategory(entityManager, "가까운 카페", "카페", 37.5665, 126.9780);
-            Long farPlaceId = PlaceFixture.createPlaceWithCategory(entityManager, "먼 카페", "카페", 37.6665, 127.0780);
+            Place nearPlace = PlaceFixture.createPlace("가까운 " + TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place farPlace = PlaceFixture.createPlace("먼 " + TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.FAR_LAT, TestConstants.FAR_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            Place savedNearPlace = entityManager.persistAndFlush(nearPlace);
+            Place savedFarPlace = entityManager.persistAndFlush(farPlace);
+            clearPersistenceContext();
 
-            List<Long> placeIds = List.of(nearPlaceId, farPlaceId);
-            Double centerLat = 37.5665;
-            Double centerLng = 126.9780;
-            Double radius = 1000.0; // 1km
+            List<Long> placeIds = List.of(savedNearPlace.getId(), savedFarPlace.getId());
 
-            // when
             List<PlaceWithDistance> results = placeRepository.findPlacesWithinRadiusByIds(
-                    placeIds, centerLat, centerLng, radius);
+                    placeIds, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.SMALL_RADIUS);
 
-            // then
             assertThat(results).hasSize(1);
-            assertThat(results.get(0).getName()).isEqualTo("가까운 카페");
-            assertThat(results.get(0).getDistance()).isLessThan(radius);
+            assertThat(results.get(0).getName()).isEqualTo("가까운 " + TestConstants.TEST_CAFE_NAME);
+            assertThat(results.get(0).getDistance()).isLessThan(TestConstants.SMALL_RADIUS);
         }
 
         @Test
         @DisplayName("반경이 매우 클 때 모든 장소가 조회된다")
         void findPlacesWithinRadiusByIds_WithLargeRadius_ReturnsAllPlaces() {
-            // given
-            Long place1Id = PlaceFixture.createPlaceWithCategory(entityManager, "카페1", "카페", 37.5665, 126.9780);
-            Long place2Id = PlaceFixture.createPlaceWithCategory(entityManager, "카페2", "카페", 37.6665, 127.0780);
+            Place place1 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "1", TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place place2 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "2", TestConstants.CAFE_CATEGORY,
+                    TestConstants.FAR_LAT, TestConstants.FAR_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            Place savedPlace1 = entityManager.persistAndFlush(place1);
+            Place savedPlace2 = entityManager.persistAndFlush(place2);
+            clearPersistenceContext();
 
-            List<Long> placeIds = List.of(place1Id, place2Id);
-            Double centerLat = 37.5665;
-            Double centerLng = 126.9780;
-            Double radius = 50000.0; // 50km
+            List<Long> placeIds = List.of(savedPlace1.getId(), savedPlace2.getId());
 
-            // when
             List<PlaceWithDistance> results = placeRepository.findPlacesWithinRadiusByIds(
-                    placeIds, centerLat, centerLng, radius);
+                    placeIds, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.LARGE_RADIUS);
 
-            // then
             assertThat(results).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("ID 목록으로 검색 시 결과가 거리순으로 정렬된다")
+        void findPlacesWithinRadiusByIds_ResultsOrderedByDistance() {
+            String nearCafeName = "가까운 " + TestConstants.TEST_CAFE_NAME;
+            String farCafeName = "먼 " + TestConstants.TEST_CAFE_NAME;
+
+            Place nearPlace = PlaceFixture.createPlace(nearCafeName, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place farPlace = PlaceFixture.createPlace(farCafeName, TestConstants.CAFE_CATEGORY,
+                    TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG);
+
+            Place savedNearPlace = entityManager.persistAndFlush(nearPlace);
+            Place savedFarPlace = entityManager.persistAndFlush(farPlace);
+            clearPersistenceContext();
+
+            List<Long> placeIds = List.of(savedNearPlace.getId(), savedFarPlace.getId());
+
+            List<PlaceWithDistance> results = placeRepository.findPlacesWithinRadiusByIds(
+                    placeIds, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.LARGE_RADIUS);
+
+            assertThat(results).hasSize(2);
+            assertThat(results.get(0).getName()).isEqualTo(nearCafeName);
+            assertThat(results.get(1).getName()).isEqualTo(farCafeName);
+            assertThat(results.get(0).getDistance()).isLessThan(results.get(1).getDistance());
         }
 
         @Test
         @DisplayName("카테고리별 반경 내 장소 검색이 정상 동작한다")
         void findPlacesByCategoryWithinRadius_ReturnsPlacesByCategory() {
-            // given
-            PlaceFixture.createPlaceWithCategory(entityManager, "테스트 카페", "카페", 37.5665, 126.9780);
-            PlaceFixture.createPlaceWithCategory(entityManager, "테스트 식당", "식당", 37.5666, 126.9781);
+            Place cafe = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place restaurant = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME, TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            entityManager.persistAndFlush(cafe);
+            entityManager.persistAndFlush(restaurant);
+            clearPersistenceContext();
 
-            String category = "카페";
-            Double centerLat = 37.5665;
-            Double centerLng = 126.9780;
-            Double radius = 1000.0;
-
-            // when
             List<PlaceWithDistance> results = placeRepository.findPlacesByCategoryWithinRadius(
-                    category, centerLat, centerLng, radius);
+                    TestConstants.CAFE_CATEGORY, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.SMALL_RADIUS);
 
-            // then
             assertThat(results).hasSize(1);
-            assertThat(results.get(0).getName()).isEqualTo("테스트 카페");
-            assertThat(results.get(0).getCategory()).isEqualTo("카페");
+            assertThat(results.get(0).getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
+            assertThat(results.get(0).getCategory()).isEqualTo(TestConstants.CAFE_CATEGORY);
         }
 
         @Test
         @DisplayName("카테고리별 검색 결과가 거리순으로 정렬된다")
         void findPlacesByCategoryWithinRadius_ResultsOrderedByDistance() {
-            // given
-            PlaceFixture.createPlaceWithCategory(entityManager, "가까운 카페", "카페", 37.5665, 126.9780);
-            PlaceFixture.createPlaceWithCategory(entityManager, "먼 카페", "카페", 37.5670, 126.9785);
+            String nearCafeName = "가까운 " + TestConstants.TEST_CAFE_NAME;
+            String farCafeName = "먼 " + TestConstants.TEST_CAFE_NAME;
 
-            entityManager.flush();
-            entityManager.clear();
+            Place nearCafe = PlaceFixture.createPlace(nearCafeName, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place farCafe = PlaceFixture.createPlace(farCafeName, TestConstants.CAFE_CATEGORY,
+                    TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG);
 
-            String category = "카페";
-            Double centerLat = 37.5665;
-            Double centerLng = 126.9780;
-            Double radius = 10000.0; // 충분히 큰 반경
+            entityManager.persistAndFlush(nearCafe);
+            entityManager.persistAndFlush(farCafe);
+            clearPersistenceContext();
 
-            // when
             List<PlaceWithDistance> results = placeRepository.findPlacesByCategoryWithinRadius(
-                    category, centerLat, centerLng, radius);
+                    TestConstants.CAFE_CATEGORY, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.LARGE_RADIUS);
 
-            // then
             assertThat(results).hasSize(2);
-            assertThat(results.get(0).getName()).isEqualTo("가까운 카페");
-            assertThat(results.get(1).getName()).isEqualTo("먼 카페");
+            assertThat(results.get(0).getName()).isEqualTo(nearCafeName);
+            assertThat(results.get(1).getName()).isEqualTo(farCafeName);
             assertThat(results.get(0).getDistance()).isLessThan(results.get(1).getDistance());
         }
 
         @Test
         @DisplayName("존재하지 않는 카테고리 검색 시 빈 결과를 반환한다")
         void findPlacesByCategoryWithinRadius_WithNonExistentCategory_ReturnsEmpty() {
-            // given
-            PlaceFixture.createPlaceWithCategory(entityManager, "테스트 카페", "카페", 37.5665, 126.9780);
+            Place cafe = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            entityManager.persistAndFlush(cafe);
+            clearPersistenceContext();
 
-            String nonExistentCategory = "존재하지않는카테고리";
-            Double centerLat = 37.5665;
-            Double centerLng = 126.9780;
-            Double radius = 1000.0;
-
-            // when
             List<PlaceWithDistance> results = placeRepository.findPlacesByCategoryWithinRadius(
-                    nonExistentCategory, centerLat, centerLng, radius);
+                    TestConstants.NON_EXISTENT_CATEGORY, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.SMALL_RADIUS);
 
-            // then
             assertThat(results).isEmpty();
         }
     }
@@ -351,55 +366,102 @@ class PlaceRepositoryTest {
         @Test
         @DisplayName("카테고리 목록 조회가 정상 동작한다")
         void findDistinctCategories_ReturnsCategories() {
-            // given
-            PlaceFixture.createPlaceWithCategory(entityManager, "카페1", "카페", 37.5665, 126.9780);
-            PlaceFixture.createPlaceWithCategory(entityManager, "식당1", "식당", 37.5666, 126.9781);
-            PlaceFixture.createPlaceWithCategory(entityManager, "술집1", "술집", 37.5667, 126.9782);
+            Place cafe = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME, TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place restaurant = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME, TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+            Place bar = PlaceFixture.createPlace(TestConstants.TEST_BAR_NAME, TestConstants.BAR_CATEGORY,
+                    TestConstants.BAR_LAT, TestConstants.BAR_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            entityManager.persistAndFlush(cafe);
+            entityManager.persistAndFlush(restaurant);
+            entityManager.persistAndFlush(bar);
+            clearPersistenceContext();
 
-            // when
             List<String> categories = placeRepository.findDistinctCategories();
 
-            // then
-            assertThat(categories).containsExactlyInAnyOrder("카페", "식당", "술집");
+            assertThat(categories).containsExactlyInAnyOrder(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY, TestConstants.BAR_CATEGORY);
         }
 
         @Test
-        @DisplayName("카테고리가 많은 순서대로 정렬되어 조회된다")
-        void findDistinctCategories_OrderedByCount() {
-            // given - 카페 3개, 식당 2개, 술집 1개
-            PlaceFixture.createPlaceWithCategory(entityManager, "카페1", "카페", 37.5665, 126.9780);
-            PlaceFixture.createPlaceWithCategory(entityManager, "카페2", "카페", 37.5666, 126.9781);
-            PlaceFixture.createPlaceWithCategory(entityManager, "카페3", "카페", 37.5667, 126.9782);
-            PlaceFixture.createPlaceWithCategory(entityManager, "식당1", "식당", 37.5668, 126.9783);
-            PlaceFixture.createPlaceWithCategory(entityManager, "식당2", "식당", 37.5669, 126.9784);
-            PlaceFixture.createPlaceWithCategory(entityManager, "술집1", "술집", 37.5670, 126.9785);
+        @DisplayName("카테고리가 COUNT 기준으로 내림차순 정렬되어 조회된다")
+        void findDistinctCategories_OrderedByCountDescending() {
+            // 카페 3개 생성 (가장 많음)
+            Place cafe1 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "1", TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place cafe2 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "2", TestConstants.CAFE_CATEGORY,
+                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+            Place cafe3 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "3", TestConstants.CAFE_CATEGORY,
+                    TestConstants.BAR_LAT, TestConstants.BAR_LNG);
 
-            entityManager.flush();
-            entityManager.clear();
+            // 식당 2개 생성 (중간)
+            Place restaurant1 = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME + "1", TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG);
+            Place restaurant2 = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME + "2", TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.RESTAURANT2_LAT, TestConstants.RESTAURANT2_LNG);
 
-            // when
+            // 술집 1개 생성 (가장 적음)
+            Place bar1 = PlaceFixture.createPlace(TestConstants.TEST_BAR_NAME + "1", TestConstants.BAR_CATEGORY,
+                    TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG);
+
+            entityManager.persistAndFlush(cafe1);
+            entityManager.persistAndFlush(cafe2);
+            entityManager.persistAndFlush(cafe3);
+            entityManager.persistAndFlush(restaurant1);
+            entityManager.persistAndFlush(restaurant2);
+            entityManager.persistAndFlush(bar1);
+            clearPersistenceContext();
+
             List<String> categories = placeRepository.findDistinctCategories();
 
-            // then
+            // 검증: 카테고리 개수가 많은 순서대로 정렬
             assertThat(categories).hasSize(3);
-            assertThat(categories.get(0)).isEqualTo("카페"); // 가장 많음
-            assertThat(categories.get(1)).isEqualTo("식당"); // 두 번째로 많음
-            assertThat(categories.get(2)).isEqualTo("술집"); // 가장 적음
+            assertThat(categories.get(0)).isEqualTo(TestConstants.CAFE_CATEGORY);      // 3개 - 1위
+            assertThat(categories.get(1)).isEqualTo(TestConstants.RESTAURANT_CATEGORY); // 2개 - 2위
+            assertThat(categories.get(2)).isEqualTo(TestConstants.BAR_CATEGORY);       // 1개 - 3위
+        }
+
+        @Test
+        @DisplayName("동일한 개수의 카테고리는 가나다순으로 정렬된다")
+        void findDistinctCategories_WithSameCount_OrderedAlphabetically() {
+            // 각 카테고리별로 동일하게 2개씩 생성
+            Place cafe1 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "1", TestConstants.CAFE_CATEGORY,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+            Place cafe2 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "2", TestConstants.CAFE_CATEGORY,
+                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+
+            Place restaurant1 = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME + "1", TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG);
+            Place restaurant2 = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME + "2", TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.RESTAURANT2_LAT, TestConstants.RESTAURANT2_LNG);
+
+            entityManager.persistAndFlush(cafe1);
+            entityManager.persistAndFlush(cafe2);
+            entityManager.persistAndFlush(restaurant1);
+            entityManager.persistAndFlush(restaurant2);
+            clearPersistenceContext();
+
+            List<String> categories = placeRepository.findDistinctCategories();
+
+            assertThat(categories).hasSize(2);
+
+            assertThat(categories.get(0)).isEqualTo(TestConstants.RESTAURANT_CATEGORY); // "식당"
+            assertThat(categories.get(1)).isEqualTo(TestConstants.CAFE_CATEGORY);       // "카페"
         }
 
         @Test
         @DisplayName("장소가 없으면 빈 카테고리 목록을 반환한다")
         void findDistinctCategories_WithNoPlaces_ReturnsEmpty() {
-            // given - 장소 없음
+            clearPersistenceContext();
 
-            // when
             List<String> categories = placeRepository.findDistinctCategories();
 
-            // then
             assertThat(categories).isEmpty();
         }
+    }
+
+    private void clearPersistenceContext() {
+        entityManager.flush();
+        entityManager.clear();
     }
 }
