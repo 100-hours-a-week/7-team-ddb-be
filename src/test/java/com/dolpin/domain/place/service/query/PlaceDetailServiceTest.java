@@ -3,6 +3,7 @@ package com.dolpin.domain.place.service.query;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.entity.*;
 import com.dolpin.domain.place.repository.PlaceRepository;
+import com.dolpin.global.constants.TestConstants;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.*;
 
@@ -37,22 +40,24 @@ class PlaceDetailServiceTest {
         @DisplayName("정상적인 장소 상세 조회가 동작한다")
         void getPlaceDetail_WithValidId_ReturnsCompleteDetail() {
             // given
-            Long placeId = 1L;
-            Place basicPlace = createMockPlaceForDetail(placeId, "테스트 카페", 37.5665, 126.9780);
+            Long placeId = TestConstants.PLACE_ID_1;
+            Place basicPlace = createMockPlaceForDetail(placeId, TestConstants.TEST_CAFE_NAME,
+                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
 
-            // 키워드가 포함된 장소
-            Place placeWithKeywords = createMockPlaceWithKeywords(placeId, "테스트 카페", List.of("아늑한", "맛있는"));
+            // 키워드가 포함된 장소 (키워드만 필요)
+            Place placeWithKeywords = createMockPlaceWithKeywordsOnly(
+                    List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD));
 
-            // 메뉴가 포함된 장소
-            Place placeWithMenus = mock(Place.class);
-            PlaceMenu menu1 = createMockMenu("아메리카노", 4000);
-            PlaceMenu menu2 = createMockMenu("라떼", 4500);
-            given(placeWithMenus.getMenus()).willReturn(List.of(menu1, menu2));
+            // 메뉴가 포함된 장소 (메뉴만 필요)
+            Place placeWithMenus = createMockPlaceWithMenusOnly(
+                    List.of(
+                            createMockMenu(TestConstants.AMERICANO_MENU, TestConstants.AMERICANO_PRICE),
+                            createMockMenu(TestConstants.LATTE_MENU, TestConstants.LATTE_PRICE)
+                    )
+            );
 
-            // 영업시간이 포함된 장소
-            Place placeWithHours = mock(Place.class);
-            List<PlaceHours> hours = createCompleteBusinessHours();
-            given(placeWithHours.getHours()).willReturn(hours);
+            // 영업시간이 포함된 장소 (영업시간만 필요)
+            Place placeWithHours = createMockPlaceWithHoursOnly(createCompleteBusinessHours());
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.of(placeWithKeywords));
@@ -64,24 +69,27 @@ class PlaceDetailServiceTest {
 
             // then
             assertThat(result.getId()).isEqualTo(placeId);
-            assertThat(result.getName()).isEqualTo("테스트 카페");
-            assertThat(result.getAddress()).isEqualTo("테스트 주소");
-            assertThat(result.getPhone()).isEqualTo("02-1234-5678");
-            assertThat(result.getDescription()).isEqualTo("테스트 설명");
-            assertThat(result.getThumbnail()).isEqualTo("test.jpg");
+            assertThat(result.getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
+            assertThat(result.getAddress()).isEqualTo(TestConstants.DEFAULT_ROAD_ADDRESS);
+            assertThat(result.getPhone()).isEqualTo(TestConstants.DEFAULT_PHONE);
+            assertThat(result.getDescription()).isEqualTo(TestConstants.DEFAULT_DESCRIPTION);
+            assertThat(result.getThumbnail()).isEqualTo(TestConstants.DEFAULT_IMAGE_URL);
 
             // 위치 정보 확인
             assertThat(result.getLocation()).containsEntry("type", "Point");
             double[] coordinates = (double[]) result.getLocation().get("coordinates");
-            assertThat(coordinates).containsExactly(126.9780, 37.5665);
+            assertThat(coordinates).containsExactly(TestConstants.CENTER_LNG, TestConstants.CENTER_LAT);
 
             // 키워드 확인
-            assertThat(result.getKeywords()).containsExactlyInAnyOrder("아늑한", "맛있는");
+            assertThat(result.getKeywords()).containsExactlyInAnyOrder(
+                    TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
 
             // 메뉴 확인
             assertThat(result.getMenu()).hasSize(2);
             assertThat(result.getMenu()).extracting(PlaceDetailResponse.Menu::getName)
-                    .containsExactlyInAnyOrder("아메리카노", "라떼");
+                    .containsExactlyInAnyOrder(TestConstants.AMERICANO_MENU, TestConstants.LATTE_MENU);
+            assertThat(result.getMenu()).extracting(PlaceDetailResponse.Menu::getPrice)
+                    .containsExactlyInAnyOrder(TestConstants.AMERICANO_PRICE, TestConstants.LATTE_PRICE);
 
             // 영업시간 확인
             assertThat(result.getOpeningHours()).isNotNull();
@@ -98,7 +106,7 @@ class PlaceDetailServiceTest {
         @DisplayName("존재하지 않는 장소 ID 조회 시 예외가 발생한다")
         void getPlaceDetail_WithNonExistentId_ThrowsPlaceNotFoundException() {
             // given
-            Long nonExistentId = 999L;
+            Long nonExistentId = TestConstants.NON_EXISTENT_PLACE_ID;
             given(placeRepository.findBasicPlaceById(nonExistentId)).willReturn(Optional.empty());
 
             // when & then
