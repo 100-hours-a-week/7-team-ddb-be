@@ -3,6 +3,7 @@ package com.dolpin.domain.place.service.query;
 import com.dolpin.domain.place.client.PlaceAiClient;
 import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.repository.PlaceRepository;
+import com.dolpin.global.constants.TestConstants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,13 @@ class PlaceQueryServiceImplTest {
         @DisplayName("카테고리 목록 정상 조회가 동작한다")
         void getAllCategories_ReturnsAllAvailableCategories() {
             // given
-            List<String> categories = Arrays.asList("카페", "식당", "술집", "베이커리", "패스트푸드");
+            List<String> categories = Arrays.asList(
+                    TestConstants.CAFE_CATEGORY,
+                    TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.BAR_CATEGORY,
+                    TestConstants.BAKERY_CATEGORY,
+                    TestConstants.FASTFOOD_CATEGORY
+            );
             given(placeRepository.findDistinctCategories()).willReturn(categories);
 
             // when
@@ -41,7 +48,12 @@ class PlaceQueryServiceImplTest {
             // then
             assertThat(result.getCategories()).hasSize(5);
             assertThat(result.getCategories()).containsExactlyInAnyOrder(
-                    "카페", "식당", "술집", "베이커리", "패스트푸드");
+                    TestConstants.CAFE_CATEGORY,
+                    TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.BAR_CATEGORY,
+                    TestConstants.BAKERY_CATEGORY,
+                    TestConstants.FASTFOOD_CATEGORY
+            );
         }
 
         @Test
