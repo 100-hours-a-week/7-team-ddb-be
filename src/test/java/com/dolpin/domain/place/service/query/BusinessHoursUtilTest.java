@@ -2,6 +2,7 @@ package com.dolpin.domain.place.service.query;
 
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.entity.PlaceHours;
+import com.dolpin.global.constants.TestConstants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -57,8 +58,8 @@ class BusinessHoursUtilTest {
         }
 
         @Test
-        @DisplayName("formatDistance null 입력 시 0을 반환한다")
-        void formatDistance_WithNull_ReturnsZero() throws Exception {
+        @DisplayName("formatDistance null 입력 시 기본값을 반환한다")
+        void formatDistance_WithNull_ReturnsDefault() throws Exception {
             // given
             Method formatDistanceMethod = PlaceQueryServiceImpl.class.getDeclaredMethod("formatDistance", Double.class);
             formatDistanceMethod.setAccessible(true);
@@ -67,7 +68,7 @@ class BusinessHoursUtilTest {
             String result = (String) formatDistanceMethod.invoke(placeQueryService, (Double) null);
 
             // then
-            assertThat(result).isEqualTo("0");
+            assertThat(result).isEqualTo(TestConstants.DISTANCE_ZERO);
         }
 
         @ParameterizedTest
@@ -99,9 +100,9 @@ class BusinessHoursUtilTest {
             parseTimeToMinutesMethod.setAccessible(true);
 
             // when & then
-            assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, "invalid")).isEqualTo(0);
-            assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, "25:00")).isEqualTo(0);
-            assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, "")).isEqualTo(0);
+            assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, TestConstants.INVALID_TIME_FORMAT)).isEqualTo(0);
+            assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, TestConstants.INVALID_TIME_HOUR)).isEqualTo(0);
+            assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, TestConstants.EMPTY_STRING)).isEqualTo(0);
             assertThat((int) parseTimeToMinutesMethod.invoke(placeQueryService, (String) null)).isEqualTo(0);
         }
 
@@ -126,8 +127,8 @@ class BusinessHoursUtilTest {
             Optional<PlaceDetailResponse.Schedule> monday = result.stream()
                     .filter(s -> "mon".equals(s.getDay())).findFirst();
             assertThat(monday).isPresent();
-            assertThat(monday.get().getHours()).isEqualTo("09:00~21:00");
-            assertThat(monday.get().getBreakTime()).isEqualTo("15:00~16:00");
+            assertThat(monday.get().getHours()).isEqualTo(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME);
+            assertThat(monday.get().getBreakTime()).isEqualTo(TestConstants.BREAK_START_TIME + "~" + TestConstants.BREAK_END_TIME);
 
             // 일요일 확인 (휴무일)
             Optional<PlaceDetailResponse.Schedule> sunday = result.stream()
@@ -159,7 +160,7 @@ class BusinessHoursUtilTest {
         void determineBusinessStatus_WhenWithinOpenHours_ReturnsOpen() throws Exception {
             // 2025-05-26 12:00 서울 기준
             ZonedDateTime now = ZonedDateTime.of(2025, 5, 26, 12, 0, 0, 0, ZoneId.of("Asia/Seoul"));
-            PlaceHours todayHours = createMockHours("월", "00:00", "23:59", false);
+            PlaceHours todayHours = createMockHours(TestConstants.MONDAY, TestConstants.FULL_DAY_START, TestConstants.FULL_DAY_END, false);
 
             Method m = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             m.setAccessible(true);
@@ -167,7 +168,7 @@ class BusinessHoursUtilTest {
             try (MockedStatic<ZonedDateTime> mockNow = Mockito.mockStatic(ZonedDateTime.class)) {
                 mockNow.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(now);
                 String status = (String) m.invoke(placeQueryService, List.of(todayHours));
-                assertThat(status).isEqualTo("영업 중");
+                assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
             }
         }
 
@@ -175,10 +176,9 @@ class BusinessHoursUtilTest {
         @DisplayName("determineBusinessStatus 브레이크 타임 반환 테스트")
         void determineBusinessStatus_WhenDuringBreakTime_ReturnsBreak() throws Exception {
             ZonedDateTime now = ZonedDateTime.of(2025, 5, 26, 12, 30, 0, 0, ZoneId.of("Asia/Seoul"));
-            String day = "월";
 
-            PlaceHours openSlot = createMockHours(day, "00:00", "23:59", false);
-            PlaceHours breakSlot = createMockHours(day, "12:00", "13:00", true);
+            PlaceHours openSlot = createMockHours(TestConstants.MONDAY, TestConstants.FULL_DAY_START, TestConstants.FULL_DAY_END, false);
+            PlaceHours breakSlot = createMockHours(TestConstants.MONDAY, TestConstants.LUNCH_BREAK_START, TestConstants.LUNCH_BREAK_END, true);
 
             Method m = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             m.setAccessible(true);
@@ -186,7 +186,7 @@ class BusinessHoursUtilTest {
             try (MockedStatic<ZonedDateTime> mockNow = Mockito.mockStatic(ZonedDateTime.class)) {
                 mockNow.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(now);
                 String status = (String) m.invoke(placeQueryService, List.of(openSlot, breakSlot));
-                assertThat(status).isEqualTo("브레이크 타임");
+                assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_BREAK);
             }
         }
 
@@ -194,9 +194,8 @@ class BusinessHoursUtilTest {
         @DisplayName("determineBusinessStatus 영업 종료 반환 테스트")
         void determineBusinessStatus_WhenAfterCloseTime_ReturnsClosed() throws Exception {
             ZonedDateTime now = ZonedDateTime.of(2025, 5, 26, 22, 0, 0, 0, ZoneId.of("Asia/Seoul"));
-            String day = "월";
 
-            PlaceHours earlyClose = createMockHours(day, "09:00", "20:00", false);
+            PlaceHours earlyClose = createMockHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.EARLY_CLOSE_TIME, false);
 
             Method m = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             m.setAccessible(true);
@@ -204,15 +203,15 @@ class BusinessHoursUtilTest {
             try (MockedStatic<ZonedDateTime> mockNow = Mockito.mockStatic(ZonedDateTime.class)) {
                 mockNow.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(now);
                 String status = (String) m.invoke(placeQueryService, List.of(earlyClose));
-                assertThat(status).isEqualTo("영업 종료");
+                assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_CLOSED);
             }
         }
 
         private static Stream<Arguments> businessStatusTestCases() {
             return Stream.of(
-                    Arguments.of(Collections.emptyList(), "영업 여부 확인 필요"),
-                    Arguments.of((List<PlaceHours>) null, "영업 여부 확인 필요"),
-                    Arguments.of(createClosedDayHours(), "휴무일")
+                    Arguments.of(Collections.emptyList(), TestConstants.BUSINESS_STATUS_UNKNOWN),
+                    Arguments.of((List<PlaceHours>) null, TestConstants.BUSINESS_STATUS_UNKNOWN),
+                    Arguments.of(createClosedDayHours(), TestConstants.BUSINESS_STATUS_HOLIDAY)
             );
         }
 
@@ -220,13 +219,13 @@ class BusinessHoursUtilTest {
             // 현재 요일로 설정 (테스트가 실행되는 시점의 요일)
             ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
             String currentDay = switch (now.getDayOfWeek()) {
-                case MONDAY -> "월";
-                case TUESDAY -> "화";
-                case WEDNESDAY -> "수";
-                case THURSDAY -> "목";
-                case FRIDAY -> "금";
-                case SATURDAY -> "토";
-                case SUNDAY -> "일";
+                case MONDAY -> TestConstants.MONDAY;
+                case TUESDAY -> TestConstants.TUESDAY;
+                case WEDNESDAY -> TestConstants.WEDNESDAY;
+                case THURSDAY -> TestConstants.THURSDAY;
+                case FRIDAY -> TestConstants.FRIDAY;
+                case SATURDAY -> TestConstants.SATURDAY;
+                case SUNDAY -> TestConstants.SUNDAY;
             };
 
             PlaceHours closedHours = mock(PlaceHours.class);
@@ -250,7 +249,7 @@ class BusinessHoursUtilTest {
             ZonedDateTime lateNight = ZonedDateTime.of(2025, 5, 26, 1, 30, 0, 0, ZoneId.of("Asia/Seoul"));
 
             // 월요일 00:00 ~ 02:00 영업 (자정 넘어가는 영업의 후반부)
-            PlaceHours mondayEarlyHours = createMockHours("월", "00:00", "02:00", false);
+            PlaceHours mondayEarlyHours = createMockHours(TestConstants.MONDAY, TestConstants.TWENTY_FOUR_HOUR_START, TestConstants.LATE_NIGHT_CLOSE, false);
 
             Method method = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             method.setAccessible(true);
@@ -262,7 +261,7 @@ class BusinessHoursUtilTest {
                 String status = (String) method.invoke(placeQueryService, List.of(mondayEarlyHours));
 
                 // then
-                assertThat(status).isEqualTo("영업 중");
+                assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
             }
         }
 
@@ -273,7 +272,7 @@ class BusinessHoursUtilTest {
             ZonedDateTime earlyMorning = ZonedDateTime.of(2025, 5, 26, 3, 0, 0, 0, ZoneId.of("Asia/Seoul"));
 
             // 월요일 00:00 ~ 02:00 영업 (이미 마감됨)
-            PlaceHours mondayEarlyHours = createMockHours("월", "00:00", "02:00", false);
+            PlaceHours mondayEarlyHours = createMockHours(TestConstants.MONDAY, TestConstants.TWENTY_FOUR_HOUR_START, TestConstants.LATE_NIGHT_CLOSE, false);
 
             Method method = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             method.setAccessible(true);
@@ -285,7 +284,7 @@ class BusinessHoursUtilTest {
                 String status = (String) method.invoke(placeQueryService, List.of(mondayEarlyHours));
 
                 // then
-                assertThat(status).isEqualTo("영업 종료");
+                assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_CLOSED);
             }
         }
 
@@ -301,7 +300,7 @@ class BusinessHoursUtilTest {
             );
 
             // 24시간 운영 (00:00 ~ 00:00)
-            PlaceHours twentyFourHours = createMockHours("월", "00:00", "00:00", false);
+            PlaceHours twentyFourHours = createMockHours(TestConstants.MONDAY, TestConstants.TWENTY_FOUR_HOUR_START, TestConstants.TWENTY_FOUR_HOUR_END, false);
 
             Method method = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             method.setAccessible(true);
@@ -315,7 +314,7 @@ class BusinessHoursUtilTest {
 
                     // then
                     assertThat(status).as("시간 %s에서 24시간 운영 상태 확인", testTime.toLocalTime())
-                            .isEqualTo("영업 중");
+                            .isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
                 }
             }
         }
@@ -323,10 +322,8 @@ class BusinessHoursUtilTest {
         @Test
         @DisplayName("경계 시간 테스트 - 오픈/마감 시각 정확한 처리")
         void determineBusinessStatus_AtBoundaryTimes_HandlesExactly() throws Exception {
-            String day = "월";
-
             // 09:00-18:00 영업
-            PlaceHours normalHours = createMockHours(day, "09:00", "18:00", false);
+            PlaceHours normalHours = createMockHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, "18:00", false);
 
             Method method = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             method.setAccessible(true);
@@ -334,15 +331,15 @@ class BusinessHoursUtilTest {
             // 테스트 케이스들
             Map<ZonedDateTime, String> boundaryTests = Map.of(
                     // 오픈 시각 정확히
-                    ZonedDateTime.of(2025, 5, 26, 9, 0, 0, 0, ZoneId.of("Asia/Seoul")), "영업 중",
+                    ZonedDateTime.of(2025, 5, 26, 9, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN,
                     // 오픈 1분 전
-                    ZonedDateTime.of(2025, 5, 26, 8, 59, 0, 0, ZoneId.of("Asia/Seoul")), "영업 종료",
+                    ZonedDateTime.of(2025, 5, 26, 8, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_CLOSED,
                     // 마감 1분 전
-                    ZonedDateTime.of(2025, 5, 26, 17, 59, 0, 0, ZoneId.of("Asia/Seoul")), "영업 중",
+                    ZonedDateTime.of(2025, 5, 26, 17, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN,
                     // 마감 시각 정확히
-                    ZonedDateTime.of(2025, 5, 26, 18, 0, 0, 0, ZoneId.of("Asia/Seoul")), "영업 종료",
+                    ZonedDateTime.of(2025, 5, 26, 18, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_CLOSED,
                     // 마감 1분 후
-                    ZonedDateTime.of(2025, 5, 26, 18, 1, 0, 0, ZoneId.of("Asia/Seoul")), "영업 종료"
+                    ZonedDateTime.of(2025, 5, 26, 18, 1, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_CLOSED
             );
 
             for (Map.Entry<ZonedDateTime, String> test : boundaryTests.entrySet()) {
@@ -365,13 +362,11 @@ class BusinessHoursUtilTest {
         @Test
         @DisplayName("브레이크 타임 경계 시간 테스트")
         void determineBusinessStatus_AtBreakTimeBoundaries_HandlesExactly() throws Exception {
-            String day = "월";
-
             // 09:00-18:00 영업
-            PlaceHours normalHours = createMockHours(day, "09:00", "18:00", false);
+            PlaceHours normalHours = createMockHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, "18:00", false);
 
             // 12:00-13:00 브레이크 타임
-            PlaceHours breakHours = createMockHours(day, "12:00", "13:00", true);
+            PlaceHours breakHours = createMockHours(TestConstants.MONDAY, TestConstants.LUNCH_BREAK_START, TestConstants.LUNCH_BREAK_END, true);
 
             Method method = PlaceQueryServiceImpl.class.getDeclaredMethod("determineBusinessStatus", List.class);
             method.setAccessible(true);
@@ -379,15 +374,15 @@ class BusinessHoursUtilTest {
             // 브레이크 타임 경계 테스트
             Map<ZonedDateTime, String> breakBoundaryTests = Map.of(
                     // 브레이크 타임 시작 1분 전
-                    ZonedDateTime.of(2025, 5, 26, 11, 59, 0, 0, ZoneId.of("Asia/Seoul")), "영업 중",
+                    ZonedDateTime.of(2025, 5, 26, 11, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN,
                     // 브레이크 타임 시작 정확히
-                    ZonedDateTime.of(2025, 5, 26, 12, 0, 0, 0, ZoneId.of("Asia/Seoul")), "브레이크 타임",
+                    ZonedDateTime.of(2025, 5, 26, 12, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_BREAK,
                     // 브레이크 타임 중간
-                    ZonedDateTime.of(2025, 5, 26, 12, 30, 0, 0, ZoneId.of("Asia/Seoul")), "브레이크 타임",
+                    ZonedDateTime.of(2025, 5, 26, 12, 30, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_BREAK,
                     // 브레이크 타임 끝 1분 전
-                    ZonedDateTime.of(2025, 5, 26, 12, 59, 0, 0, ZoneId.of("Asia/Seoul")), "브레이크 타임",
+                    ZonedDateTime.of(2025, 5, 26, 12, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_BREAK,
                     // 브레이크 타임 끝 정확히
-                    ZonedDateTime.of(2025, 5, 26, 13, 0, 0, 0, ZoneId.of("Asia/Seoul")), "영업 중"
+                    ZonedDateTime.of(2025, 5, 26, 13, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN
             );
 
             for (Map.Entry<ZonedDateTime, String> test : breakBoundaryTests.entrySet()) {
