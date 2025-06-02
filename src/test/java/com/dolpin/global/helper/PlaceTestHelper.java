@@ -11,8 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
 import java.util.*;
 
-import static org.mockito.Mockito.*;  // when, doReturn, mock
-import static org.mockito.BDDMockito.*; // for other BDD stubs if needed
+import static org.mockito.Mockito.*;
 
 public class PlaceTestHelper {
 
@@ -28,40 +27,21 @@ public class PlaceTestHelper {
         entityManager.clear();
     }
 
-    // ========== 1. Reflection 제거: 생성자 또는 빌더 사용 ==========
-    /**
-     * PlaceRecommendation 생성 - Reflection 대신 생성자 사용
-     * 주의: PlaceAiResponse.PlaceRecommendation에 적절한 생성자나 빌더가 필요합니다.
-     */
     public static PlaceAiResponse.PlaceRecommendation createRecommendation(Long id, Double score, List<String> keywords) {
-        // 방법 1: 생성자 사용 (PlaceRecommendation에 생성자 추가 필요)
         return new PlaceAiResponse.PlaceRecommendation(id, score, keywords);
 
-        // 방법 2: 빌더 패턴 사용 (PlaceRecommendation에 빌더 추가 필요)
-        // return PlaceAiResponse.PlaceRecommendation.builder()
-        //         .id(id)
-        //         .similarityScore(score)
-        //         .keyword(keywords)
-        //         .build();
     }
 
     public static PlaceAiResponse createAiResponse(List<PlaceAiResponse.PlaceRecommendation> recommendations) {
         return new PlaceAiResponse(recommendations);
     }
 
-    // ========== 2. Mock 네이밍 수정 및 파라미터 확장 ==========
-    /**
-     * PlaceWithDistance 테스트 객체 생성 - 기본값 사용
-     */
     public static PlaceWithDistance createPlaceWithDistance(Long id, String name, double lat, double lng, double distance) {
         return createPlaceWithDistance(id, name, TestConstants.CAFE_CATEGORY,
                 TestConstants.DEFAULT_ROAD_ADDRESS, TestConstants.DEFAULT_LOT_ADDRESS,
                 TestConstants.DEFAULT_IMAGE_URL, lat, lng, distance);
     }
 
-    /**
-     * PlaceWithDistance 테스트 객체 생성 - 모든 파라미터 지정 가능
-     */
     public static PlaceWithDistance createPlaceWithDistance(Long id, String name, String category,
                                                             String roadAddress, String lotAddress, String imageUrl,
                                                             double lat, double lng, double distance) {
@@ -78,16 +58,12 @@ public class PlaceTestHelper {
         };
     }
 
-    /**
-     * 카테고리만 다르게 지정하는 편의 메서드
-     */
     public static PlaceWithDistance createPlaceWithDistance(Long id, String name, String category, double lat, double lng, double distance) {
         return createPlaceWithDistance(id, name, category,
                 TestConstants.DEFAULT_ROAD_ADDRESS, TestConstants.DEFAULT_LOT_ADDRESS,
                 TestConstants.DEFAULT_IMAGE_URL, lat, lng, distance);
     }
 
-    // ========== 3. 기존 편의 메서드들 업데이트 ==========
     public static PlaceWithDistance createDefaultCafePlaceWithDistance(Long id, double distance) {
         return createPlaceWithDistance(id, TestConstants.TEST_CAFE_NAME + id, TestConstants.CAFE_CATEGORY,
                 TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, distance);
@@ -98,7 +74,6 @@ public class PlaceTestHelper {
                 TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG, distance);
     }
 
-    // ========== 4. Place Mock 생성 메서드들 (기존 유지) ==========
     public static Place createMockPlace(Long id, String name, double lat, double lng) {
         Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat));
         Place place = mock(Place.class);
@@ -132,7 +107,6 @@ public class PlaceTestHelper {
                 TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG);
     }
 
-    // ========== 5. 키워드 관련 메서드들 (수정됨) ==========
     public static List<PlaceKeyword> createKeywordMocks(List<String> keywordStrings) {
         if (keywordStrings == null) {
             return Collections.emptyList();
@@ -140,12 +114,11 @@ public class PlaceTestHelper {
 
         List<PlaceKeyword> result = new ArrayList<>();
         for (String kw : keywordStrings) {
-            // 1) Keyword mock 생성
+
             Keyword keyword = mock(Keyword.class);
-            // Mockito가 실제 메서드를 타지 않고 stub만 기록하도록 when().thenReturn() 사용
+
             when(keyword.getKeyword()).thenReturn(kw);
 
-            // 2) PlaceKeyword mock 생성
             PlaceKeyword placeKeyword = mock(PlaceKeyword.class);
             when(placeKeyword.getKeyword()).thenReturn(keyword);
 
@@ -159,7 +132,7 @@ public class PlaceTestHelper {
         when(place.getId()).thenReturn(id);
         when(place.getName()).thenReturn(name);
         List<PlaceKeyword> keywordMocks = createKeywordMocks(keywordStrings);
-        // doReturn().when() 을 사용해 place.getKeywords() 호출 자체를 방지
+
         doReturn(keywordMocks).when(place).getKeywords();
         return place;
     }
@@ -190,7 +163,6 @@ public class PlaceTestHelper {
         return place;
     }
 
-    // ========== 6. 정렬 테스트용 메서드들 (업데이트된 메서드 사용) ==========
     public static List<Place> createSortTestPlaces() {
         return List.of(
                 createMockPlaceWithFullInfo(TestConstants.PLACE_ID_1, TestConstants.ORDINARY_CAFE_NAME,
@@ -221,7 +193,6 @@ public class PlaceTestHelper {
         );
     }
 
-    // ========== 7. 기타 편의 메서드들 ==========
     public static List<String> getDefaultCafeKeywords() {
         return List.of(TestConstants.COZY_KEYWORD, TestConstants.GOOD_KEYWORD);
     }
@@ -298,11 +269,9 @@ public class PlaceTestHelper {
     public static List<PlaceHours> createCompleteBusinessHours() {
         List<PlaceHours> hours = new ArrayList<>();
 
-        // 월요일 - 영업시간 + 브레이크타임
         hours.add(createDefaultBusinessHours(TestConstants.MONDAY));
         hours.add(createDefaultBreakTime(TestConstants.MONDAY));
 
-        // 화요일~토요일 기본 영업
         String[] days = {TestConstants.TUESDAY, TestConstants.WEDNESDAY, TestConstants.THURSDAY, TestConstants.FRIDAY, TestConstants.SATURDAY};
         for (String day : days) {
             hours.add(createDefaultBusinessHours(day));
@@ -323,7 +292,6 @@ public class PlaceTestHelper {
         return createMockHours(day, null, null, false);
     }
 
-    // ========== 9. 기타 유틸리티 메서드들 ==========
     public static Map<String, Object> createCompleteCafeMocks(Long id) {
         Map<String, Object> mocks = new HashMap<>();
 

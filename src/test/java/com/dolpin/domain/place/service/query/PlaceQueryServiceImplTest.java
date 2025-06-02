@@ -32,7 +32,6 @@ class PlaceQueryServiceImplTest {
         @Test
         @DisplayName("카테고리 목록 정상 조회가 동작한다")
         void getAllCategories_ReturnsAllAvailableCategories() {
-            // given
             List<String> categories = Arrays.asList(
                     TestConstants.CAFE_CATEGORY,
                     TestConstants.RESTAURANT_CATEGORY,
@@ -42,10 +41,8 @@ class PlaceQueryServiceImplTest {
             );
             given(placeRepository.findDistinctCategories()).willReturn(categories);
 
-            // when
             PlaceCategoryResponse result = placeQueryService.getAllCategories();
 
-            // then
             assertThat(result.getCategories()).hasSize(5);
             assertThat(result.getCategories()).containsExactlyInAnyOrder(
                     TestConstants.CAFE_CATEGORY,
@@ -59,13 +56,10 @@ class PlaceQueryServiceImplTest {
         @Test
         @DisplayName("카테고리가 없을 때 빈 목록을 반환한다")
         void getAllCategories_WithNoCategories_ReturnsEmptyList() {
-            // given
             given(placeRepository.findDistinctCategories()).willReturn(Collections.emptyList());
 
-            // when
             PlaceCategoryResponse result = placeQueryService.getAllCategories();
 
-            // then
             assertThat(result.getCategories()).isEmpty();
         }
     }
