@@ -27,7 +27,7 @@ public class PlaceSearchResponse {
         private Long id;
         private String name;
         private String thumbnail;
-        private String distance;
+        private Double distance;
 
         private String momentCount;
 

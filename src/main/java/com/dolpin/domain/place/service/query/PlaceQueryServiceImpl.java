@@ -274,7 +274,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
             PlaceWithDistance placeWithDistance, List<String> keywords) {
         // 거리 포맷팅
-        String formattedDistance = formatDistance(placeWithDistance.getDistance());
+        Double convertedDistance = convertDistance(placeWithDistance.getDistance());
 
         // 실제 장소의 위치 정보 사용
         Map<String, Object> locationMap = new HashMap<>();
@@ -289,7 +289,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .id(placeWithDistance.getId())
                 .name(placeWithDistance.getName())
                 .thumbnail(placeWithDistance.getImageUrl())
-                .distance(formattedDistance)
+                .distance(convertedDistance)
                 .momentCount("0")
                 .keywords(keywords)
                 .location(locationMap)
@@ -299,7 +299,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
         // 거리 포맷팅
-        String formattedDistance = formatDistance(distance);
+        Double convertedDistance = convertDistance(distance);
 
         // 키워드 추출
         List<String> keywords;
@@ -324,7 +324,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .id(place.getId())
                 .name(place.getName())
                 .thumbnail(place.getImageUrl())
-                .distance(formattedDistance)
+                .distance(convertedDistance)
                 .momentCount("0")  // 추후 연동 필요
                 .keywords(keywords)
                 .location(locationMap)
@@ -449,17 +449,17 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         return schedules;
     }
 
-    private String formatDistance(Double distanceInMeters) {
-        if (distanceInMeters == null) return "0";
+    private Double convertDistance(Double distanceInMeters) {
+        if (distanceInMeters == null) return 0.0;
 
         if (distanceInMeters < 1000) {
-            // 미터 단위로 표시
-            return Math.round(distanceInMeters) + "m";
+            // 미터 단위 - 반올림해서 반환
+            return (double) Math.round(distanceInMeters);
         } else {
-            // 킬로미터 단위로 표시
-            BigDecimal km = BigDecimal.valueOf(distanceInMeters / 1000.0)
-                    .setScale(1, RoundingMode.HALF_UP);
-            return km.toString() + "km";
+            // 킬로미터 단위 - 소수점 1자리까지
+            return BigDecimal.valueOf(distanceInMeters / 1000.0)
+                    .setScale(1, RoundingMode.HALF_UP)
+                    .doubleValue();
         }
     }
 
