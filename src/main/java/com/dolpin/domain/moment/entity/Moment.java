@@ -22,6 +22,9 @@ public class Moment {
     @Column(name = "place_id", nullable = false)
     private Long placeId;
 
+    @Column(name = "place_name", nullable = false, length = 100)
+    private String placeName;
+
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
@@ -68,6 +71,16 @@ public class Moment {
         }
         if (isPublic != null) {
             this.isPublic = isPublic;
+        }
+    }
+
+    // 장소 정보 업데이트 (장소 이름 변경시 사용)
+    public void updatePlaceInfo(Long placeId, String placeName) {
+        if (placeId != null) {
+            this.placeId = placeId;
+        }
+        if (placeName != null && !placeName.trim().isEmpty()) {
+            this.placeName = placeName;
         }
     }
 
