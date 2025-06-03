@@ -19,10 +19,10 @@ public class Moment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "place_id", nullable = false)
+    @Column(name = "place_id", nullable = true)
     private Long placeId;
 
-    @Column(name = "place_name", nullable = false, length = 100)
+    @Column(name = "place_name", nullable = true, length = 100)
     private String placeName;
 
     @Column(name = "user_id", nullable = false)
