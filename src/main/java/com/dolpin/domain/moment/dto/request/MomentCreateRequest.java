@@ -22,8 +22,10 @@ public class MomentCreateRequest {
     @Size(max = 1000, message = "내용은 1000자 이내여야 합니다")
     private String content;
 
-    @NotNull(message = "장소 ID는 필수입니다")
     private Long placeId;
+
+    @Size(max = 100, message = "장소명은 100자 이내여야 합니다")
+    private String placeName;
 
     private List<String> images;
 
