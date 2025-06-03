@@ -20,6 +20,9 @@ public class MomentUpdateRequest {
 
     private Long placeId;
 
+    @Size(max = 100, message = "장소명은 100자 이내여야 합니다")
+    private String placeName;
+
     private List<String> images;
 
     private Boolean isPublic;
