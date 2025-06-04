@@ -29,7 +29,7 @@ public class PlaceSearchResponse {
         private String thumbnail;
         private Double distance;
 
-        private String momentCount;
+        private Long momentCount;
 
         private List<String> keywords;
         private Map<String, Object> location;

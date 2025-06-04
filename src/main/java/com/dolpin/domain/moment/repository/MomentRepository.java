@@ -76,4 +76,11 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
             "AND m.isPublic = true " +
             "ORDER BY m.createdAt DESC")
     Page<Moment> findMomentsByUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
+
+    // 여러 장소의 Moment 개수를 한 번에 조회
+    @Query("SELECT m.placeId, COUNT(m) FROM Moment m " +
+            "WHERE m.placeId IN :placeIds " +
+            "AND m.isPublic = true " +
+            "GROUP BY m.placeId")
+    List<Object[]> countPublicMomentsByPlaceIds(@Param("placeIds") List<Long> placeIds);
 }

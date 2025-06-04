@@ -1,5 +1,6 @@
 package com.dolpin.domain.place.service.query;
 
+import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.domain.place.client.PlaceAiClient;
 import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.entity.Place;
@@ -30,6 +31,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     private final PlaceRepository placeRepository;
     private final PlaceAiClient placeAiClient;
+    private final MomentRepository momentRepository;
 
     @Value("${place.search.default-radius}")
     private double defaultSearchRadius;
@@ -157,6 +159,23 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .collect(Collectors.toList());
     }
 
+    private Map<Long, Long> getMomentCountMap(List<Long> placeIds) {
+        if (placeIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        List<Object[]> results = momentRepository.countPublicMomentsByPlaceIds(placeIds);
+        Map<Long, Long> momentCountMap = new HashMap<>();
+
+        for (Object[] result : results) {
+            Long placeId = (Long) result[0];
+            Long count = (Long) result[1];
+            momentCountMap.put(placeId, count);
+        }
+
+        return momentCountMap;
+    }
+
     private List<PlaceSearchResponse.PlaceDto> processPlaceIds(
             List<Long> placeIds, Double lat, Double lng,
             Map<Long, Double> similarityScores,
@@ -176,6 +195,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<Long> filteredPlaceIds = nearbyPlaces.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
+
+        // Moment 개수를 한 번에 조회
+        Map<Long, Long> momentCountMap = getMomentCountMap(filteredPlaceIds);
 
         // 거리 정보 맵 구성
         Map<Long, Double> distanceMap = nearbyPlaces.stream()
@@ -209,7 +231,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                             .collect(Collectors.toList())
             );
 
-            PlaceSearchResponse.PlaceDto dto = convertToPlaceDto(place, distance, similarityScore, keywords);
+            PlaceSearchResponse.PlaceDto dto = convertToPlaceDto(place, distance, similarityScore, keywords, momentCountMap);
 
             // DB 검색 결과인지 확인 (dbSearchIdSet에 있으면 DB 결과)
             if (dbSearchIdSet.contains(placeId)) {
@@ -245,6 +267,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
 
+        // Moment 개수를 한 번에 조회
+        Map<Long, Long> momentCountMap = getMomentCountMap(placeIds);
+
         // 키워드를 포함한 장소 정보 조회
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
 
@@ -262,19 +287,22 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                                 .map(pk -> pk.getKeyword().getKeyword())
                                 .collect(Collectors.toList());
 
-                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords);
+                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords, momentCountMap);
                     } else {
                         // Place 정보가 없는 경우 빈 키워드로 처리
-                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList());
+                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList(), momentCountMap);
                     }
                 })
                 .collect(Collectors.toList());
     }
 
     private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
-            PlaceWithDistance placeWithDistance, List<String> keywords) {
+            PlaceWithDistance placeWithDistance, List<String> keywords, Map<Long, Long> momentCountMap) {
         // 거리 포맷팅
         Double convertedDistance = convertDistance(placeWithDistance.getDistance());
+
+        // Moment 개수 조회 (Map에서)
+        Long momentCount = momentCountMap.getOrDefault(placeWithDistance.getId(), 0L);
 
         // 실제 장소의 위치 정보 사용
         Map<String, Object> locationMap = new HashMap<>();
@@ -290,16 +318,20 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .name(placeWithDistance.getName())
                 .thumbnail(placeWithDistance.getImageUrl())
                 .distance(convertedDistance)
-                .momentCount("0")
+                .momentCount(momentCount)
                 .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(null)
                 .build();
     }
 
-    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore,
+                                                           List<String> aiKeywords, Map<Long, Long> momentCountMap) {
         // 거리 포맷팅
         Double convertedDistance = convertDistance(distance);
+
+        // Moment 개수 조회 (Map에서)
+        Long momentCount = momentCountMap.getOrDefault(place.getId(), 0L);
 
         // 키워드 추출
         List<String> keywords;
@@ -325,7 +357,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .name(place.getName())
                 .thumbnail(place.getImageUrl())
                 .distance(convertedDistance)
-                .momentCount("0")  // 추후 연동 필요
+                .momentCount(momentCount)
                 .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(similarityScore)
