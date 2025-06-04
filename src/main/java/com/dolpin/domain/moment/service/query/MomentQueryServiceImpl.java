@@ -39,7 +39,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         int pageSize = validateAndGetLimit(limit);
         LocalDateTime cursorTime = parseCursor(cursor);
 
-        Pageable pageable = PageRequest.of(0, pageSize + 1); // +1로 hasNext 판단
+        Pageable pageable = PageRequest.of(0, pageSize + 1);
         Page<Moment> moments = momentRepository.findPublicMoments(pageable);
 
         return buildMomentListResponse(moments.getContent(), pageSize, true);
@@ -60,7 +60,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Override
     @Transactional(readOnly = true)
     public MomentListResponse getUserMoments(Long targetUserId, Integer limit, String cursor) {
-        // 사용자 존재 확인
         userQueryService.getUserById(targetUserId);
 
         int pageSize = validateAndGetLimit(limit);
@@ -75,7 +74,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceMomentListResponse getPlaceMoments(Long placeId) {
-        // 전체 조회 (페이징 없음)
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE);
         Page<Moment> moments = momentRepository.findPublicMomentsByPlaceId(placeId, pageable);
 
@@ -95,28 +93,27 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         Moment moment = momentRepository.findByIdWithImages(momentId)
                 .orElseThrow(() -> new BusinessException(ResponseStatus.USER_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")));
 
-        // 비공개 기록인 경우 소유자만 조회 가능
-        if (!moment.getIsPublic() && (currentUserId == null || !moment.getUserId().equals(currentUserId))) {
+        // 도메인 메서드를 사용한 권한 검증
+        if (!moment.canBeViewedBy(currentUserId)) {
             throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다."));
         }
 
-        boolean isOwner = currentUserId != null && moment.getUserId().equals(currentUserId);
+        boolean isOwner = moment.isOwnedBy(currentUserId);
 
         return MomentDetailResponse.from(moment, isOwner);
     }
 
     private PlaceMomentListResponse.PlaceMomentDto buildPlaceMomentDto(Moment moment) {
-        // 첫 번째 이미지를 썸네일로 사용
-        String thumbnail = moment.getImages().isEmpty() ? null : moment.getImages().get(0).getImageUrl();
+        // 도메인 메서드 사용
+        String thumbnail = moment.getThumbnailUrl();
 
-        // 작성자 정보 조회
         User author = userQueryService.getUserById(moment.getUserId());
 
         return PlaceMomentListResponse.PlaceMomentDto.builder()
                 .id(moment.getId())
                 .title(moment.getTitle())
                 .thumbnail(thumbnail)
-                .imagesCount(moment.getImages().size())
+                .imagesCount(moment.getImageCount())
                 .isPublic(moment.getIsPublic())
                 .createdAt(moment.getCreatedAt())
                 .place(PlaceMomentListResponse.PlaceDto.builder()
@@ -154,7 +151,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                         .build())
                 .build();
 
-        // TODO: _links 구현
         MomentListResponse.LinksDto links = MomentListResponse.LinksDto.builder()
                 .self(MomentListResponse.LinkDto.builder().href("").build())
                 .next(hasNext ? MomentListResponse.LinkDto.builder().href("").build() : null)
@@ -168,14 +164,14 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     }
 
     private MomentListResponse.MomentSummaryDto buildMomentSummaryDto(Moment moment, boolean includeAuthor) {
-        // 첫 번째 이미지를 썸네일로 사용
-        String thumbnail = moment.getImages().isEmpty() ? null : moment.getImages().get(0).getImageUrl();
+        // 도메인 메서드 사용
+        String thumbnail = moment.getThumbnailUrl();
 
         MomentListResponse.MomentSummaryDto.MomentSummaryDtoBuilder builder = MomentListResponse.MomentSummaryDto.builder()
                 .id(moment.getId())
                 .title(moment.getTitle())
                 .thumbnail(thumbnail)
-                .imagesCount(moment.getImages().size())
+                .imagesCount(moment.getImageCount())
                 .isPublic(moment.getIsPublic())
                 .createdAt(moment.getCreatedAt())
                 .place(moment.getPlaceId() != null ?
@@ -185,7 +181,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                                 .build()
                         : null);
 
-        // 전체 기록 목록 조회시에만 작성자 정보 포함
         if (includeAuthor) {
             User author = userQueryService.getUserById(moment.getUserId());
             builder.author(MomentListResponse.AuthorDto.builder()
@@ -214,7 +209,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         }
 
         try {
-            // ISO 형식의 cursor를 파싱
             String cleanCursor = cursor.endsWith("Z") ? cursor.substring(0, cursor.length() - 1) : cursor;
             return LocalDateTime.parse(cleanCursor, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         } catch (Exception e) {

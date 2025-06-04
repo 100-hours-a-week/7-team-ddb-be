@@ -27,12 +27,21 @@ public class MomentImage {
     @Builder.Default
     private Integer imageSequence = 0;
 
-    // 비즈니스 메서드
+    // 실제 사용되는 비즈니스 메서드
     public void updateImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
+        if (imageUrl != null && !imageUrl.trim().isEmpty()) {
+            this.imageUrl = imageUrl;
+        }
     }
 
     public void updateSequence(Integer sequence) {
-        this.imageSequence = sequence;
+        if (sequence != null && sequence >= 0) {
+            this.imageSequence = sequence;
+        }
+    }
+
+    // 비즈니스 로직 메서드
+    public boolean hasValidUrl() {
+        return this.imageUrl != null && !this.imageUrl.trim().isEmpty();
     }
 }

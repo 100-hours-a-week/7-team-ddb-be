@@ -5,9 +5,7 @@ import com.dolpin.domain.moment.dto.request.MomentUpdateRequest;
 import com.dolpin.domain.moment.dto.response.MomentCreateResponse;
 import com.dolpin.domain.moment.dto.response.MomentUpdateResponse;
 import com.dolpin.domain.moment.entity.Moment;
-import com.dolpin.domain.moment.entity.MomentImage;
 import com.dolpin.domain.moment.repository.MomentRepository;
-import com.dolpin.domain.moment.repository.MomentImageRepository;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import lombok.RequiredArgsConstructor;
@@ -15,16 +13,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.IntStream;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MomentCommandServiceImpl implements MomentCommandService {
 
     private final MomentRepository momentRepository;
-    private final MomentImageRepository momentImageRepository;
 
     @Override
     @Transactional
@@ -39,13 +33,16 @@ public class MomentCommandServiceImpl implements MomentCommandService {
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : true)
                 .build();
 
-        // Moment 저장
+        // 도메인 메서드를 사용한 이미지 추가
+        if (request.getImages() != null && !request.getImages().isEmpty()) {
+            moment.addImages(request.getImages());
+        }
+
+        // Moment 저장 (Cascade로 이미지도 함께 저장됨)
         Moment savedMoment = momentRepository.save(moment);
 
-        // 이미지가 있는 경우 처리
-        if (request.getImages() != null && !request.getImages().isEmpty()) {
-            createMomentImages(savedMoment, request.getImages());
-        }
+        log.info("Moment created: momentId={}, userId={}, imageCount={}",
+                savedMoment.getId(), userId, savedMoment.getImageCount());
 
         return MomentCreateResponse.builder()
                 .id(savedMoment.getId())
@@ -62,20 +59,24 @@ public class MomentCommandServiceImpl implements MomentCommandService {
 
         validateOwnership(moment, userId);
 
-        // 기본 정보 업데이트
+        // 도메인 메서드를 사용한 업데이트
         moment.updateContent(request.getTitle(), request.getContent(), request.getIsPublic());
 
-        // 장소 정보 업데이트 (필요한 경우)
+        // 장소 정보 업데이트
         if (request.getPlaceId() != null || request.getPlaceName() != null) {
             moment.updatePlaceInfo(request.getPlaceId(), request.getPlaceName());
         }
 
-        // 이미지 업데이트
+        // 도메인 메서드를 사용한 이미지 교체
         if (request.getImages() != null) {
-            updateMomentImages(moment, request.getImages());
+            moment.replaceImages(request.getImages());
         }
 
+        // 저장 (Cascade로 이미지 변경사항도 함께 저장됨)
         Moment updatedMoment = momentRepository.save(moment);
+
+        log.info("Moment updated: momentId={}, userId={}, imageCount={}",
+                momentId, userId, updatedMoment.getImageCount());
 
         return MomentUpdateResponse.builder()
                 .id(updatedMoment.getId())
@@ -98,38 +99,8 @@ public class MomentCommandServiceImpl implements MomentCommandService {
         log.info("Moment deleted: momentId={}, userId={}", momentId, userId);
     }
 
-    private void createMomentImages(Moment moment, List<String> imageUrls) {
-        List<MomentImage> images = IntStream.range(0, imageUrls.size())
-                .mapToObj(i -> MomentImage.builder()
-                        .moment(moment)
-                        .imageUrl(imageUrls.get(i))
-                        .imageSequence(i)
-                        .build())
-                .toList();
-
-        momentImageRepository.saveAll(images);
-    }
-
-    private void updateMomentImages(Moment moment, List<String> newImageUrls) {
-        moment.getImages().clear();
-
-        momentImageRepository.deleteByMomentId(moment.getId());
-
-        if (!newImageUrls.isEmpty()) {
-            List<MomentImage> newImages = IntStream.range(0, newImageUrls.size())
-                    .mapToObj(i -> MomentImage.builder()
-                            .moment(moment)
-                            .imageUrl(newImageUrls.get(i))
-                            .imageSequence(i)
-                            .build())
-                    .toList();
-            moment.getImages().addAll(newImages);
-            momentImageRepository.saveAll(newImages);
-        }
-    }
-
     private void validateOwnership(Moment moment, Long userId) {
-        if (!moment.getUserId().equals(userId)) {
+        if (!moment.isOwnedBy(userId)) {
             throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다."));
         }
     }

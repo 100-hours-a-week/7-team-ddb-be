@@ -74,7 +74,6 @@ public class Moment {
         }
     }
 
-    // 장소 정보 업데이트 (장소 이름 변경시 사용)
     public void updatePlaceInfo(Long placeId, String placeName) {
         if (placeId != null) {
             this.placeId = placeId;
@@ -84,30 +83,86 @@ public class Moment {
         }
     }
 
-    // 이미지 추가
-    public void addImage(MomentImage image) {
+    // 이미지 관련 도메인 메서드들 - 실제 사용
+    public void addImage(String imageUrl) {
+        int nextSequence = this.images.size();
+        MomentImage image = MomentImage.builder()
+                .moment(this)
+                .imageUrl(imageUrl)
+                .imageSequence(nextSequence)
+                .build();
         this.images.add(image);
-        image.setMoment(this);
     }
 
-    // 이미지 제거
+    public void addImages(List<String> imageUrls) {
+        if (imageUrls != null && !imageUrls.isEmpty()) {
+            for (String imageUrl : imageUrls) {
+                addImage(imageUrl);
+            }
+        }
+    }
+
+    public void clearImages() {
+        this.images.clear();
+    }
+
+    public void replaceImages(List<String> newImageUrls) {
+        clearImages();
+        if (newImageUrls != null && !newImageUrls.isEmpty()) {
+            addImages(newImageUrls);
+        }
+    }
+
     public void removeImage(MomentImage image) {
         this.images.remove(image);
         image.setMoment(null);
+        // 순서 재정렬
+        reorderImageSequences();
     }
 
-    // 이미지 순서 재정렬
     public void reorderImages(List<MomentImage> newOrderImages) {
         this.images.clear();
         for (int i = 0; i < newOrderImages.size(); i++) {
             MomentImage image = newOrderImages.get(i);
             image.updateSequence(i);
             this.images.add(image);
+            image.setMoment(this);
         }
     }
 
-    // 공개 여부 변경
     public void togglePublic() {
         this.isPublic = !this.isPublic;
+    }
+
+    public void setPublic(boolean isPublic) {
+        this.isPublic = isPublic;
+    }
+
+    // 내부 헬퍼 메서드
+    private void reorderImageSequences() {
+        for (int i = 0; i < this.images.size(); i++) {
+            this.images.get(i).updateSequence(i);
+        }
+    }
+
+    // 비즈니스 로직 메서드
+    public boolean hasImages() {
+        return !this.images.isEmpty();
+    }
+
+    public String getThumbnailUrl() {
+        return hasImages() ? this.images.get(0).getImageUrl() : null;
+    }
+
+    public int getImageCount() {
+        return this.images.size();
+    }
+
+    public boolean isOwnedBy(Long userId) {
+        return this.userId.equals(userId);
+    }
+
+    public boolean canBeViewedBy(Long userId) {
+        return this.isPublic || isOwnedBy(userId);
     }
 }
