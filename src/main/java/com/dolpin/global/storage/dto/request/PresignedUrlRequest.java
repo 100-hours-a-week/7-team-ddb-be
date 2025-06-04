@@ -20,6 +20,4 @@ public class PresignedUrlRequest {
 
     @NotBlank(message = "업로드 타입은 필수입니다.")
     private String uploadType;
-
-    private Long momentId;
 }

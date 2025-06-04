@@ -142,15 +142,7 @@ public class GcsStorageServiceImpl implements StorageService {
 
         return switch (uploadType) {
             case "profile" -> String.format("profile/u%d/%s", userId, uniqueFileName);
-            case "moment" -> {
-                if (request.getMomentId() != null) {
-                    // 기존 moment 수정
-                    yield String.format("moment/u%d/m%d/%s", userId, request.getMomentId(), uniqueFileName);
-                } else {
-                    // 새 moment 생성용 임시 경로
-                    yield String.format("moment/u%d/temp/%s", userId, uniqueFileName);
-                }
-            }
+            case "moment" -> String.format("moment/u%d/%s", userId, uniqueFileName);
             default -> throw new IllegalArgumentException("지원하지 않는 업로드 타입: " + uploadType);
         };
     }
