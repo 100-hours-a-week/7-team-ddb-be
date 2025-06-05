@@ -4,6 +4,7 @@ import com.dolpin.domain.moment.entity.Moment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -45,6 +46,17 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
             "WHERE m.isPublic = true " +
             "ORDER BY m.createdAt DESC")
     Page<Moment> findPublicMoments(Pageable pageable);
+
+    // 공개 기록 + 특정 사용자의 모든 기록 조회 (로그인 사용자용)
+    @Query("SELECT m FROM Moment m " +
+            "WHERE m.isPublic = true OR m.userId = :currentUserId " +
+            "ORDER BY m.createdAt DESC")
+    Page<Moment> findPublicMomentsWithUserPrivate(@Param("currentUserId") Long currentUserId, Pageable pageable);
+
+    // 동시성 보장 조회수 증가 (원자적 연산)
+    @Modifying
+    @Query("UPDATE Moment m SET m.viewCount = m.viewCount + 1 WHERE m.id = :momentId")
+    int incrementViewCount(@Param("momentId") Long momentId);
 
     // 특정 사용자의 Moment 개수
     @Query("SELECT COUNT(m) FROM Moment m " +
