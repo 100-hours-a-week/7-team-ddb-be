@@ -25,14 +25,16 @@ public class MomentController {
     private final MomentCommandService momentCommandService;
 
     /**
-     * 전체 기록 목록 조회 (공개된 기록만)
+     * 전체 기록 목록 조회 (공개된 기록 + 로그인한 경우 자신의 비공개 기록)
      */
     @GetMapping("/users/moments")
     public ResponseEntity<ApiResponse<MomentListResponse>> getAllMoments(
+            @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) String cursor) {
 
-        MomentListResponse response = momentQueryService.getAllMoments(limit, cursor);
+        Long userId = userDetails != null ? Long.parseLong(userDetails.getUsername()) : null;
+        MomentListResponse response = momentQueryService.getAllMoments(userId, limit, cursor);
         return ResponseEntity.ok(ApiResponse.success("all_moment_list_get_success", response));
     }
 

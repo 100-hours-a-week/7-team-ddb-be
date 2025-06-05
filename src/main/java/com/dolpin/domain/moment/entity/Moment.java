@@ -38,6 +38,11 @@ public class Moment {
     @Builder.Default
     private Boolean isPublic = true;
 
+    // 조회수 컬럼 추가
+    @Column(name = "view_count", nullable = false)
+    @Builder.Default
+    private Long viewCount = 0L;
+
     @OneToMany(mappedBy = "moment", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @OrderBy("imageSequence ASC")
     @Builder.Default
@@ -81,6 +86,11 @@ public class Moment {
         if (placeName != null && !placeName.trim().isEmpty()) {
             this.placeName = placeName;
         }
+    }
+
+    // 조회수 증가 메서드 (내부용)
+    public void incrementViewCount() {
+        this.viewCount++;
     }
 
     // 이미지 관련 도메인 메서드들 - 실제 사용

@@ -28,26 +28,14 @@ public class MomentListResponse {
     public static class MomentSummaryDto {
         private Long id;
         private String title;
+        private String content;
         private String thumbnail;
-
         private Integer imagesCount;
-
         private Boolean isPublic;
-
         private LocalDateTime createdAt;
-
-        private PlaceDto place;
-        private AuthorDto author; // 전체 기록 목록에만 포함
-        private String location;
-    }
-
-    @Getter
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class PlaceDto {
-        private Long id;
-        private String name;
+        private Long viewCount;
+        private Long commentCount;
+        private AuthorDto author;
     }
 
     @Getter

@@ -1,10 +1,12 @@
 package com.dolpin.domain.moment.service.query;
 
+import com.dolpin.domain.comment.repository.CommentRepository;
 import com.dolpin.domain.moment.dto.response.MomentDetailResponse;
 import com.dolpin.domain.moment.dto.response.MomentListResponse;
 import com.dolpin.domain.moment.dto.response.PlaceMomentListResponse;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.repository.MomentRepository;
+import com.dolpin.domain.moment.service.MomentViewService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.global.exception.BusinessException;
@@ -19,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -29,18 +33,24 @@ public class MomentQueryServiceImpl implements MomentQueryService {
 
     private final MomentRepository momentRepository;
     private final UserQueryService userQueryService;
+    private final CommentRepository commentRepository;
+    private final MomentViewService momentViewService;
 
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 50;
 
     @Override
     @Transactional(readOnly = true)
-    public MomentListResponse getAllMoments(Integer limit, String cursor) {
+    public MomentListResponse getAllMoments(Long currentUserId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
-
         Pageable pageable = PageRequest.of(0, pageSize + 1);
-        Page<Moment> moments = momentRepository.findPublicMoments(pageable);
+
+        Page<Moment> moments;
+        if (currentUserId != null) {
+            moments = momentRepository.findPublicMomentsWithUserPrivate(currentUserId, pageable);
+        } else {
+            moments = momentRepository.findPublicMoments(pageable);
+        }
 
         return buildMomentListResponse(moments.getContent(), pageSize, true);
     }
@@ -49,8 +59,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Transactional(readOnly = true)
     public MomentListResponse getMyMoments(Long userId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
-
         Pageable pageable = PageRequest.of(0, pageSize + 1);
         Page<Moment> moments = momentRepository.findByUserIdWithVisibility(userId, true, pageable);
 
@@ -63,8 +71,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         userQueryService.getUserById(targetUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
-
         Pageable pageable = PageRequest.of(0, pageSize + 1);
         Page<Moment> moments = momentRepository.findByUserIdWithVisibility(targetUserId, false, pageable);
 
@@ -88,25 +94,27 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public MomentDetailResponse getMomentDetail(Long momentId, Long currentUserId) {
         Moment moment = momentRepository.findByIdWithImages(momentId)
                 .orElseThrow(() -> new BusinessException(ResponseStatus.USER_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")));
 
-        // 도메인 메서드를 사용한 권한 검증
         if (!moment.canBeViewedBy(currentUserId)) {
             throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다."));
         }
 
-        boolean isOwner = moment.isOwnedBy(currentUserId);
+        // 조회수 증가
+        momentViewService.incrementViewCount(momentId);
 
-        return MomentDetailResponse.from(moment, isOwner);
+        boolean isOwner = moment.isOwnedBy(currentUserId);
+        Long commentCount = commentRepository.countByMomentIdAndNotDeleted(momentId);
+        Long viewCount = momentViewService.getViewCount(momentId);
+
+        return MomentDetailResponse.from(moment, isOwner, commentCount, viewCount);
     }
 
     private PlaceMomentListResponse.PlaceMomentDto buildPlaceMomentDto(Moment moment) {
-        // 도메인 메서드 사용
         String thumbnail = moment.getThumbnailUrl();
-
         User author = userQueryService.getUserById(moment.getUserId());
 
         return PlaceMomentListResponse.PlaceMomentDto.builder()
@@ -132,8 +140,15 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         boolean hasNext = moments.size() > pageSize;
         List<Moment> actualMoments = hasNext ? moments.subList(0, pageSize) : moments;
 
+        // 댓글 수 한 번에 조회
+        List<Long> momentIds = actualMoments.stream()
+                .map(Moment::getId)
+                .collect(Collectors.toList());
+
+        Map<Long, Long> commentCountMap = getCommentCountMap(momentIds);
+
         List<MomentListResponse.MomentSummaryDto> momentDtos = actualMoments.stream()
-                .map(moment -> buildMomentSummaryDto(moment, includeAuthor))
+                .map(moment -> buildMomentSummaryDto(moment, includeAuthor, commentCountMap))
                 .collect(Collectors.toList());
 
         String nextCursor = null;
@@ -163,23 +178,20 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                 .build();
     }
 
-    private MomentListResponse.MomentSummaryDto buildMomentSummaryDto(Moment moment, boolean includeAuthor) {
-        // 도메인 메서드 사용
+    private MomentListResponse.MomentSummaryDto buildMomentSummaryDto(Moment moment, boolean includeAuthor,
+                                                                      Map<Long, Long> commentCountMap) {
         String thumbnail = moment.getThumbnailUrl();
 
         MomentListResponse.MomentSummaryDto.MomentSummaryDtoBuilder builder = MomentListResponse.MomentSummaryDto.builder()
                 .id(moment.getId())
                 .title(moment.getTitle())
+                .content(moment.getContent()) // 원본 본문 그대로 전송
                 .thumbnail(thumbnail)
                 .imagesCount(moment.getImageCount())
                 .isPublic(moment.getIsPublic())
                 .createdAt(moment.getCreatedAt())
-                .place(moment.getPlaceId() != null ?
-                        MomentListResponse.PlaceDto.builder()
-                                .id(moment.getPlaceId())
-                                .name(moment.getPlaceName())
-                                .build()
-                        : null);
+                .commentCount(commentCountMap.getOrDefault(moment.getId(), 0L))
+                .viewCount(moment.getViewCount());
 
         if (includeAuthor) {
             User author = userQueryService.getUserById(moment.getUserId());
@@ -193,6 +205,27 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         return builder.build();
     }
 
+    private Map<Long, Long> getCommentCountMap(List<Long> momentIds) {
+        if (momentIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        List<Object[]> results = commentRepository.countByMomentIds(momentIds);
+        Map<Long, Long> commentCountMap = new HashMap<>();
+
+        for (Object[] result : results) {
+            Long momentId = (Long) result[0];
+            Long count = (Long) result[1];
+            commentCountMap.put(momentId, count);
+        }
+
+        for (Long momentId : momentIds) {
+            commentCountMap.putIfAbsent(momentId, 0L);
+        }
+
+        return commentCountMap;
+    }
+
     private int validateAndGetLimit(Integer limit) {
         if (limit == null) {
             return DEFAULT_LIMIT;
@@ -201,19 +234,5 @@ public class MomentQueryServiceImpl implements MomentQueryService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
-    }
-
-    private LocalDateTime parseCursor(String cursor) {
-        if (cursor == null || cursor.isEmpty()) {
-            return LocalDateTime.now();
-        }
-
-        try {
-            String cleanCursor = cursor.endsWith("Z") ? cursor.substring(0, cursor.length() - 1) : cursor;
-            return LocalDateTime.parse(cleanCursor, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        } catch (Exception e) {
-            log.warn("Invalid cursor format: {}", cursor);
-            return LocalDateTime.now();
-        }
     }
 }
