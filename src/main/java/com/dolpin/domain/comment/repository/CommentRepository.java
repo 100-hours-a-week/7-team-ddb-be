@@ -70,4 +70,11 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             "AND c.deletedAt IS NULL " +
             "ORDER BY c.createdAt DESC")
     Page<Comment> findByUserIdAndNotDeleted(@Param("userId") Long userId, Pageable pageable);
+
+    // 여러 기록 댓글 갯수 조회
+    @Query("SELECT c.momentId, COUNT(c) FROM Comment c " +
+            "WHERE c.momentId IN :momentIds " +
+            "AND c.deletedAt IS NULL " +
+            "GROUP BY c.momentId")
+    List<Object[]> countByMomentIds(@Param("momentIds") List<Long> momentIds);
 }
