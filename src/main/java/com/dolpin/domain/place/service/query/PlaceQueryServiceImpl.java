@@ -46,6 +46,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
+    // 기존 메서드 (수정 없음)
     @Override
     @Transactional(readOnly = true)
     public PlaceSearchResponse searchPlaces(String query, Double lat, Double lng, String category) {
@@ -89,6 +90,111 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .total(placeDtos.size())
                 .places(placeDtos)
                 .build();
+    }
+
+    // 새로 추가된 dev 전용 메서드
+    @Override
+    @Transactional(readOnly = true)
+    public PlaceSearchResponse searchPlacesWithDevToken(String query, Double lat, Double lng, String category, String devToken) {
+        log.info(" DEV: Searching with token bypass - query: {}, token: {}",
+                query, devToken != null ? "provided" : "null");
+
+        boolean hasQuery = StringUtils.isNotBlank(query);
+        boolean hasCategory = StringUtils.isNotBlank(category);
+
+        // query와 category가 동시에 있으면 에러
+        if (hasQuery && hasCategory) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER,
+                    "검색어와 카테고리 중 하나만 선택해주세요");
+        }
+
+        // 검색어와 카테고리 둘 다 없으면 에러
+        if (!hasQuery && !hasCategory) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER,
+                    "검색어 또는 카테고리가 필요합니다");
+        }
+
+        // 위치 유효성 검사
+        if (lat == null || lng == null) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER,
+                    "위치 정보가 필요합니다");
+        }
+
+        List<PlaceSearchResponse.PlaceDto> placeDtos;
+
+        // 검색어가 있는 경우 토큰과 함께 AI 호출
+        if (query != null && !query.trim().isEmpty()) {
+            placeDtos = searchByQueryWithDevToken(query, lat, lng, devToken);
+        }
+        // 카테고리만 있는 경우 기존 로직 (AI 호출 없음)
+        else {
+            placeDtos = searchByCategory(category, lat, lng);
+        }
+
+        return PlaceSearchResponse.builder()
+                .total(placeDtos.size())
+                .places(placeDtos)
+                .build();
+    }
+
+    // dev 토큰과 함께 AI 호출하는 새로운 메서드
+    private List<PlaceSearchResponse.PlaceDto> searchByQueryWithDevToken(String query, Double lat, Double lng, String devToken) {
+        // 1. 이름 기반 DB 검색
+        List<Long> dbSearchIds = placeRepository.findPlaceIdsByNameContaining(query);
+        log.info("DB search found {} places for query: {}", dbSearchIds.size(), query);
+
+        // 2. AI 서비스 호출 (토큰과 함께)
+        PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query, devToken);
+        List<Long> aiRecommendedIds = new ArrayList<>();
+        Map<Long, Double> similarityScores = new HashMap<>();
+        Map<Long, List<String>> keywordsByPlaceId = new HashMap<>();
+
+        if (aiResponse != null && aiResponse.getRecommendations() != null) {
+            for (PlaceAiResponse.PlaceRecommendation rec : aiResponse.getRecommendations()) {
+                aiRecommendedIds.add(rec.getId());
+                similarityScores.put(rec.getId(), rec.getSimilarityScore());
+                if (rec.getKeyword() != null && !rec.getKeyword().isEmpty()) {
+                    keywordsByPlaceId.put(rec.getId(), rec.getKeyword());
+                }
+            }
+        }
+
+        log.info(" DEV: AI service found {} places with token bypass, suggested category: {}",
+                aiRecommendedIds.size(), aiResponse != null ? aiResponse.getPlaceCategory() : null);
+
+        // DB 검색 결과 ID 집합 생성 (중복 체크용)
+        Set<Long> dbSearchIdSet = new HashSet<>(dbSearchIds);
+
+        // 3. 결과 병합 (DB 검색 결과를 먼저, AI 결과를 나중에)
+        LinkedHashSet<Long> mergedIds = new LinkedHashSet<>();
+        mergedIds.addAll(dbSearchIds); // 1번 리스트 먼저
+        mergedIds.addAll(aiRecommendedIds); // 2번 리스트 나중에 (중복 자동 제거)
+
+        List<Long> finalIds = new ArrayList<>(mergedIds);
+
+        // 4. 카테고리 필터링 (AI가 카테고리를 제안한 경우)
+        if (aiResponse != null && StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+            finalIds = filterByCategory(finalIds, aiResponse.getPlaceCategory());
+            log.info("Filtered by category '{}', remaining {} places",
+                    aiResponse.getPlaceCategory(), finalIds.size());
+        }
+
+        // 5. 위치 기반 필터링 및 거리 계산
+        List<PlaceSearchResponse.PlaceDto> result = new ArrayList<>();
+        if (!finalIds.isEmpty()) {
+            result = processPlaceIds(finalIds, lat, lng, similarityScores, keywordsByPlaceId, dbSearchIdSet);
+        }
+
+        // 6. 폴백: 결과가 비어있고 AI가 카테고리를 제안했다면 해당 카테고리로 검색
+        if (result.isEmpty() && aiResponse != null && StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+            log.info("No results found, falling back to category search: {}", aiResponse.getPlaceCategory());
+            result = searchByCategory(aiResponse.getPlaceCategory(), lat, lng);
+        }
+
+        return result;
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByQueryNew(String query, Double lat, Double lng) {

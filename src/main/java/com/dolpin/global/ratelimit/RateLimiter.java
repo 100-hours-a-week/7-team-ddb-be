@@ -23,8 +23,22 @@ public class RateLimiter {
     @Value("${ai.service.rate-limit.period}")
     private int aiServicePeriodSeconds;
 
+    // dev 전용 토큰 (환경변수)
+    @Value("${ai.service.dev-bypass-token:}")
+    private String devBypassToken;
+
+    // dev 환경 체크
+    @Value("${spring.profiles.active:}")
+    private String activeProfile;
+
     public void init() {
         registerLimit("ai-service", aiServiceMaxRequests, Duration.ofSeconds(aiServicePeriodSeconds));
+
+        // dev 환경에서 토큰이 설정되어 있으면 알림
+        if (isDevEnvironment() && devBypassToken != null && !devBypassToken.isEmpty()) {
+            log.warn(" DEV MODE: Rate limit bypass token is active! Token: {}***",
+                    devBypassToken.substring(0, Math.min(4, devBypassToken.length())));
+        }
     }
 
     public void registerLimit(String serviceName, int maxRequests, Duration period) {
@@ -32,6 +46,7 @@ public class RateLimiter {
         counters.put(serviceName, new ServiceCounter(Instant.now()));
     }
 
+    // 기존 메서드 (하위 호환성 유지)
     public boolean allowRequest(String serviceName) {
         LimitConfig config = limitConfigs.get(serviceName);
         if (config == null) {
@@ -53,6 +68,31 @@ public class RateLimiter {
         } else {
             return false;
         }
+    }
+
+    // 새로 추가된 메서드 (토큰 지원)
+    public boolean allowRequest(String serviceName, String token) {
+        // dev 환경에서 토큰이 일치하면 우회
+        if (isDevBypass(token)) {
+            log.debug(" DEV: Rate limit bypassed for service: {}", serviceName);
+            return true;
+        }
+
+        // 기존 로직 그대로 호출
+        return allowRequest(serviceName);
+    }
+
+    // dev 환경 체크
+    private boolean isDevEnvironment() {
+        return "dev".equals(activeProfile) || (activeProfile != null && activeProfile.contains("dev"));
+    }
+
+    // dev 토큰 검증
+    private boolean isDevBypass(String token) {
+        return isDevEnvironment() &&
+                devBypassToken != null &&
+                !devBypassToken.isEmpty() &&
+                devBypassToken.equals(token);
     }
 
     // 남은 요청 수 확인 메서드
