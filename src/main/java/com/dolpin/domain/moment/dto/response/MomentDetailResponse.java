@@ -23,14 +23,11 @@ public class MomentDetailResponse {
     private String content;
     private List<String> images;
     private PlaceDetailDto place;
-
     private Boolean isPublic;
-
     private Boolean isOwner;
-
     private LocalDateTime createdAt;
-
-    private Integer commentsCount;
+    private Long commentCount;
+    private Long viewCount;
 
     @Getter
     @Builder
@@ -41,7 +38,8 @@ public class MomentDetailResponse {
         private String name;
     }
 
-    public static MomentDetailResponse from(Moment moment, boolean isOwner) {
+    public static MomentDetailResponse from(Moment moment, boolean isOwner,
+                                            Long commentCount, Long viewCount) {
         List<String> imageUrls = moment.getImages().stream()
                 .map(MomentImage::getImageUrl)
                 .collect(Collectors.toList());
@@ -60,7 +58,8 @@ public class MomentDetailResponse {
                 .isPublic(moment.getIsPublic())
                 .isOwner(isOwner)
                 .createdAt(moment.getCreatedAt())
-                .commentsCount(0) // TODO: 댓글 기능 구현 후 설정
+                .commentCount(commentCount)
+                .viewCount(viewCount)
                 .build();
     }
 }
