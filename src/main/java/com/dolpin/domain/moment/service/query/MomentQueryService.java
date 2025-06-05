@@ -6,7 +6,7 @@ import com.dolpin.domain.moment.dto.response.PlaceMomentListResponse;
 
 public interface MomentQueryService {
 
-    MomentListResponse getAllMoments(Integer limit, String cursor);
+    MomentListResponse getAllMoments(Long currentUserId, Integer limit, String cursor);
 
     MomentListResponse getMyMoments(Long userId, Integer limit, String cursor);
 
