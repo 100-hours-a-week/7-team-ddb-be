@@ -18,11 +18,6 @@ public class PlaceTestHelper {
 
     public static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
 
-    public static void clearContext(TestEntityManager entityManager) {
-        entityManager.flush();
-        entityManager.clear();
-    }
-
     public static void clearPersistenceContext(TestEntityManager entityManager) {
         entityManager.flush();
         entityManager.clear();
