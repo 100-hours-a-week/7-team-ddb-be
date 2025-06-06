@@ -90,7 +90,7 @@ class PlaceRepositoryTest {
         }
 
         @Test
-        @DisplayName("존재하지 않는 ID로 조회하면 빈 결과를 반환한다")
+        @DisplayName("존재하지 않는 ID로 조회 시 빈 결과를 반환한다")
         void findBasicPlaceById_WithNonExistentId_ReturnsEmpty() {
             Long nonExistentId = 999L;
             clearPersistenceContext();
@@ -386,7 +386,6 @@ class PlaceRepositoryTest {
         @Test
         @DisplayName("카테고리가 COUNT 기준으로 내림차순 정렬되어 조회된다")
         void findDistinctCategories_OrderedByCountDescending() {
-            // 카페 3개 생성 (가장 많음)
             Place cafe1 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "1", TestConstants.CAFE_CATEGORY,
                     TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
             Place cafe2 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "2", TestConstants.CAFE_CATEGORY,
@@ -394,13 +393,11 @@ class PlaceRepositoryTest {
             Place cafe3 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "3", TestConstants.CAFE_CATEGORY,
                     TestConstants.BAR_LAT, TestConstants.BAR_LNG);
 
-            // 식당 2개 생성 (중간)
             Place restaurant1 = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME + "1", TestConstants.RESTAURANT_CATEGORY,
                     TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG);
             Place restaurant2 = PlaceFixture.createPlace(TestConstants.TEST_RESTAURANT_NAME + "2", TestConstants.RESTAURANT_CATEGORY,
                     TestConstants.RESTAURANT2_LAT, TestConstants.RESTAURANT2_LNG);
 
-            // 술집 1개 생성 (가장 적음)
             Place bar1 = PlaceFixture.createPlace(TestConstants.TEST_BAR_NAME + "1", TestConstants.BAR_CATEGORY,
                     TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG);
 
@@ -414,17 +411,15 @@ class PlaceRepositoryTest {
 
             List<String> categories = placeRepository.findDistinctCategories();
 
-            // 검증: 카테고리 개수가 많은 순서대로 정렬
             assertThat(categories).hasSize(3);
-            assertThat(categories.get(0)).isEqualTo(TestConstants.CAFE_CATEGORY);      // 3개 - 1위
-            assertThat(categories.get(1)).isEqualTo(TestConstants.RESTAURANT_CATEGORY); // 2개 - 2위
-            assertThat(categories.get(2)).isEqualTo(TestConstants.BAR_CATEGORY);       // 1개 - 3위
+            assertThat(categories.get(0)).isEqualTo(TestConstants.CAFE_CATEGORY);
+            assertThat(categories.get(1)).isEqualTo(TestConstants.RESTAURANT_CATEGORY);
+            assertThat(categories.get(2)).isEqualTo(TestConstants.BAR_CATEGORY);
         }
 
         @Test
         @DisplayName("동일한 개수의 카테고리는 가나다순으로 정렬된다")
         void findDistinctCategories_WithSameCount_OrderedAlphabetically() {
-            // 각 카테고리별로 동일하게 2개씩 생성
             Place cafe1 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "1", TestConstants.CAFE_CATEGORY,
                     TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
             Place cafe2 = PlaceFixture.createPlace(TestConstants.TEST_CAFE_NAME + "2", TestConstants.CAFE_CATEGORY,
@@ -444,9 +439,8 @@ class PlaceRepositoryTest {
             List<String> categories = placeRepository.findDistinctCategories();
 
             assertThat(categories).hasSize(2);
-
-            assertThat(categories.get(0)).isEqualTo(TestConstants.RESTAURANT_CATEGORY); // "식당"
-            assertThat(categories.get(1)).isEqualTo(TestConstants.CAFE_CATEGORY);       // "카페"
+            assertThat(categories.get(0)).isEqualTo(TestConstants.RESTAURANT_CATEGORY);
+            assertThat(categories.get(1)).isEqualTo(TestConstants.CAFE_CATEGORY);
         }
 
         @Test
