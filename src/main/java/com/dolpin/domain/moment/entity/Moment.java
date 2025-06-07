@@ -38,8 +38,8 @@ public class Moment {
     @Builder.Default
     private Boolean isPublic = true;
 
-    // 조회수 컬럼 추가
-    @Column(name = "view_count", nullable = false)
+    // 조회수 컬럼 - 기본값 설정하고 nullable로 변경
+    @Column(name = "view_count", nullable = true, columnDefinition = "bigint default 0")
     @Builder.Default
     private Long viewCount = 0L;
 
@@ -59,11 +59,21 @@ public class Moment {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
+
+        // view_count가 null이면 0으로 초기화
+        if (this.viewCount == null) {
+            this.viewCount = 0L;
+        }
     }
 
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+
+        // view_count가 null이면 0으로 초기화
+        if (this.viewCount == null) {
+            this.viewCount = 0L;
+        }
     }
 
     // 비즈니스 메서드
@@ -88,12 +98,15 @@ public class Moment {
         }
     }
 
-    // 조회수 증가 메서드 (내부용)
+    // 조회수 증가 메서드
     public void incrementViewCount() {
+        if (this.viewCount == null) {
+            this.viewCount = 0L;
+        }
         this.viewCount++;
     }
 
-    // 이미지 관련 도메인 메서드들 - 실제 사용
+    // 이미지 관련 도메인 메서드들
     public void addImage(String imageUrl) {
         int nextSequence = this.images.size();
         MomentImage image = MomentImage.builder()
@@ -174,5 +187,10 @@ public class Moment {
 
     public boolean canBeViewedBy(Long userId) {
         return this.isPublic || isOwnedBy(userId);
+    }
+
+    // view_count getter - null 체크 추가
+    public Long getViewCount() {
+        return this.viewCount != null ? this.viewCount : 0L;
     }
 }
