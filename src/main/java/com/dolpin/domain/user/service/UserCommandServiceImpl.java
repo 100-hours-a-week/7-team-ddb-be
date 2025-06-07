@@ -31,8 +31,8 @@ public class UserCommandServiceImpl implements UserCommandService {
             throw new BusinessException(ResponseStatus.INVALID_PARAMETER.withMessage("유효하지 않은 소셜 로그인 정보"));
         }
 
-        // 임시 사용자명 생성 (나중에 사용자가 설정 가능)
-        String tempUsername = "user" + oAuthInfo.getProviderId().substring(0, Math.min(4, oAuthInfo.getProviderId().length()));
+        // 2자로 설정하여 베이스명이 6자가 되도록 조정
+        String tempUsername = "user" + oAuthInfo.getProviderId().substring(0, Math.min(2, oAuthInfo.getProviderId().length()));
         String username = generateUniqueUsername(tempUsername);
 
         User user = User.builder()
@@ -59,7 +59,6 @@ public class UserCommandServiceImpl implements UserCommandService {
         user.updateProfile(nickname, profileImage, introduction);
         userRepository.save(user);
     }
-
 
     @Override
     @Transactional
@@ -104,25 +103,39 @@ public class UserCommandServiceImpl implements UserCommandService {
             nickname = "user";
         }
 
-        // 이름이 10자를 초과하면 잘라냄 (username 필드 길이 제한 때문)
-        if (nickname.length() > 8) {
-            nickname = nickname.substring(0, 8);
+        // 6자로 늘려서 더 많은 조합 가능 (접미사 공간 4자 확보)
+        if (nickname.length() > 6) {
+            nickname = nickname.substring(0, 6);
         }
 
         String candidateUsername = nickname;
-        int suffix = 1;
+        String suffix = "";
+        int attempt = 0;
 
         while (userRepository.existsByUsername(candidateUsername)) {
-            suffix++;
-            candidateUsername = nickname + suffix;
+            attempt++;
+            suffix = generateAlphanumericSuffix(attempt);
 
-            // 이름 + 접미사가 10자를 초과하면 이름을 더 자름
-            if (candidateUsername.length() > 10) {
+            // 기본명 + 접미사가 10자를 초과하면 기본명을 줄임
+            while (nickname.length() + suffix.length() > 10) {
                 nickname = nickname.substring(0, nickname.length() - 1);
-                candidateUsername = nickname + suffix;
             }
+
+            candidateUsername = nickname + suffix;
         }
 
         return candidateUsername;
+    }
+
+    private String generateAlphanumericSuffix(int number) {
+        StringBuilder suffix = new StringBuilder();
+
+        while (number > 0) {
+            number--;
+            suffix.insert(0, (char)('a' + (number % 26)));
+            number /= 26;
+        }
+
+        return suffix.toString();
     }
 }
