@@ -217,7 +217,6 @@ public class PlaceTestHelper {
         return createMockPlaceWithKeywords(id, name, getDefaultRestaurantKeywords());
     }
 
-    // ========== 8. 메뉴 및 영업시간 관련 메서드들 ==========
     public static Place createMockPlaceWithMenusOnly(List<PlaceMenu> menus) {
         Place place = mock(Place.class);
         when(place.getMenus()).thenReturn(menus);
