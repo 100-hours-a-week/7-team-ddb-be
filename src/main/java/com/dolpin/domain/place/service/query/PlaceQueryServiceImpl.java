@@ -1,5 +1,6 @@
 package com.dolpin.domain.place.service.query;
 
+import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.domain.place.client.PlaceAiClient;
 import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.entity.Place;
@@ -30,6 +31,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     private final PlaceRepository placeRepository;
     private final PlaceAiClient placeAiClient;
+    private final MomentRepository momentRepository;
 
     @Value("${place.search.default-radius}")
     private double defaultSearchRadius;
@@ -44,6 +46,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
+    // 기존 메서드 (수정 없음)
     @Override
     @Transactional(readOnly = true)
     public PlaceSearchResponse searchPlaces(String query, Double lat, Double lng, String category) {
@@ -74,11 +77,11 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
         List<PlaceSearchResponse.PlaceDto> placeDtos;
 
-        // 검색어가 있는 경우 AI 검색
+        // 검색어가 있는 경우 새로운 로직 적용
         if (query != null && !query.trim().isEmpty()) {
-            placeDtos = searchByQuery(query, lat, lng);
+            placeDtos = searchByQueryNew(query, lat, lng);
         }
-        // 카테고리만 있는 경우 DB 직접 검색
+        // 카테고리만 있는 경우 기존 로직 유지
         else {
             placeDtos = searchByCategory(category, lat, lng);
         }
@@ -89,40 +92,206 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .build();
     }
 
-    private List<PlaceSearchResponse.PlaceDto> searchByQuery(String query, Double lat, Double lng) {
-        // AI 서비스에 검색 쿼리 전송
-        PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query);
+    // 새로 추가된 dev 전용 메서드
+    @Override
+    @Transactional(readOnly = true)
+    public PlaceSearchResponse searchPlacesWithDevToken(String query, Double lat, Double lng, String category, String devToken) {
+        log.info(" DEV: Searching with token bypass - query: {}, token: {}",
+                query, devToken != null ? "provided" : "null");
 
-        if (aiResponse == null || aiResponse.getRecommendations() == null || aiResponse.getRecommendations().isEmpty()) {
-            log.info("AI service returned no results");
-            return Collections.emptyList();
+        boolean hasQuery = StringUtils.isNotBlank(query);
+        boolean hasCategory = StringUtils.isNotBlank(category);
+
+        // query와 category가 동시에 있으면 에러
+        if (hasQuery && hasCategory) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER,
+                    "검색어와 카테고리 중 하나만 선택해주세요");
         }
 
-        // 추천된 장소 ID 목록 추출
-        List<Long> placeIds = aiResponse.getRecommendations().stream()
-                .map(PlaceAiResponse.PlaceRecommendation::getId)
+        // 검색어와 카테고리 둘 다 없으면 에러
+        if (!hasQuery && !hasCategory) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER,
+                    "검색어 또는 카테고리가 필요합니다");
+        }
+
+        // 위치 유효성 검사
+        if (lat == null || lng == null) {
+            throw new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER,
+                    "위치 정보가 필요합니다");
+        }
+
+        List<PlaceSearchResponse.PlaceDto> placeDtos;
+
+        // 검색어가 있는 경우 토큰과 함께 AI 호출
+        if (query != null && !query.trim().isEmpty()) {
+            placeDtos = searchByQueryWithDevToken(query, lat, lng, devToken);
+        }
+        // 카테고리만 있는 경우 기존 로직 (AI 호출 없음)
+        else {
+            placeDtos = searchByCategory(category, lat, lng);
+        }
+
+        return PlaceSearchResponse.builder()
+                .total(placeDtos.size())
+                .places(placeDtos)
+                .build();
+    }
+
+    // dev 토큰과 함께 AI 호출하는 새로운 메서드
+    private List<PlaceSearchResponse.PlaceDto> searchByQueryWithDevToken(String query, Double lat, Double lng, String devToken) {
+        // 1. 이름 기반 DB 검색
+        List<Long> dbSearchIds = placeRepository.findPlaceIdsByNameContaining(query);
+        log.info("DB search found {} places for query: {}", dbSearchIds.size(), query);
+
+        // 2. AI 서비스 호출 (토큰과 함께)
+        PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query, devToken);
+        List<Long> aiRecommendedIds = new ArrayList<>();
+        Map<Long, Double> similarityScores = new HashMap<>();
+        Map<Long, List<String>> keywordsByPlaceId = new HashMap<>();
+
+        if (aiResponse != null && aiResponse.getRecommendations() != null) {
+            for (PlaceAiResponse.PlaceRecommendation rec : aiResponse.getRecommendations()) {
+                aiRecommendedIds.add(rec.getId());
+                similarityScores.put(rec.getId(), rec.getSimilarityScore());
+                if (rec.getKeyword() != null && !rec.getKeyword().isEmpty()) {
+                    keywordsByPlaceId.put(rec.getId(), rec.getKeyword());
+                }
+            }
+        }
+
+        log.info(" DEV: AI service found {} places with token bypass, suggested category: {}",
+                aiRecommendedIds.size(), aiResponse != null ? aiResponse.getPlaceCategory() : null);
+
+        // DB 검색 결과 ID 집합 생성 (중복 체크용)
+        Set<Long> dbSearchIdSet = new HashSet<>(dbSearchIds);
+
+        // 3. 결과 병합 (DB 검색 결과를 먼저, AI 결과를 나중에)
+        LinkedHashSet<Long> mergedIds = new LinkedHashSet<>();
+        mergedIds.addAll(dbSearchIds); // 1번 리스트 먼저
+        mergedIds.addAll(aiRecommendedIds); // 2번 리스트 나중에 (중복 자동 제거)
+
+        List<Long> finalIds = new ArrayList<>(mergedIds);
+
+        // 4. 카테고리 필터링 (AI가 카테고리를 제안한 경우)
+        if (aiResponse != null && StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+            finalIds = filterByCategory(finalIds, aiResponse.getPlaceCategory());
+            log.info("Filtered by category '{}', remaining {} places",
+                    aiResponse.getPlaceCategory(), finalIds.size());
+        }
+
+        // 5. 위치 기반 필터링 및 거리 계산
+        List<PlaceSearchResponse.PlaceDto> result = new ArrayList<>();
+        if (!finalIds.isEmpty()) {
+            result = processPlaceIds(finalIds, lat, lng, similarityScores, keywordsByPlaceId, dbSearchIdSet);
+        }
+
+        // 6. 폴백: 결과가 비어있고 AI가 카테고리를 제안했다면 해당 카테고리로 검색
+        if (result.isEmpty() && aiResponse != null && StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+            log.info("No results found, falling back to category search: {}", aiResponse.getPlaceCategory());
+            result = searchByCategory(aiResponse.getPlaceCategory(), lat, lng);
+        }
+
+        return result;
+    }
+
+    private List<PlaceSearchResponse.PlaceDto> searchByQueryNew(String query, Double lat, Double lng) {
+        // 1. 이름 기반 DB 검색
+        List<Long> dbSearchIds = placeRepository.findPlaceIdsByNameContaining(query);
+        log.info("DB search found {} places for query: {}", dbSearchIds.size(), query);
+
+        // 2. AI 서비스 호출
+        PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query);
+        List<Long> aiRecommendedIds = new ArrayList<>();
+        Map<Long, Double> similarityScores = new HashMap<>();
+        Map<Long, List<String>> keywordsByPlaceId = new HashMap<>();
+
+        if (aiResponse != null && aiResponse.getRecommendations() != null) {
+            for (PlaceAiResponse.PlaceRecommendation rec : aiResponse.getRecommendations()) {
+                aiRecommendedIds.add(rec.getId());
+                similarityScores.put(rec.getId(), rec.getSimilarityScore());
+                if (rec.getKeyword() != null && !rec.getKeyword().isEmpty()) {
+                    keywordsByPlaceId.put(rec.getId(), rec.getKeyword());
+                }
+            }
+        }
+
+        log.info("AI service found {} places, suggested category: {}",
+                aiRecommendedIds.size(), aiResponse != null ? aiResponse.getPlaceCategory() : null);
+
+        // DB 검색 결과 ID 집합 생성 (중복 체크용)
+        Set<Long> dbSearchIdSet = new HashSet<>(dbSearchIds);
+
+        // 3. 결과 병합 (DB 검색 결과를 먼저, AI 결과를 나중에)
+        LinkedHashSet<Long> mergedIds = new LinkedHashSet<>();
+        mergedIds.addAll(dbSearchIds); // 1번 리스트 먼저
+        mergedIds.addAll(aiRecommendedIds); // 2번 리스트 나중에 (중복 자동 제거)
+
+        List<Long> finalIds = new ArrayList<>(mergedIds);
+
+        // 4. 카테고리 필터링 (AI가 카테고리를 제안한 경우)
+        if (aiResponse != null && StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+            finalIds = filterByCategory(finalIds, aiResponse.getPlaceCategory());
+            log.info("Filtered by category '{}', remaining {} places",
+                    aiResponse.getPlaceCategory(), finalIds.size());
+        }
+
+        // 5. 위치 기반 필터링 및 거리 계산
+        List<PlaceSearchResponse.PlaceDto> result = new ArrayList<>();
+        if (!finalIds.isEmpty()) {
+            result = processPlaceIds(finalIds, lat, lng, similarityScores, keywordsByPlaceId, dbSearchIdSet);
+        }
+
+        // 6. 폴백: 결과가 비어있고 AI가 카테고리를 제안했다면 해당 카테고리로 검색
+        if (result.isEmpty() && aiResponse != null && StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+            log.info("No results found, falling back to category search: {}", aiResponse.getPlaceCategory());
+            result = searchByCategory(aiResponse.getPlaceCategory(), lat, lng);
+        }
+
+        return result;
+    }
+
+    private List<Long> filterByCategory(List<Long> placeIds, String category) {
+        if (placeIds.isEmpty()) {
+            return placeIds;
+        }
+
+        // 장소 ID들의 카테고리를 조회해서 필터링
+        return placeRepository.findAllById(placeIds).stream()
+                .filter(place -> category.equals(place.getCategory()))
+                .map(Place::getId)
                 .collect(Collectors.toList());
+    }
 
-        // 유사도 점수 매핑 (장소 ID -> 유사도 점수)
-        Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
-                .collect(Collectors.toMap(
-                        PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore
-                ));
+    private Map<Long, Long> getMomentCountMap(List<Long> placeIds) {
+        if (placeIds.isEmpty()) {
+            return new HashMap<>();
+        }
 
-        // 키워드 매핑 (장소 ID -> 키워드 리스트)
-        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
-                .filter(rec -> rec.getKeyword() != null && !rec.getKeyword().isEmpty())
-                .collect(Collectors.toMap(
-                        PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getKeyword
-                ));
+        List<Object[]> results = momentRepository.countPublicMomentsByPlaceIds(placeIds);
+        Map<Long, Long> momentCountMap = new HashMap<>();
+
+        for (Object[] result : results) {
+            Long placeId = (Long) result[0];
+            Long count = (Long) result[1];
+            momentCountMap.put(placeId, count);
+        }
+
+        return momentCountMap;
+    }
+
+    private List<PlaceSearchResponse.PlaceDto> processPlaceIds(
+            List<Long> placeIds, Double lat, Double lng,
+            Map<Long, Double> similarityScores,
+            Map<Long, List<String>> keywordsByPlaceId,
+            Set<Long> dbSearchIdSet) {
 
         // PostGIS를 활용한 위치 기반 필터링 및 거리 계산
         List<PlaceWithDistance> nearbyPlaces = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, lat, lng, defaultSearchRadius);
 
-        // 필터링된 ID가 없으면 빈 결과 반환
         if (nearbyPlaces.isEmpty()) {
             log.info("No places found within radius");
             return Collections.emptyList();
@@ -132,6 +301,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<Long> filteredPlaceIds = nearbyPlaces.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
+
+        // Moment 개수를 한 번에 조회
+        Map<Long, Long> momentCountMap = getMomentCountMap(filteredPlaceIds);
 
         // 거리 정보 맵 구성
         Map<Long, Double> distanceMap = nearbyPlaces.stream()
@@ -143,27 +315,52 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         // 키워드를 포함한 장소 정보 한 번에 조회 (N+1 문제 방지)
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(filteredPlaceIds);
 
-        // DTO 변환
-        List<PlaceSearchResponse.PlaceDto> placeDtos = placesWithKeywords.stream()
-                .map(place -> {
-                    Double distance = distanceMap.get(place.getId());
-                    Double similarityScore = similarityScores.get(place.getId());
+        // 원래 순서 유지를 위한 맵 생성
+        Map<Long, Place> placeMap = placesWithKeywords.stream()
+                .collect(Collectors.toMap(Place::getId, place -> place));
 
-                    // AI에서 제공된 키워드 리스트 가져오기
-                    List<String> keywords = keywordsByPlaceId.getOrDefault(place.getId(),
-                            place.getKeywords().stream()
-                                    .map(pk -> pk.getKeyword().getKeyword())
-                                    .collect(Collectors.toList())
-                    );
+        // DB 검색 결과와 AI 추천 결과 분리하여 처리
+        List<PlaceSearchResponse.PlaceDto> dbResults = new ArrayList<>();
+        List<PlaceSearchResponse.PlaceDto> aiResults = new ArrayList<>();
 
-                    return convertToPlaceDto(place, distance, similarityScore, keywords);
-                })
-                .collect(Collectors.toList());
+        for (Long placeId : placeIds) {
+            if (!placeMap.containsKey(placeId)) continue; // 반경 내에 없는 장소 제외
 
-        // 유사도 점수 기준 정렬
-        placeDtos.sort((a, b) -> Double.compare(b.getSimilarityScore(), a.getSimilarityScore()));
+            Place place = placeMap.get(placeId);
+            Double distance = distanceMap.get(placeId);
+            Double similarityScore = similarityScores.get(placeId);
 
-        return placeDtos;
+            // AI에서 제공된 키워드 리스트 가져오기
+            List<String> keywords = keywordsByPlaceId.getOrDefault(placeId,
+                    place.getKeywords().stream()
+                            .map(pk -> pk.getKeyword().getKeyword())
+                            .collect(Collectors.toList())
+            );
+
+            PlaceSearchResponse.PlaceDto dto = convertToPlaceDto(place, distance, similarityScore, keywords, momentCountMap);
+
+            // DB 검색 결과인지 확인 (dbSearchIdSet에 있으면 DB 결과)
+            if (dbSearchIdSet.contains(placeId)) {
+                dbResults.add(dto);
+            } else {
+                aiResults.add(dto);
+            }
+        }
+
+        // AI 결과만 similarity_score 기준으로 정렬 (내림차순)
+        aiResults.sort((a, b) -> {
+            if (a.getSimilarityScore() == null && b.getSimilarityScore() == null) return 0;
+            if (a.getSimilarityScore() == null) return 1;
+            if (b.getSimilarityScore() == null) return -1;
+            return Double.compare(b.getSimilarityScore(), a.getSimilarityScore());
+        });
+
+        // DB 결과를 앞에, AI 결과를 뒤에 배치
+        List<PlaceSearchResponse.PlaceDto> finalResults = new ArrayList<>();
+        finalResults.addAll(dbResults);
+        finalResults.addAll(aiResults);
+
+        return finalResults;
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByCategory(String category, Double lat, Double lng) {
@@ -175,6 +372,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         List<Long> placeIds = searchResults.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
+
+        // Moment 개수를 한 번에 조회
+        Map<Long, Long> momentCountMap = getMomentCountMap(placeIds);
 
         // 키워드를 포함한 장소 정보 조회
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
@@ -193,19 +393,22 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                                 .map(pk -> pk.getKeyword().getKeyword())
                                 .collect(Collectors.toList());
 
-                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords);
+                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords, momentCountMap);
                     } else {
                         // Place 정보가 없는 경우 빈 키워드로 처리
-                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList());
+                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList(), momentCountMap);
                     }
                 })
                 .collect(Collectors.toList());
     }
 
     private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
-            PlaceWithDistance placeWithDistance, List<String> keywords) {
+            PlaceWithDistance placeWithDistance, List<String> keywords, Map<Long, Long> momentCountMap) {
         // 거리 포맷팅
-        String formattedDistance = formatDistance(placeWithDistance.getDistance());
+        Double convertedDistance = convertDistance(placeWithDistance.getDistance());
+
+        // Moment 개수 조회 (Map에서)
+        Long momentCount = momentCountMap.getOrDefault(placeWithDistance.getId(), 0L);
 
         // 실제 장소의 위치 정보 사용
         Map<String, Object> locationMap = new HashMap<>();
@@ -220,17 +423,21 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .id(placeWithDistance.getId())
                 .name(placeWithDistance.getName())
                 .thumbnail(placeWithDistance.getImageUrl())
-                .distance(formattedDistance)
-                .momentCount("0")
+                .distance(convertedDistance)
+                .momentCount(momentCount)
                 .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(null)
                 .build();
     }
 
-    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore, List<String> aiKeywords) {
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance, Double similarityScore,
+                                                           List<String> aiKeywords, Map<Long, Long> momentCountMap) {
         // 거리 포맷팅
-        String formattedDistance = formatDistance(distance);
+        Double convertedDistance = convertDistance(distance);
+
+        // Moment 개수 조회 (Map에서)
+        Long momentCount = momentCountMap.getOrDefault(place.getId(), 0L);
 
         // 키워드 추출
         List<String> keywords;
@@ -255,8 +462,8 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .id(place.getId())
                 .name(place.getName())
                 .thumbnail(place.getImageUrl())
-                .distance(formattedDistance)
-                .momentCount("0")  // 추후 연동 필요
+                .distance(convertedDistance)
+                .momentCount(momentCount)
                 .keywords(keywords)
                 .location(locationMap)
                 .similarityScore(similarityScore)
@@ -380,17 +587,17 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         return schedules;
     }
 
-    private String formatDistance(Double distanceInMeters) {
-        if (distanceInMeters == null) return "0";
+    private Double convertDistance(Double distanceInMeters) {
+        if (distanceInMeters == null) return 0.0;
 
         if (distanceInMeters < 1000) {
-            // 미터 단위로 표시
-            return Math.round(distanceInMeters) + "m";
+            // 미터 단위 - 반올림해서 반환
+            return (double) Math.round(distanceInMeters);
         } else {
-            // 킬로미터 단위로 표시
-            BigDecimal km = BigDecimal.valueOf(distanceInMeters / 1000.0)
-                    .setScale(1, RoundingMode.HALF_UP);
-            return km.toString() + "km";
+            // 킬로미터 단위 - 소수점 1자리까지
+            return BigDecimal.valueOf(distanceInMeters / 1000.0)
+                    .setScale(1, RoundingMode.HALF_UP)
+                    .doubleValue();
         }
     }
 

@@ -1,6 +1,5 @@
 package com.dolpin.domain.place.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,6 +12,8 @@ import java.util.List;
 public class PlaceAiResponse {
 
     private List<PlaceRecommendation> recommendations;
+
+    private String placeCategory;
 
     @Data
     @NoArgsConstructor

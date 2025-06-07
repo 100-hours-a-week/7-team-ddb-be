@@ -5,6 +5,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
@@ -25,6 +28,9 @@ public class PerformanceLoggingInterceptor implements HandlerInterceptor {
 
         // MDC에 핸들러 정보 추가
         MDC.put("handler", handler.getClass().getSimpleName());
+
+        // 인증된 사용자 ID 설정 (Security Filter 이후이므로 정확함)
+        setUserIdInMDC();
 
         return true;
     }
@@ -50,29 +56,61 @@ public class PerformanceLoggingInterceptor implements HandlerInterceptor {
             long totalTime = System.currentTimeMillis() - startTime;
             String endpoint = request.getMethod() + " " + request.getRequestURI();
 
-            // 사용자 ID 추출
-            String userIdStr = MDC.get("userId");
-            Long userId = "anonymous".equals(userIdStr) || "unknown".equals(userIdStr)
-                    ? null : Long.parseLong(userIdStr);
+            // 최종 사용자 ID 추출 (인증 완료 후)
+            String userIdStr = getCurrentUserId();
+            Long userId = "anonymous".equals(userIdStr) || "unknown".equals(userIdStr) || "processing".equals(userIdStr)
+                    ? null : parseUserId(userIdStr);
+
+            // MDC 업데이트
+            MDC.put("userId", userIdStr);
 
             // API 응답 로깅
             LoggingUtils.logApiResponse(log, endpoint, response.getStatus(), totalTime, userId);
 
             // 느린 API 경고
             if (totalTime > 1000) {
-                log.warn("Slow API detected - endpoint: {}, duration: {}ms, handler: {}",
-                        endpoint, totalTime, request.getAttribute(HANDLER_METHOD_ATTRIBUTE));
+                log.warn("Slow API detected - endpoint: {}, duration: {}ms, handler: {}, user: {}",
+                        endpoint, totalTime, request.getAttribute(HANDLER_METHOD_ATTRIBUTE), userIdStr);
             }
 
             // 예외 발생 시 로깅
             if (ex != null) {
-                log.error("Request failed - endpoint: {}, duration: {}ms, error: {}",
-                        endpoint, totalTime, ex.getMessage(), ex);
+                log.error("Request failed - endpoint: {}, duration: {}ms, user: {}, error: {}",
+                        endpoint, totalTime, userIdStr, ex.getMessage(), ex);
             }
         }
 
         // MDC 정리
         MDC.remove("handler");
         MDC.remove("controllerTime");
+    }
+
+    private void setUserIdInMDC() {
+        String userId = getCurrentUserId();
+        MDC.put("userId", userId);
+    }
+
+    private String getCurrentUserId() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated() &&
+                    authentication.getPrincipal() instanceof UserDetails) {
+                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+                return userDetails.getUsername();
+            } else {
+                return "anonymous";
+            }
+        } catch (Exception e) {
+            log.debug("Failed to get user ID: {}", e.getMessage());
+            return "unknown";
+        }
+    }
+
+    private Long parseUserId(String userIdStr) {
+        try {
+            return Long.parseLong(userIdStr);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
