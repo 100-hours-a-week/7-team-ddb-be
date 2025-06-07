@@ -5,6 +5,18 @@ public final class TestConstants {
     private TestConstants() {
     }
 
+    public static final class Api {
+        public static final String SUCCESS_MESSAGE_SEARCH = "get_place_success";
+        public static final String SUCCESS_MESSAGE_DETAIL = "get_place_detail_success";
+        public static final String SUCCESS_MESSAGE_CATEGORIES = "get_categories_success";
+    }
+
+    public static final String SEARCH_QUERY_NONEXISTENT = "존재하지않는검색어";
+    public static final String TEST_ADDRESS = "서울시 강남구 테스트로 123";
+    public static final String TEST_DESCRIPTION = "테스트 카페입니다";
+    public static final String STARBUCKS_THUMBNAIL = "starbucks.jpg";
+    public static final String TEST_THUMBNAIL = "test.jpg";
+
     // === 장소 관련 상수 ===
     public static final String TEST_CAFE_NAME = "테스트 카페";
     public static final String TEST_RESTAURANT_NAME = "테스트 식당";
