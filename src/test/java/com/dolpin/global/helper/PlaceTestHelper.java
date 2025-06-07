@@ -1,136 +1,218 @@
 package com.dolpin.global.helper;
 
-import com.dolpin.domain.place.dto.response.*;
+import com.dolpin.domain.place.dto.response.PlaceWithDistance;
 import com.dolpin.domain.place.entity.*;
 import com.dolpin.global.constants.TestConstants;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.geom.PrecisionModel;
+import com.dolpin.global.fixture.PlaceFixture;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-import static org.mockito.BDDMockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
+@Component
 public class PlaceTestHelper {
 
-    public static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
+    // === 영속화 메서드 ===
+    public Place savePlace(TestEntityManager entityManager, Place place) {
+        return entityManager.persistAndFlush(place);
+    }
 
-    public static void clearPersistenceContext(TestEntityManager entityManager) {
+    public Keyword saveKeyword(TestEntityManager entityManager, Keyword keyword) {
+        return entityManager.persistAndFlush(keyword);
+    }
+
+    // === 복합 영속화 메서드 ===
+    public Place savePlaceWithKeywords(TestEntityManager entityManager, Place place, List<String> keywords) {
+        Place savedPlace = entityManager.persistAndFlush(place);
+
+        for (String keywordText : keywords) {
+            Keyword keyword = saveKeyword(entityManager, PlaceFixture.createKeyword(keywordText));
+            entityManager.persistAndFlush(PlaceFixture.createPlaceKeyword(savedPlace, keyword));
+        }
+
+        return savedPlace;
+    }
+
+    public Place savePlaceWithMenus(TestEntityManager entityManager, Place place, List<PlaceMenu> menus) {
+        Place savedPlace = entityManager.persistAndFlush(place);
+
+        for (PlaceMenu menu : menus) {
+            PlaceMenu menuWithPlace = PlaceMenu.builder()
+                    .place(savedPlace)
+                    .menuName(menu.getMenuName())
+                    .price(menu.getPrice())
+                    .build();
+            entityManager.persistAndFlush(menuWithPlace);
+        }
+
+        return savedPlace;
+    }
+
+    public Place savePlaceWithHours(TestEntityManager entityManager, Place place, List<PlaceHours> hours) {
+        Place savedPlace = entityManager.persistAndFlush(place);
+
+        for (PlaceHours hour : hours) {
+            PlaceHours hourWithPlace = PlaceHours.builder()
+                    .place(savedPlace)
+                    .dayOfWeek(hour.getDayOfWeek())
+                    .openTime(hour.getOpenTime())
+                    .closeTime(hour.getCloseTime())
+                    .isBreakTime(hour.getIsBreakTime())
+                    .build();
+            entityManager.persistAndFlush(hourWithPlace);
+        }
+
+        return savedPlace;
+    }
+
+    // === 완전한 장소 저장 ===
+    public Place saveCompletePlace(TestEntityManager entityManager, Place place,
+                                   List<String> keywords, List<PlaceMenu> menus, List<PlaceHours> hours) {
+        Place savedPlace = savePlaceWithKeywords(entityManager, place, keywords);
+
+        // 메뉴 추가
+        for (PlaceMenu menu : menus) {
+            PlaceMenu menuWithPlace = PlaceMenu.builder()
+                    .place(savedPlace)
+                    .menuName(menu.getMenuName())
+                    .price(menu.getPrice())
+                    .build();
+            entityManager.persistAndFlush(menuWithPlace);
+        }
+
+        // 영업시간 추가
+        for (PlaceHours hour : hours) {
+            PlaceHours hourWithPlace = PlaceHours.builder()
+                    .place(savedPlace)
+                    .dayOfWeek(hour.getDayOfWeek())
+                    .openTime(hour.getOpenTime())
+                    .closeTime(hour.getCloseTime())
+                    .isBreakTime(hour.getIsBreakTime())
+                    .build();
+            entityManager.persistAndFlush(hourWithPlace);
+        }
+
+        return savedPlace;
+    }
+
+    // === 테스트 데이터 세트 생성 ===
+    public List<Place> savePlacesForCategoryTest(TestEntityManager entityManager) {
+        Place cafe1 = savePlace(entityManager, PlaceFixture.createCafe(
+                TestConstants.TEST_CAFE_NAME + "1", TestConstants.CENTER_LAT, TestConstants.CENTER_LNG));
+        Place cafe2 = savePlace(entityManager, PlaceFixture.createCafe(
+                TestConstants.TEST_CAFE_NAME + "2", TestConstants.NEAR_LAT, TestConstants.NEAR_LNG));
+        Place cafe3 = savePlace(entityManager, PlaceFixture.createCafe(
+                TestConstants.TEST_CAFE_NAME + "3", TestConstants.BAR_LAT, TestConstants.BAR_LNG));
+
+        Place restaurant1 = savePlace(entityManager, PlaceFixture.createRestaurant(
+                TestConstants.TEST_RESTAURANT_NAME + "1", TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG));
+        Place restaurant2 = savePlace(entityManager, PlaceFixture.createRestaurant(
+                TestConstants.TEST_RESTAURANT_NAME + "2", TestConstants.RESTAURANT2_LAT, TestConstants.RESTAURANT2_LNG));
+
+        Place bar = savePlace(entityManager, PlaceFixture.createBar(
+                TestConstants.TEST_BAR_NAME + "1", TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG));
+
+        return List.of(cafe1, cafe2, cafe3, restaurant1, restaurant2, bar);
+    }
+
+    public List<Place> setupSortTestData(TestEntityManager entityManager) {
+        Place place1 = PlaceFixture.createCafe(TestConstants.BEST_CAFE_NAME,
+                TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+        Place place2 = PlaceFixture.createCafe(TestConstants.GOOD_CAFE_NAME,
+                TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG);
+        Place place3 = PlaceFixture.createCafe(TestConstants.ORDINARY_CAFE_NAME,
+                TestConstants.SORT_TEST_PLACE3_LAT, TestConstants.SORT_TEST_PLACE3_LNG);
+
+        Place saved1 = savePlace(entityManager, place1);
+        Place saved2 = savePlace(entityManager, place2);
+        Place saved3 = savePlace(entityManager, place3);
+
+        return List.of(saved1, saved2, saved3);
+    }
+
+    // === 키워드별 장소 생성 ===
+    public Place saveCafeWithKeywords(TestEntityManager entityManager, String name,
+                                      double lat, double lng, List<String> keywords) {
+        Place cafe = PlaceFixture.createCafe(name, lat, lng);
+        return savePlaceWithKeywords(entityManager, cafe, keywords);
+    }
+
+    // === 기본 데이터 생성 ===
+    public Place saveBasicCafeWithAllData(TestEntityManager entityManager) {
+        Place cafe = PlaceFixture.createBasicCafe();
+
+        List<String> keywords = List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
+        List<PlaceMenu> menus = List.of(
+                PlaceFixture.createAmericanoMenu(cafe),
+                PlaceFixture.createLatteMenu(cafe)
+        );
+        List<PlaceHours> hours = List.of(
+                PlaceFixture.createMondayHours(cafe),
+                PlaceFixture.createTuesdayHours(cafe)
+        );
+
+        return saveCompletePlace(entityManager, cafe, keywords, menus, hours);
+    }
+
+    // === 영속성 컨텍스트 관리 ===
+    public void clearPersistenceContext(TestEntityManager entityManager) {
         entityManager.flush();
         entityManager.clear();
     }
 
-    public static PlaceAiResponse.PlaceRecommendation createRecommendation(Long id, Double score, List<String> keywords) {
-        PlaceAiResponse.PlaceRecommendation recommendation = new PlaceAiResponse.PlaceRecommendation();
-        ReflectionTestUtils.setField(recommendation, "id", id);
-        ReflectionTestUtils.setField(recommendation, "similarityScore", score);
-        ReflectionTestUtils.setField(recommendation, "keyword", keywords);
-        return recommendation;
+    // === 검증 헬퍼 메서드들 ===
+    public void assertPlaceBasicInfo(Place place, String expectedName, String expectedCategory) {
+        assertThat(place.getName()).isEqualTo(expectedName);
+        assertThat(place.getCategory()).isEqualTo(expectedCategory);
+        assertThat(place.getRoadAddress()).isEqualTo(TestConstants.DEFAULT_ROAD_ADDRESS);
+        assertThat(place.getImageUrl()).isEqualTo(TestConstants.DEFAULT_IMAGE_URL);
     }
 
-    public static PlaceWithDistance createMockPlaceWithDistance(Long id, String name, double lat, double lng, double distance) {
-        return createMockPlaceWithDistance(id, name, TestConstants.CAFE_CATEGORY, lat, lng, distance);
+    public void assertPlaceLocation(Place place, double expectedLat, double expectedLng) {
+        assertThat(place.getLocation().getY()).isEqualTo(expectedLat);
+        assertThat(place.getLocation().getX()).isEqualTo(expectedLng);
     }
 
-    public static PlaceWithDistance createMockPlaceWithDistance(Long id, String name, String category, double lat, double lng, double distance) {
-        return new PlaceWithDistance() {
-            @Override public Long getId() { return id; }
-            @Override public String getName() { return name; }
-            @Override public String getCategory() { return category; }
-            @Override public String getRoadAddress() { return TestConstants.DEFAULT_ROAD_ADDRESS; }
-            @Override public String getLotAddress() { return TestConstants.DEFAULT_LOT_ADDRESS; }
-            @Override public Double getDistance() { return distance; }
-            @Override public Double getLongitude() { return lng; }
-            @Override public Double getLatitude() { return lat; }
-            @Override public String getImageUrl() { return TestConstants.DEFAULT_IMAGE_URL; }
-        };
+    public void assertDistanceOrdering(List<PlaceWithDistance> results) {
+        for (int i = 0; i < results.size() - 1; i++) {
+            assertThat(results.get(i).getDistance())
+                    .isLessThanOrEqualTo(results.get(i + 1).getDistance());
+        }
     }
 
-    public static Place createMockPlace(Long id, String name, double lat, double lng) {
-        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat));
-        Place place = mock(Place.class);
-        given(place.getId()).willReturn(id);
-        given(place.getName()).willReturn(name);
-        given(place.getLocation()).willReturn(location);
-        given(place.getKeywords()).willReturn(Collections.emptyList());
-        return place;
-    }
-
-    public static Place createMockPlaceForDetail(Long id, String name, double lat, double lng) {
-        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat));
-        Place place = mock(Place.class);
-        given(place.getId()).willReturn(id);
-        given(place.getName()).willReturn(name);
-        given(place.getLocation()).willReturn(location);
-        given(place.getRoadAddress()).willReturn(TestConstants.DEFAULT_ROAD_ADDRESS);
-        given(place.getImageUrl()).willReturn(TestConstants.DEFAULT_IMAGE_URL);
-        given(place.getDescription()).willReturn(TestConstants.DEFAULT_DESCRIPTION);
-        given(place.getPhone()).willReturn(TestConstants.DEFAULT_PHONE);
-        return place;
-    }
-
-    public static Place createMockPlaceWithKeywords(Long id, String name, List<String> keywordStrings) {
-        Place place = mock(Place.class);
-
-        List<PlaceKeyword> keywords = keywordStrings.stream()
-                .map(kw -> {
-                    Keyword keyword = mock(Keyword.class);
-                    given(keyword.getKeyword()).willReturn(kw);
-                    PlaceKeyword placeKeyword = mock(PlaceKeyword.class);
-                    given(placeKeyword.getKeyword()).willReturn(keyword);
-                    return placeKeyword;
-                })
+    public void assertKeywordsMatch(List<PlaceKeyword> actualKeywords, List<String> expectedKeywords) {
+        List<String> actualKeywordStrings = actualKeywords.stream()
+                .map(pk -> pk.getKeyword().getKeyword())
                 .toList();
-        given(place.getKeywords()).willReturn(keywords);
-        return place;
+        assertThat(actualKeywordStrings).containsExactlyInAnyOrderElementsOf(expectedKeywords);
     }
 
-    public static PlaceMenu createMockMenu(String name, Integer price) {
-        PlaceMenu menu = mock(PlaceMenu.class);
-        given(menu.getMenuName()).willReturn(name);
-        given(menu.getPrice()).willReturn(price);
-        return menu;
+    public void assertMenusMatch(List<PlaceMenu> actualMenus, List<String> expectedMenuNames) {
+        List<String> actualMenuNames = actualMenus.stream()
+                .map(PlaceMenu::getMenuName)
+                .toList();
+        assertThat(actualMenuNames).containsExactlyInAnyOrderElementsOf(expectedMenuNames);
     }
 
-    public static PlaceHours createMockHours(String day, String openTime, String closeTime, Boolean isBreakTime) {
-        PlaceHours hours = mock(PlaceHours.class);
-        given(hours.getDayOfWeek()).willReturn(day);
-        given(hours.getOpenTime()).willReturn(openTime);
-        given(hours.getCloseTime()).willReturn(closeTime);
-        given(hours.getIsBreakTime()).willReturn(isBreakTime);
-        return hours;
-    }
-
-    public static List<PlaceHours> createCompleteBusinessHours() {
-        List<PlaceHours> hours = new ArrayList<>();
-
-        PlaceHours monOpen = mock(PlaceHours.class);
-        given(monOpen.getDayOfWeek()).willReturn(TestConstants.MONDAY);
-        given(monOpen.getOpenTime()).willReturn(TestConstants.OPEN_TIME);
-        given(monOpen.getCloseTime()).willReturn(TestConstants.CLOSE_TIME);
-        given(monOpen.getIsBreakTime()).willReturn(false);
-        hours.add(monOpen);
-
-        PlaceHours monBreak = mock(PlaceHours.class);
-        given(monBreak.getDayOfWeek()).willReturn(TestConstants.MONDAY);
-        given(monBreak.getOpenTime()).willReturn("15:00");
-        given(monBreak.getCloseTime()).willReturn("16:00");
-        given(monBreak.getIsBreakTime()).willReturn(true);
-        hours.add(monBreak);
-
-        String[] days = {TestConstants.TUESDAY, "수", "목", "금", "토"};
-        for (String day : days) {
-            PlaceHours dayHours = mock(PlaceHours.class);
-            given(dayHours.getDayOfWeek()).willReturn(day);
-            given(dayHours.getOpenTime()).willReturn(TestConstants.OPEN_TIME);
-            given(dayHours.getCloseTime()).willReturn(TestConstants.CLOSE_TIME);
-            given(dayHours.getIsBreakTime()).willReturn(false);
-            hours.add(dayHours);
+    // === 테스트 데이터 생성 헬퍼 ===
+    public Map<Long, Long> createMomentCountMap(List<Long> placeIds, List<Long> counts) {
+        if (placeIds.size() != counts.size()) {
+            throw new IllegalArgumentException("PlaceIds와 counts의 크기가 일치하지 않습니다.");
         }
 
-        return hours;
+        return placeIds.stream()
+                .collect(Collectors.toMap(
+                        Function.identity(),
+                        placeIds::indexOf,
+                        (existing, replacement) -> existing))
+                .entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> counts.get(entry.getValue())));
     }
 }
