@@ -24,8 +24,8 @@ public class RateLimiter {
     @Value("${ai.service.rate-limit.period}")
     private int aiServicePeriodSeconds;
 
-    // dev 전용 토큰
-    @Value("${ai.service.dev-bypass-token}")
+    // dev 전용 토큰 (환경변수)
+    @Value("${ai.service.dev-bypass-token:}")
     private String devBypassToken;
 
     // dev 환경 체크
@@ -42,7 +42,7 @@ public class RateLimiter {
 
             // dev 환경에서 토큰이 설정되어 있으면 알림
             if (isDevEnvironment() && devBypassToken != null && !devBypassToken.isEmpty()) {
-                log.warn("DEV MODE: Rate limit bypass token is active! Token: {}***",
+                log.warn("🚨 DEV MODE: Rate limit bypass token is active! Token: {}***",
                         devBypassToken.substring(0, Math.min(4, devBypassToken.length())));
             }
 
