@@ -20,5 +20,6 @@ public interface PlaceQueryService {
     PlaceDetailResponse getPlaceDetail(Long placeId);
 
     PlaceCategoryResponse getAllCategories();
-}
 
+    PlaceSearchResponse searchPlacesWithDevToken(String query, Double lat, Double lng, String category, String devToken);
+}
