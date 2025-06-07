@@ -4,6 +4,7 @@ import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.service.query.PlaceQueryService;
+import com.dolpin.global.constants.TestConstants;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ApiResponse;
 import com.dolpin.global.response.ResponseStatus;
@@ -51,30 +52,28 @@ class PlaceControllerTest {
         @Test
         @DisplayName("정상적인 검색어 기반 검색이 성공한다")
         void searchPlaces_WithQuery_ReturnsSuccessResponse() throws Exception {
-            // given
-            String query = "맛있는 카페";
-            Double lat = 37.5665;
-            Double lng = 126.9780;
+            String query = TestConstants.CAFE_SEARCH_QUERY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
 
             PlaceSearchResponse mockResponse = PlaceSearchResponse.builder()
                     .total(1)
                     .places(List.of(
                             PlaceSearchResponse.PlaceDto.builder()
-                                    .id(1L)
-                                    .name("테스트 카페")
-                                    .thumbnail("test.jpg")
-                                    .distance("100m")
-                                    .momentCount("5")
-                                    .keywords(List.of("맛있는", "아늑한"))
+                                    .id(TestConstants.PLACE_ID_1)
+                                    .name(TestConstants.TEST_CAFE_NAME)
+                                    .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
+                                    .distance(TestConstants.DISTANCE_100M)
+                                    .momentCount(5L)
+                                    .keywords(List.of(TestConstants.DELICIOUS_KEYWORD, TestConstants.COZY_KEYWORD))
                                     .location(Map.of("type", "Point", "coordinates", new double[]{lng, lat}))
-                                    .similarityScore(0.95)
+                                    .similarityScore(TestConstants.SIMILARITY_SCORE_HIGH)
                                     .build()
                     ))
                     .build();
 
             given(placeQueryService.searchPlaces(query, lat, lng, null)).willReturn(mockResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/search")
                             .param("query", query)
                             .param("lat", lat.toString())
@@ -84,7 +83,6 @@ class PlaceControllerTest {
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                     .andReturn();
 
-            // 응답 검증
             String responseBody = result.getResponse().getContentAsString();
             ApiResponse<PlaceSearchResponse> apiResponse = objectMapper.readValue(
                     responseBody, new TypeReference<ApiResponse<PlaceSearchResponse>>() {});
@@ -92,7 +90,7 @@ class PlaceControllerTest {
             assertThat(apiResponse.getMessage()).isEqualTo("get_place_success");
             assertThat(apiResponse.getData().getTotal()).isEqualTo(1);
             assertThat(apiResponse.getData().getPlaces()).hasSize(1);
-            assertThat(apiResponse.getData().getPlaces().get(0).getName()).isEqualTo("테스트 카페");
+            assertThat(apiResponse.getData().getPlaces().get(0).getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
 
             verify(placeQueryService).searchPlaces(query, lat, lng, null);
         }
@@ -100,21 +98,20 @@ class PlaceControllerTest {
         @Test
         @DisplayName("정상적인 카테고리 기반 검색이 성공한다")
         void searchPlaces_WithCategory_ReturnsSuccessResponse() throws Exception {
-            // given
-            String category = "카페";
-            Double lat = 37.5665;
-            Double lng = 126.9780;
+            String category = TestConstants.CAFE_CATEGORY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
 
             PlaceSearchResponse mockResponse = PlaceSearchResponse.builder()
                     .total(1)
                     .places(List.of(
                             PlaceSearchResponse.PlaceDto.builder()
-                                    .id(1L)
-                                    .name("스타벅스")
-                                    .thumbnail("starbucks.jpg")
-                                    .distance("200m")
-                                    .momentCount("10")
-                                    .keywords(List.of("체인점", "넓은"))
+                                    .id(TestConstants.PLACE_ID_1)
+                                    .name(TestConstants.STARBUCKS_NAME)
+                                    .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
+                                    .distance(TestConstants.DISTANCE_200M)
+                                    .momentCount(10L)
+                                    .keywords(List.of(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD))
                                     .location(Map.of("type", "Point", "coordinates", new double[]{lng, lat}))
                                     .similarityScore(null)
                                     .build()
@@ -123,7 +120,6 @@ class PlaceControllerTest {
 
             given(placeQueryService.searchPlaces(null, lat, lng, category)).willReturn(mockResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/search")
                             .param("category", category)
                             .param("lat", lat.toString())
@@ -145,16 +141,14 @@ class PlaceControllerTest {
         @Test
         @DisplayName("잘못된 파라미터 조합 시 400 에러가 발생한다")
         void searchPlaces_WithInvalidParams_Returns400Error() throws Exception {
-            // given
-            String query = "카페";
-            String category = "카페";
-            Double lat = 37.5665;
-            Double lng = 126.9780;
+            String query = TestConstants.CAFE_SEARCH_QUERY;
+            String category = TestConstants.CAFE_CATEGORY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
 
             given(placeQueryService.searchPlaces(query, lat, lng, category))
                     .willThrow(new BusinessException(ResponseStatus.INVALID_PARAMETER, "검색어와 카테고리 중 하나만 선택해주세요"));
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/search")
                             .param("query", query)
                             .param("category", category)
@@ -175,10 +169,9 @@ class PlaceControllerTest {
         @Test
         @DisplayName("빈 검색 결과를 정상적으로 반환한다")
         void searchPlaces_WithEmptyResult_ReturnsEmptyResponse() throws Exception {
-            // given
-            String query = "존재하지않는검색어";
-            Double lat = 37.5665;
-            Double lng = 126.9780;
+            String query = TestConstants.NON_EXISTENT_SEARCH_QUERY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
 
             PlaceSearchResponse emptyResponse = PlaceSearchResponse.builder()
                     .total(0)
@@ -187,7 +180,6 @@ class PlaceControllerTest {
 
             given(placeQueryService.searchPlaces(query, lat, lng, null)).willReturn(emptyResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/search")
                             .param("query", query)
                             .param("lat", lat.toString())
@@ -212,38 +204,36 @@ class PlaceControllerTest {
         @Test
         @DisplayName("정상적인 장소 상세 조회가 성공한다")
         void getPlaceDetail_WithValidId_ReturnsSuccessResponse() throws Exception {
-            // given
-            Long placeId = 1L;
+            Long placeId = TestConstants.PLACE_ID_1;
             PlaceDetailResponse mockResponse = PlaceDetailResponse.builder()
                     .id(placeId)
-                    .name("테스트 카페")
-                    .address("서울시 강남구 테스트로 123")
-                    .thumbnail("test.jpg")
-                    .location(Map.of("type", "Point", "coordinates", new double[]{126.9780, 37.5665}))
-                    .keywords(List.of("아늑한", "맛있는"))
-                    .description("테스트 카페입니다")
-                    .phone("02-1234-5678")
+                    .name(TestConstants.TEST_CAFE_NAME)
+                    .address(TestConstants.DEFAULT_ROAD_ADDRESS)
+                    .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
+                    .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.CENTER_LNG, TestConstants.CENTER_LAT}))
+                    .keywords(List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD))
+                    .description(TestConstants.DEFAULT_DESCRIPTION)
+                    .phone(TestConstants.DEFAULT_PHONE)
                     .openingHours(PlaceDetailResponse.OpeningHours.builder()
-                            .status("영업 중")
+                            .status(TestConstants.BUSINESS_STATUS_OPEN)
                             .schedules(List.of(
                                     PlaceDetailResponse.Schedule.builder()
                                             .day("mon")
-                                            .hours("09:00~21:00")
-                                            .breakTime("15:00~16:00")
+                                            .hours(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME)
+                                            .breakTime(TestConstants.BREAK_START_TIME + "~" + TestConstants.BREAK_END_TIME)
                                             .build()
                             ))
                             .build())
                     .menu(List.of(
                             PlaceDetailResponse.Menu.builder()
-                                    .name("아메리카노")
-                                    .price(4000)
+                                    .name(TestConstants.AMERICANO_MENU)
+                                    .price(TestConstants.AMERICANO_PRICE)
                                     .build()
                     ))
                     .build();
 
             given(placeQueryService.getPlaceDetail(placeId)).willReturn(mockResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/{place_id}", placeId)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
@@ -256,10 +246,10 @@ class PlaceControllerTest {
 
             assertThat(apiResponse.getMessage()).isEqualTo("get_place_detail_success");
             assertThat(apiResponse.getData().getId()).isEqualTo(placeId);
-            assertThat(apiResponse.getData().getName()).isEqualTo("테스트 카페");
-            assertThat(apiResponse.getData().getKeywords()).containsExactlyInAnyOrder("아늑한", "맛있는");
+            assertThat(apiResponse.getData().getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
+            assertThat(apiResponse.getData().getKeywords()).containsExactlyInAnyOrder(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
             assertThat(apiResponse.getData().getMenu()).hasSize(1);
-            assertThat(apiResponse.getData().getOpeningHours().getStatus()).isEqualTo("영업 중");
+            assertThat(apiResponse.getData().getOpeningHours().getStatus()).isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
 
             verify(placeQueryService).getPlaceDetail(placeId);
         }
@@ -267,12 +257,10 @@ class PlaceControllerTest {
         @Test
         @DisplayName("존재하지 않는 장소 ID 조회 시 404 에러가 발생한다")
         void getPlaceDetail_WithNonExistentId_Returns404Error() throws Exception {
-            // given
-            Long nonExistentId = 999L;
+            Long nonExistentId = TestConstants.NON_EXISTENT_PLACE_ID;
             given(placeQueryService.getPlaceDetail(nonExistentId))
                     .willThrow(new BusinessException(ResponseStatus.PLACE_NOT_FOUND, "장소를 찾을 수 없습니다"));
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/{place_id}", nonExistentId)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isNotFound())
@@ -289,10 +277,8 @@ class PlaceControllerTest {
         @Test
         @DisplayName("잘못된 형식의 place_id에 대해 400 에러가 발생한다")
         void getPlaceDetail_WithInvalidId_Returns400Error() throws Exception {
-            // given
             String invalidId = "invalid";
 
-            // when & then
             mockMvc.perform(get("/api/v1/places/{place_id}", invalidId)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest());
@@ -306,14 +292,13 @@ class PlaceControllerTest {
         @Test
         @DisplayName("정상적인 카테고리 목록 조회가 성공한다")
         void getAllCategories_ReturnsSuccessResponse() throws Exception {
-            // given
             PlaceCategoryResponse mockResponse = PlaceCategoryResponse.builder()
-                    .categories(List.of("카페", "식당", "술집", "베이커리"))
+                    .categories(List.of(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY,
+                            TestConstants.BAR_CATEGORY, TestConstants.BAKERY_CATEGORY))
                     .build();
 
             given(placeQueryService.getAllCategories()).willReturn(mockResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/categories")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
@@ -327,7 +312,8 @@ class PlaceControllerTest {
             assertThat(apiResponse.getMessage()).isEqualTo("get_categories_success");
             assertThat(apiResponse.getData().getCategories()).hasSize(4);
             assertThat(apiResponse.getData().getCategories())
-                    .containsExactlyInAnyOrder("카페", "식당", "술집", "베이커리");
+                    .containsExactlyInAnyOrder(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY,
+                            TestConstants.BAR_CATEGORY, TestConstants.BAKERY_CATEGORY);
 
             verify(placeQueryService).getAllCategories();
         }
@@ -335,14 +321,12 @@ class PlaceControllerTest {
         @Test
         @DisplayName("빈 카테고리 목록을 정상적으로 반환한다")
         void getAllCategories_WithEmptyResult_ReturnsEmptyResponse() throws Exception {
-            // given
             PlaceCategoryResponse emptyResponse = PlaceCategoryResponse.builder()
                     .categories(Collections.emptyList())
                     .build();
 
             given(placeQueryService.getAllCategories()).willReturn(emptyResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/categories")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
@@ -363,16 +347,14 @@ class PlaceControllerTest {
         @Test
         @DisplayName("모든 성공 응답은 올바른 ApiResponse 구조를 가진다")
         void allSuccessResponses_HaveCorrectApiResponseStructure() throws Exception {
-            // given
             PlaceSearchResponse mockSearchResponse = PlaceSearchResponse.builder()
                     .total(0).places(Collections.emptyList()).build();
             given(placeQueryService.searchPlaces(anyString(), any(), any(), isNull())).willReturn(mockSearchResponse);
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/search")
                             .param("query", "test")
-                            .param("lat", "37.5")
-                            .param("lng", "126.9")
+                            .param("lat", TestConstants.CENTER_LAT.toString())
+                            .param("lng", TestConstants.CENTER_LNG.toString())
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -382,7 +364,6 @@ class PlaceControllerTest {
             ApiResponse<PlaceSearchResponse> apiResponse = objectMapper.readValue(
                     responseBody, new TypeReference<ApiResponse<PlaceSearchResponse>>() {});
 
-            // ApiResponse 구조 검증
             assertThat(apiResponse.getMessage()).isNotNull();
             assertThat(apiResponse.getData()).isNotNull();
         }
@@ -390,11 +371,9 @@ class PlaceControllerTest {
         @Test
         @DisplayName("서비스 예외 발생 시 적절한 에러 응답을 반환한다")
         void serviceException_ReturnsProperErrorResponse() throws Exception {
-            // given
             given(placeQueryService.getAllCategories())
                     .willThrow(new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류"));
 
-            // when & then
             MvcResult result = mockMvc.perform(get("/api/v1/places/categories")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isInternalServerError())
