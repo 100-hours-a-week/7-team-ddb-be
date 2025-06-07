@@ -4,6 +4,7 @@ import com.dolpin.domain.place.client.PlaceAiClient;
 import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.entity.*;
 import com.dolpin.domain.place.repository.PlaceRepository;
+import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.global.constants.TestConstants;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +42,9 @@ class PlaceSearchServiceTest {
     @Mock
     private PlaceAiClient placeAiClient;
 
+    @Mock
+    private MomentRepository momentRepository;
+
     @InjectMocks
     private PlaceQueryServiceImpl placeQueryService;
 
@@ -54,59 +60,16 @@ class PlaceSearchServiceTest {
         @Test
         @DisplayName("AI 검색 - 검색어만 있는 경우 정상 동작한다")
         void searchPlaces_WithQueryOnly_PerformsAiSearch() {
-
             String query = TestConstants.PASTA_SEARCH_QUERY;
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            PlaceAiResponse.PlaceRecommendation rec1 = createRecommendation(
-                    TestConstants.PLACE_ID_1, TestConstants.SIMILARITY_SCORE_HIGH,
-                    List.of(TestConstants.DELICIOUS_KEYWORD, TestConstants.ITALIAN_KEYWORD));
-            PlaceAiResponse.PlaceRecommendation rec2 = createRecommendation(
-                    TestConstants.PLACE_ID_2, TestConstants.SIMILARITY_SCORE_MEDIUM,
-                    List.of(TestConstants.ROMANTIC_KEYWORD, TestConstants.DATE_KEYWORD));
-            PlaceAiResponse aiResponse = new PlaceAiResponse(List.of(rec1, rec2));
-            given(placeAiClient.recommendPlaces(query)).willReturn(aiResponse);
-
-            List<PlaceWithDistance> nearbyPlaces = List.of(
-                    createPlaceWithDistance(TestConstants.PLACE_ID_1, TestConstants.ITALIAN_RESTAURANT_NAME,
-                            TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.DISTANCE_150M),
-                    createPlaceWithDistance(TestConstants.PLACE_ID_2, TestConstants.ROMANTIC_PASTA_NAME,
-                            TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.DISTANCE_300M)
-            );
-            given(placeRepository.findPlacesWithinRadiusByIds(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)),
-                    eq(lat), eq(lng), eq(TestConstants.DEFAULT_RADIUS)))
-                    .willReturn(nearbyPlaces);
-
-            List<Place> places = List.of(
-                    createMockPlace(TestConstants.PLACE_ID_1, TestConstants.ITALIAN_RESTAURANT_NAME,
-                            TestConstants.CENTER_LAT, TestConstants.CENTER_LNG),
-                    createMockPlace(TestConstants.PLACE_ID_2, TestConstants.ROMANTIC_PASTA_NAME,
-                            TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG)
-            );
-            given(placeRepository.findByIdsWithKeywords(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)))).willReturn(places);
+            setupAiSearchMocks(query, lat, lng);
 
             PlaceSearchResponse result = placeQueryService.searchPlaces(query, lat, lng, null);
 
-            assertThat(result.getTotal()).isEqualTo(2);
-            assertThat(result.getPlaces()).hasSize(2);
-
-            assertThat(result.getPlaces().get(0).getSimilarityScore()).isEqualTo(TestConstants.SIMILARITY_SCORE_HIGH);
-            assertThat(result.getPlaces().get(1).getSimilarityScore()).isEqualTo(TestConstants.SIMILARITY_SCORE_MEDIUM);
-
-            assertThat(result.getPlaces().get(0).getKeywords())
-                    .containsExactlyInAnyOrder(TestConstants.DELICIOUS_KEYWORD, TestConstants.ITALIAN_KEYWORD);
-            assertThat(result.getPlaces().get(1).getKeywords())
-                    .containsExactlyInAnyOrder(TestConstants.ROMANTIC_KEYWORD, TestConstants.DATE_KEYWORD);
-
-            verify(placeAiClient).recommendPlaces(query);
-            verify(placeRepository).findPlacesWithinRadiusByIds(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)),
-                    eq(lat), eq(lng), eq(TestConstants.DEFAULT_RADIUS));
-            verify(placeRepository).findByIdsWithKeywords(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)));
+            verifyAiSearchResults(result);
+            verifyAiSearchInteractions(query, lat, lng);
         }
 
         @Test
@@ -116,38 +79,12 @@ class PlaceSearchServiceTest {
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            List<PlaceWithDistance> categoryPlaces = List.of(
-                    createPlaceWithDistance(TestConstants.PLACE_ID_1, TestConstants.STARBUCKS_NAME,
-                            TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.DISTANCE_100M),
-                    createPlaceWithDistance(TestConstants.PLACE_ID_2, TestConstants.TWOSOME_NAME,
-                            TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.DISTANCE_200M)
-            );
-            given(placeRepository.findPlacesByCategoryWithinRadius(category, lat, lng, TestConstants.DEFAULT_RADIUS))
-                    .willReturn(categoryPlaces);
-
-            List<Place> places = List.of(
-                    createMockPlaceWithKeywords(TestConstants.PLACE_ID_1, TestConstants.STARBUCKS_NAME, getChainStoreKeywords()),
-                    createMockPlaceWithKeywords(TestConstants.PLACE_ID_2, TestConstants.TWOSOME_NAME, getDessertKeywords())
-            );
-            given(placeRepository.findByIdsWithKeywords(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)))).willReturn(places);
+            setupCategorySearchMocks(category, lat, lng);
 
             PlaceSearchResponse result = placeQueryService.searchPlaces(null, lat, lng, category);
 
-            assertThat(result.getTotal()).isEqualTo(2);
-            assertThat(result.getPlaces()).hasSize(2);
-
-            assertThat(result.getPlaces().get(0).getSimilarityScore()).isNull();
-            assertThat(result.getPlaces().get(1).getSimilarityScore()).isNull();
-
-            assertThat(result.getPlaces().get(0).getKeywords())
-                    .containsExactlyInAnyOrder(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD);
-            assertThat(result.getPlaces().get(1).getKeywords())
-                    .containsExactlyInAnyOrder(TestConstants.DESSERT_KEYWORD, TestConstants.CAKE_KEYWORD);
-
-            verify(placeRepository).findPlacesByCategoryWithinRadius(category, lat, lng, TestConstants.DEFAULT_RADIUS);
-            verify(placeRepository).findByIdsWithKeywords(eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)));
-            verifyNoInteractions(placeAiClient);
+            verifyCategorySearchResults(result);
+            verifyCategorySearchInteractions(category, lat, lng);
         }
 
         @Test
@@ -157,39 +94,11 @@ class PlaceSearchServiceTest {
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            PlaceAiResponse aiResponse = createSortTestAiResponse();
-            given(placeAiClient.recommendPlaces(query)).willReturn(aiResponse);
-
-            List<PlaceWithDistance> nearbyPlaces = createSortTestPlaceWithDistances();
-            given(placeRepository.findPlacesWithinRadiusByIds(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2, TestConstants.PLACE_ID_3)),
-                    eq(lat), eq(lng), eq(TestConstants.DEFAULT_RADIUS)))
-                    .willReturn(nearbyPlaces);
-
-            List<Place> places = createSortTestPlaces();
-            given(placeRepository.findByIdsWithKeywords(
-                    eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2, TestConstants.PLACE_ID_3))))
-                    .willReturn(places);
+            setupSortTestMocks(query, lat, lng);
 
             PlaceSearchResponse result = placeQueryService.searchPlaces(query, lat, lng, null);
 
-            assertThat(result.getPlaces()).hasSize(3);
-
-            List<Double> scores = result.getPlaces().stream()
-                    .map(PlaceSearchResponse.PlaceDto::getSimilarityScore)
-                    .toList();
-            assertThat(scores).containsExactly(
-                    TestConstants.SIMILARITY_SCORE_HIGH,
-                    TestConstants.SIMILARITY_SCORE_MEDIUM,
-                    TestConstants.SIMILARITY_SCORE_LOW);
-
-            List<String> names = result.getPlaces().stream()
-                    .map(PlaceSearchResponse.PlaceDto::getName)
-                    .toList();
-            assertThat(names).containsExactly(
-                    TestConstants.BEST_CAFE_NAME,
-                    TestConstants.GOOD_CAFE_NAME,
-                    TestConstants.ORDINARY_CAFE_NAME);
+            verifySortedResults(result);
         }
 
         @Test
@@ -207,21 +116,15 @@ class PlaceSearchServiceTest {
                     .isEqualTo(ResponseStatus.INVALID_PARAMETER);
         }
 
-        @Test
+        @ParameterizedTest
+        @NullAndEmptySource
+        @ValueSource(strings = {" ", "   "})
         @DisplayName("검색어와 카테고리 모두 없을 때 예외 발생")
-        void searchPlaces_WithNeitherQueryNorCategory_ThrowsException() {
+        void searchPlaces_WithNeitherQueryNorCategory_ThrowsException(String emptyValue) {
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            assertThatThrownBy(() -> placeQueryService.searchPlaces(null, lat, lng, null))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage("검색어 또는 카테고리가 필요합니다");
-
-            assertThatThrownBy(() -> placeQueryService.searchPlaces(TestConstants.EMPTY_STRING, lat, lng, TestConstants.EMPTY_STRING))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage("검색어 또는 카테고리가 필요합니다");
-
-            assertThatThrownBy(() -> placeQueryService.searchPlaces("   ", lat, lng, "   "))
+            assertThatThrownBy(() -> placeQueryService.searchPlaces(emptyValue, lat, lng, emptyValue))
                     .isInstanceOf(BusinessException.class)
                     .hasMessage("검색어 또는 카테고리가 필요합니다");
         }
@@ -250,7 +153,7 @@ class PlaceSearchServiceTest {
 
             PlaceSearchResponse result = placeQueryService.searchPlaces(query, lat, lng, null);
 
-            assertThat(result.getTotal()).isEqualTo(0);
+            assertThat(result.getTotal()).isZero();
             assertThat(result.getPlaces()).isEmpty();
         }
 
@@ -261,12 +164,12 @@ class PlaceSearchServiceTest {
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            PlaceAiResponse emptyResponse = new PlaceAiResponse(Collections.emptyList());
+            PlaceAiResponse emptyResponse = createEmptyAiResponse();
             given(placeAiClient.recommendPlaces(query)).willReturn(emptyResponse);
 
             PlaceSearchResponse result = placeQueryService.searchPlaces(query, lat, lng, null);
 
-            assertThat(result.getTotal()).isEqualTo(0);
+            assertThat(result.getTotal()).isZero();
             assertThat(result.getPlaces()).isEmpty();
         }
 
@@ -277,10 +180,10 @@ class PlaceSearchServiceTest {
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            PlaceAiResponse.PlaceRecommendation rec = createRecommendation(
+            PlaceAiResponse.PlaceRecommendation rec = createRecommendationStub(
                     TestConstants.PLACE_ID_1, TestConstants.SIMILARITY_SCORE_HIGH,
                     List.of(TestConstants.DELICIOUS_KEYWORD));
-            PlaceAiResponse aiResponse = new PlaceAiResponse(List.of(rec));
+            PlaceAiResponse aiResponse = createAiResponseStub(List.of(rec));
             given(placeAiClient.recommendPlaces(query)).willReturn(aiResponse);
 
             given(placeRepository.findPlacesWithinRadiusByIds(
@@ -289,8 +192,209 @@ class PlaceSearchServiceTest {
 
             PlaceSearchResponse result = placeQueryService.searchPlaces(query, lat, lng, null);
 
-            assertThat(result.getTotal()).isEqualTo(0);
+            assertThat(result.getTotal()).isZero();
             assertThat(result.getPlaces()).isEmpty();
         }
+
+        @Test
+        @DisplayName("거리 기준 정렬이 정상 동작한다 - 카테고리 검색")
+        void searchPlaces_CategorySearch_SortsByDistance() {
+            String category = TestConstants.CAFE_CATEGORY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
+
+            setupDistanceSortTestMocks(category, lat, lng);
+
+            PlaceSearchResponse result = placeQueryService.searchPlaces(null, lat, lng, category);
+
+            verifyDistanceSortResults(result);
+        }
+    }
+
+    private void setupAiSearchMocks(String query, Double lat, Double lng) {
+        PlaceAiResponse.PlaceRecommendation rec1 = createRecommendationStub(
+                TestConstants.PLACE_ID_1, TestConstants.SIMILARITY_SCORE_HIGH,
+                List.of(TestConstants.DELICIOUS_KEYWORD, TestConstants.ITALIAN_KEYWORD));
+        PlaceAiResponse.PlaceRecommendation rec2 = createRecommendationStub(
+                TestConstants.PLACE_ID_2, TestConstants.SIMILARITY_SCORE_MEDIUM,
+                List.of(TestConstants.ROMANTIC_KEYWORD, TestConstants.DATE_KEYWORD));
+        PlaceAiResponse aiResponse = createAiResponseStub(List.of(rec1, rec2));
+        given(placeAiClient.recommendPlaces(query)).willReturn(aiResponse);
+
+        List<PlaceWithDistance> nearbyPlaces = List.of(
+                createPlaceWithDistanceStub(TestConstants.PLACE_ID_1, TestConstants.ITALIAN_RESTAURANT_NAME,
+                        TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.DISTANCE_150M),
+                createPlaceWithDistanceStub(TestConstants.PLACE_ID_2, TestConstants.ROMANTIC_PASTA_NAME,
+                        TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.DISTANCE_300M)
+        );
+        given(placeRepository.findPlacesWithinRadiusByIds(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)),
+                eq(lat), eq(lng), eq(TestConstants.DEFAULT_RADIUS)))
+                .willReturn(nearbyPlaces);
+
+        List<Place> places = List.of(
+                createPlaceStub(TestConstants.PLACE_ID_1, TestConstants.ITALIAN_RESTAURANT_NAME,
+                        TestConstants.CENTER_LAT, TestConstants.CENTER_LNG),
+                createPlaceStub(TestConstants.PLACE_ID_2, TestConstants.ROMANTIC_PASTA_NAME,
+                        TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG)
+        );
+        given(placeRepository.findByIdsWithKeywords(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)))).willReturn(places);
+
+        given(momentRepository.countPublicMomentsByPlaceIds(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2))))
+                .willReturn(createMomentCountTestData(
+                        List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2),
+                        List.of(TestConstants.MOMENT_COUNT_MEDIUM, TestConstants.MOMENT_COUNT_LOW)
+                ));
+    }
+
+    private void setupCategorySearchMocks(String category, Double lat, Double lng) {
+        List<PlaceWithDistance> categoryPlaces = List.of(
+                createPlaceWithDistanceStub(TestConstants.PLACE_ID_1, TestConstants.STARBUCKS_NAME,
+                        TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.DISTANCE_100M),
+                createPlaceWithDistanceStub(TestConstants.PLACE_ID_2, TestConstants.TWOSOME_NAME,
+                        TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.DISTANCE_200M)
+        );
+        given(placeRepository.findPlacesByCategoryWithinRadius(category, lat, lng, TestConstants.DEFAULT_RADIUS))
+                .willReturn(categoryPlaces);
+
+        List<Place> places = List.of(
+                createPlaceStubWithKeywords(TestConstants.PLACE_ID_1, TestConstants.STARBUCKS_NAME, getChainStoreKeywords()),
+                createPlaceStubWithKeywords(TestConstants.PLACE_ID_2, TestConstants.TWOSOME_NAME, getDessertKeywords())
+        );
+        given(placeRepository.findByIdsWithKeywords(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)))).willReturn(places);
+
+        given(momentRepository.countPublicMomentsByPlaceIds(anyList()))
+                .willReturn(createMomentCountTestData(
+                        List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2),
+                        List.of(TestConstants.MOMENT_COUNT_LOW, TestConstants.MOMENT_COUNT_LOW)
+                ));
+    }
+
+    private void setupSortTestMocks(String query, Double lat, Double lng) {
+        PlaceAiResponse aiResponse = createSortTestAiResponseStub();
+        given(placeAiClient.recommendPlaces(query)).willReturn(aiResponse);
+
+        List<PlaceWithDistance> nearbyPlaces = createSortTestPlaceWithDistanceStubs();
+        given(placeRepository.findPlacesWithinRadiusByIds(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2, TestConstants.PLACE_ID_3)),
+                eq(lat), eq(lng), eq(TestConstants.DEFAULT_RADIUS)))
+                .willReturn(nearbyPlaces);
+
+        List<Place> places = createSortTestPlaceStubs();
+        given(placeRepository.findByIdsWithKeywords(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2, TestConstants.PLACE_ID_3))))
+                .willReturn(places);
+
+        given(momentRepository.countPublicMomentsByPlaceIds(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2, TestConstants.PLACE_ID_3))))
+                .willReturn(createMomentCountTestData(
+                        List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2, TestConstants.PLACE_ID_3),
+                        List.of(TestConstants.MOMENT_COUNT_HIGH, TestConstants.MOMENT_COUNT_MEDIUM, TestConstants.MOMENT_COUNT_LOW)
+                ));
+    }
+
+    private void setupDistanceSortTestMocks(String category, Double lat, Double lng) {
+        List<PlaceWithDistance> sortedByDistance = List.of(
+                createPlaceWithDistanceStub(TestConstants.PLACE_ID_1, TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME,
+                        TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.DISTANCE_100M),
+                createPlaceWithDistanceStub(TestConstants.PLACE_ID_2, TestConstants.FAR_PREFIX + TestConstants.TEST_CAFE_NAME,
+                        TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG, TestConstants.DISTANCE_500M)
+        );
+        given(placeRepository.findPlacesByCategoryWithinRadius(category, lat, lng, TestConstants.DEFAULT_RADIUS))
+                .willReturn(sortedByDistance);
+
+        List<Place> places = List.of(
+                createPlaceStubWithKeywords(TestConstants.PLACE_ID_1, TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME, getDefaultCafeKeywords()),
+                createPlaceStubWithKeywords(TestConstants.PLACE_ID_2, TestConstants.FAR_PREFIX + TestConstants.TEST_CAFE_NAME, getDefaultCafeKeywords())
+        );
+        given(placeRepository.findByIdsWithKeywords(anyList())).willReturn(places);
+
+        given(momentRepository.countPublicMomentsByPlaceIds(anyList()))
+                .willReturn(createMomentCountTestData(
+                        List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2),
+                        List.of(TestConstants.MOMENT_COUNT_LOW, TestConstants.MOMENT_COUNT_LOW)
+                ));
+    }
+
+    private void verifyAiSearchResults(PlaceSearchResponse result) {
+        assertThat(result.getTotal()).isEqualTo(2);
+        assertThat(result.getPlaces()).hasSize(2);
+
+        assertThat(result.getPlaces())
+                .extracting(PlaceSearchResponse.PlaceDto::getSimilarityScore)
+                .containsExactly(TestConstants.SIMILARITY_SCORE_HIGH, TestConstants.SIMILARITY_SCORE_MEDIUM)
+                .isSortedAccordingTo(Comparator.reverseOrder());
+
+        assertThat(result.getPlaces().get(0).getKeywords())
+                .containsExactlyInAnyOrder(TestConstants.DELICIOUS_KEYWORD, TestConstants.ITALIAN_KEYWORD);
+        assertThat(result.getPlaces().get(1).getKeywords())
+                .containsExactlyInAnyOrder(TestConstants.ROMANTIC_KEYWORD, TestConstants.DATE_KEYWORD);
+    }
+
+    private void verifyCategorySearchResults(PlaceSearchResponse result) {
+        assertThat(result.getTotal()).isEqualTo(2);
+        assertThat(result.getPlaces()).hasSize(2);
+
+        assertThat(result.getPlaces())
+                .extracting(PlaceSearchResponse.PlaceDto::getSimilarityScore)
+                .containsOnly((Double) null);
+
+        assertThat(result.getPlaces().get(0).getKeywords())
+                .containsExactlyInAnyOrder(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD);
+        assertThat(result.getPlaces().get(1).getKeywords())
+                .containsExactlyInAnyOrder(TestConstants.DESSERT_KEYWORD, TestConstants.CAKE_KEYWORD);
+    }
+
+    private void verifySortedResults(PlaceSearchResponse result) {
+        assertThat(result.getPlaces()).hasSize(TestConstants.EXPECTED_SORT_TEST_SIZE);
+
+        assertThat(result.getPlaces())
+                .extracting(PlaceSearchResponse.PlaceDto::getSimilarityScore)
+                .containsExactly(
+                        TestConstants.SIMILARITY_SCORE_HIGH,
+                        TestConstants.SIMILARITY_SCORE_MEDIUM,
+                        TestConstants.SIMILARITY_SCORE_LOW)
+                .isSortedAccordingTo(Comparator.reverseOrder());
+
+        assertThat(result.getPlaces())
+                .extracting(PlaceSearchResponse.PlaceDto::getName)
+                .containsExactly(
+                        TestConstants.BEST_CAFE_NAME,
+                        TestConstants.GOOD_CAFE_NAME,
+                        TestConstants.ORDINARY_CAFE_NAME);
+    }
+
+    private void verifyDistanceSortResults(PlaceSearchResponse result) {
+        assertThat(result.getPlaces()).hasSize(2);
+
+        assertThat(result.getPlaces())
+                .extracting(PlaceSearchResponse.PlaceDto::getDistance)
+                .containsExactly(TestConstants.DISTANCE_100M, TestConstants.DISTANCE_500M)
+                .isSortedAccordingTo(Comparator.naturalOrder());
+
+        assertThat(result.getPlaces())
+                .extracting(PlaceSearchResponse.PlaceDto::getName)
+                .containsExactly(
+                        TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME,
+                        TestConstants.FAR_PREFIX + TestConstants.TEST_CAFE_NAME);
+    }
+
+
+    private void verifyAiSearchInteractions(String query, Double lat, Double lng) {
+        verify(placeAiClient).recommendPlaces(query);
+        verify(placeRepository).findPlacesWithinRadiusByIds(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)),
+                eq(lat), eq(lng), eq(TestConstants.DEFAULT_RADIUS));
+        verify(placeRepository).findByIdsWithKeywords(
+                eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)));
+    }
+
+    private void verifyCategorySearchInteractions(String category, Double lat, Double lng) {
+        verify(placeRepository).findPlacesByCategoryWithinRadius(category, lat, lng, TestConstants.DEFAULT_RADIUS);
+        verify(placeRepository).findByIdsWithKeywords(eq(List.of(TestConstants.PLACE_ID_1, TestConstants.PLACE_ID_2)));
+        verifyNoInteractions(placeAiClient);
     }
 }
