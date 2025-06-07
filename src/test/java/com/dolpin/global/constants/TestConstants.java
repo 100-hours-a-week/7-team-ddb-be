@@ -157,4 +157,40 @@ public final class TestConstants {
     public static final String PASTA_SEARCH_QUERY = "맛있는 파스타";
     public static final String CAFE_SEARCH_QUERY = "맛있는 카페";
     public static final String NON_EXISTENT_SEARCH_QUERY = "존재하지 않는 검색어";
+
+    public static final class Distance {
+        // formatDistance 테스트용 거리 값들
+        public static final Double DISTANCE_500M_DOUBLE = 500.0;
+        public static final Double DISTANCE_999M_DOUBLE = 999.9;
+        public static final Double DISTANCE_1000M_DOUBLE = 1000.0;
+        public static final Double DISTANCE_1500M_DOUBLE = 1500.0;
+        public static final Double DISTANCE_2340M_DOUBLE = 2340.7;
+        public static final Double DISTANCE_10000M_DOUBLE = 10000.0;
+
+        // formatDistance 테스트용 결과 문자열들
+        public static final String DISTANCE_500M_TEXT = "500m";
+        public static final String DISTANCE_1000M_TEXT = "1000m";
+        public static final String DISTANCE_1KM_TEXT = "1.0km";
+        public static final String DISTANCE_1_5KM_TEXT = "1.5km";
+        public static final String DISTANCE_2_3KM_TEXT = "2.3km";
+        public static final String DISTANCE_10KM_TEXT = "10.0km";
+    }
+
+    public static final class Time {
+        // parseTimeToMinutes 테스트용 시간 문자열들
+        public static final String TIME_09_30 = "09:30";
+        public static final String TIME_12_00 = "12:00";
+        public static final String TIME_18_45 = "18:45";
+        public static final String TIME_23_59 = "23:59";
+        public static final String TIME_00_00 = "00:00";
+
+        // parseTimeToMinutes 테스트용 예상 분 값들
+        public static final int MINUTES_570 = 570;
+        public static final int MINUTES_720 = 720;
+        public static final int MINUTES_1125 = 1125;
+        public static final int MINUTES_1439 = 1439;
+        public static final int MINUTES_0 = 0;
+    }
+
+    public static final String TEST_CLOSE_TIME_18 = "18:00";
 }
