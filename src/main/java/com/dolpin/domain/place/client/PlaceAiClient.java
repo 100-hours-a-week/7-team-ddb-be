@@ -47,6 +47,26 @@ public class PlaceAiClient {
             );
         }
 
+        return executeAiRequest(query);
+    }
+
+    // 토큰 지원
+    public PlaceAiResponse recommendPlaces(String query, String token) {
+        // 레이트 리밋 검사 (토큰 전달)
+        if (rateLimitEnabled && !rateLimiter.allowRequest("ai-service", token)) {
+            int remainingTime = 60;
+
+            throw new BusinessException(
+                    ResponseStatus.TOO_MANY_REQUESTS,
+                    "AI 서비스 요청 한도를 초과했습니다. " + remainingTime + "초 후에 다시 시도해주세요."
+            );
+        }
+
+        return executeAiRequest(query);
+    }
+
+    // 공통 AI 요청 로직 (중복 제거)
+    private PlaceAiResponse executeAiRequest(String query) {
         String requestUrl = String.format("%s/v1/recommend?text=%s", aiServiceUrl, query);
 
         HttpHeaders headers = new HttpHeaders();

@@ -40,6 +40,9 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             "WHERE p.id IN :ids")
     List<Place> findByIdsWithKeywords(@Param("ids") List<Long> ids);
 
+    // 이름 기반 검색 추가
+    @Query("SELECT p.id FROM Place p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%'))")
+    List<Long> findPlaceIdsByNameContaining(@Param("query") String query);
 
     @Query(value =
             "SELECT p.id as id, p.name as name, p.category as category, " +
