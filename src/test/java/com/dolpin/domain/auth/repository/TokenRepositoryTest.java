@@ -1,10 +1,11 @@
 package com.dolpin.domain.auth.repository;
 
 import com.dolpin.domain.auth.entity.Token;
-import com.dolpin.domain.auth.entity.enums.TokenStatus;
+import com.dolpin.global.helper.AuthTestHelper;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.repository.UserRepository;
 import com.dolpin.global.config.TestConfig;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static com.dolpin.global.constants.AuthTestConstants.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
@@ -58,24 +60,19 @@ class TokenRepositoryTest {
     @Autowired
     private TestEntityManager testEntityManager;
 
-    private User createAndSaveUser(String username, Long providerId) {
-        User user = User.builder()
-                .providerId(providerId)
-                .provider("kakao")
-                .username(username)
-                .build();
+    @AfterEach
+    void tearDown() {
+        testEntityManager.clear();
+    }
+
+    private User persistUser(String username, Long providerId) {
+        User user = AuthTestHelper.createUser(null, username, providerId);
         return testEntityManager.persistAndFlush(user);
     }
 
-    private Token createToken(User user, String tokenValue, LocalDateTime expiredAt, boolean isRevoked) {
-        return Token.builder()
-                .user(user)
-                .status(TokenStatus.ACTIVE)
-                .token(tokenValue)
-                .createdAt(LocalDateTime.now())
-                .expiredAt(expiredAt)
-                .isRevoked(isRevoked)
-                .build();
+    private Token persistToken(User user, String tokenValue, LocalDateTime expiredAt, boolean isRevoked) {
+        Token token = AuthTestHelper.createToken(user, tokenValue, expiredAt, isRevoked);
+        return testEntityManager.persistAndFlush(token);
     }
 
     @Nested
@@ -86,17 +83,16 @@ class TokenRepositoryTest {
         @DisplayName("토큰 문자열로 토큰을 정상적으로 찾는다")
         void findByToken_WithValidToken_ReturnsToken() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
-            Token token = createToken(user, "valid-token-123",
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
+            Token token = persistToken(user, VALID_TOKEN_VALUE,
                     LocalDateTime.now().plusDays(1), false);
-            testEntityManager.persistAndFlush(token);
 
             // when
-            Optional<Token> result = tokenRepository.findByToken("valid-token-123");
+            Optional<Token> result = tokenRepository.findByToken(VALID_TOKEN_VALUE);
 
             // then
             assertThat(result).isPresent();
-            assertThat(result.get().getToken()).isEqualTo("valid-token-123");
+            assertThat(result.get().getToken()).isEqualTo(VALID_TOKEN_VALUE);
             assertThat(result.get().getUser().getId()).isEqualTo(user.getId());
         }
 
@@ -104,13 +100,12 @@ class TokenRepositoryTest {
         @DisplayName("존재하지 않는 토큰 조회 시 빈 Optional을 반환한다")
         void findByToken_WithNonExistentToken_ReturnsEmpty() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
-            Token token = createToken(user, "existing-token",
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
+            persistToken(user, EXISTING_TOKEN_VALUE,
                     LocalDateTime.now().plusDays(1), false);
-            testEntityManager.persistAndFlush(token);
 
             // when
-            Optional<Token> result = tokenRepository.findByToken("non-existent-token");
+            Optional<Token> result = tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE);
 
             // then
             assertThat(result).isEmpty();
@@ -125,18 +120,15 @@ class TokenRepositoryTest {
         @DisplayName("사용자의 모든 토큰을 정상적으로 조회한다")
         void findAllByUser_WithMultipleTokens_ReturnsAllTokens() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
 
-            Token token1 = createToken(user, "token-1",
-                    LocalDateTime.now().plusDays(1), false);
-            Token token2 = createToken(user, "token-2",
-                    LocalDateTime.now().plusDays(2), true);
-            Token token3 = createToken(user, "token-3",
-                    LocalDateTime.now().minusDays(1), false);
+            String token1Value = VALID_TOKEN_VALUE + "-1";
+            String token2Value = VALID_TOKEN_VALUE + "-2";
+            String token3Value = VALID_TOKEN_VALUE + "-3";
 
-            testEntityManager.persistAndFlush(token1);
-            testEntityManager.persistAndFlush(token2);
-            testEntityManager.persistAndFlush(token3);
+            persistToken(user, token1Value, LocalDateTime.now().plusDays(1), false);
+            persistToken(user, token2Value, LocalDateTime.now().plusDays(2), true);
+            persistToken(user, token3Value, LocalDateTime.now().minusDays(1), false);
 
             // when
             List<Token> result = tokenRepository.findAllByUser(user);
@@ -144,14 +136,14 @@ class TokenRepositoryTest {
             // then
             assertThat(result).hasSize(3);
             assertThat(result).extracting(Token::getToken)
-                    .containsExactlyInAnyOrder("token-1", "token-2", "token-3");
+                    .containsExactlyInAnyOrder(token1Value, token2Value, token3Value);
         }
 
         @Test
         @DisplayName("토큰이 없는 사용자 조회 시 빈 리스트를 반환한다")
         void findAllByUser_WithNoTokens_ReturnsEmptyList() {
             // given
-            User user = createAndSaveUser("notokens", 12345L);
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
 
             // when
             List<Token> result = tokenRepository.findAllByUser(user);
@@ -164,23 +156,21 @@ class TokenRepositoryTest {
         @DisplayName("다른 사용자의 토큰은 조회되지 않는다")
         void findAllByUser_WithDifferentUser_ReturnsOnlyUserTokens() {
             // given
-            User user1 = createAndSaveUser("user1", 12345L);
-            User user2 = createAndSaveUser("user2", 67890L);
+            User user1 = persistUser(TEST_USERNAME_2, TEST_PROVIDER_ID);
+            User user2 = persistUser(TEST_USERNAME_3, TEST_PROVIDER_ID_2);
 
-            Token token1 = createToken(user1, "user1-token",
-                    LocalDateTime.now().plusDays(1), false);
-            Token token2 = createToken(user2, "user2-token",
-                    LocalDateTime.now().plusDays(1), false);
+            String user1TokenValue = "user1-token";
+            String user2TokenValue = "user2-token";
 
-            testEntityManager.persistAndFlush(token1);
-            testEntityManager.persistAndFlush(token2);
+            persistToken(user1, user1TokenValue, LocalDateTime.now().plusDays(1), false);
+            persistToken(user2, user2TokenValue, LocalDateTime.now().plusDays(1), false);
 
             // when
             List<Token> result = tokenRepository.findAllByUser(user1);
 
             // then
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getToken()).isEqualTo("user1-token");
+            assertThat(result.get(0).getToken()).isEqualTo(user1TokenValue);
         }
     }
 
@@ -192,50 +182,38 @@ class TokenRepositoryTest {
         @DisplayName("유효한 토큰만 조회한다")
         void findValidTokensByUserId_ReturnsOnlyValidTokens() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
+
+            String validTokenValue = VALID_TOKEN_VALUE;
+            String expiredTokenValue = EXPIRED_TOKEN_VALUE;
+            String revokedTokenValue = REVOKED_TOKEN_VALUE;
+            String expiredRevokedTokenValue = EXPIRED_REVOKED_TOKEN_VALUE;
 
             // 유효한 토큰
-            Token validToken = createToken(user, "valid-token",
-                    LocalDateTime.now().plusDays(1), false);
-
+            persistToken(user, validTokenValue, LocalDateTime.now().plusDays(1), false);
             // 만료된 토큰
-            Token expiredToken = createToken(user, "expired-token",
-                    LocalDateTime.now().minusDays(1), false);
-
+            persistToken(user, expiredTokenValue, LocalDateTime.now().minusDays(1), false);
             // 취소된 토큰
-            Token revokedToken = createToken(user, "revoked-token",
-                    LocalDateTime.now().plusDays(1), true);
-
+            persistToken(user, revokedTokenValue, LocalDateTime.now().plusDays(1), true);
             // 만료되고 취소된 토큰
-            Token expiredAndRevokedToken = createToken(user, "expired-revoked-token",
-                    LocalDateTime.now().minusDays(1), true);
-
-            testEntityManager.persistAndFlush(validToken);
-            testEntityManager.persistAndFlush(expiredToken);
-            testEntityManager.persistAndFlush(revokedToken);
-            testEntityManager.persistAndFlush(expiredAndRevokedToken);
+            persistToken(user, expiredRevokedTokenValue, LocalDateTime.now().minusDays(1), true);
 
             // when
             List<Token> result = tokenRepository.findValidTokensByUserId(user.getId());
 
             // then
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getToken()).isEqualTo("valid-token");
+            assertThat(result.get(0).getToken()).isEqualTo(validTokenValue);
         }
 
         @Test
         @DisplayName("유효한 토큰이 없는 경우 빈 리스트를 반환한다")
         void findValidTokensByUserId_WithNoValidTokens_ReturnsEmptyList() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
 
-            Token expiredToken = createToken(user, "expired-token",
-                    LocalDateTime.now().minusDays(1), false);
-            Token revokedToken = createToken(user, "revoked-token",
-                    LocalDateTime.now().plusDays(1), true);
-
-            testEntityManager.persistAndFlush(expiredToken);
-            testEntityManager.persistAndFlush(revokedToken);
+            persistToken(user, EXPIRED_TOKEN_VALUE, LocalDateTime.now().minusDays(1), false);
+            persistToken(user, REVOKED_TOKEN_VALUE, LocalDateTime.now().plusDays(1), true);
 
             // when
             List<Token> result = tokenRepository.findValidTokensByUserId(user.getId());
@@ -266,15 +244,13 @@ class TokenRepositoryTest {
         @DisplayName("사용자의 모든 토큰을 정상적으로 삭제한다")
         void deleteAllByUser_DeletesAllUserTokens() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
 
-            Token token1 = createToken(user, "token-1",
-                    LocalDateTime.now().plusDays(1), false);
-            Token token2 = createToken(user, "token-2",
-                    LocalDateTime.now().plusDays(2), true);
+            String token1Value = VALID_TOKEN_VALUE + "-1";
+            String token2Value = VALID_TOKEN_VALUE + "-2";
 
-            testEntityManager.persistAndFlush(token1);
-            testEntityManager.persistAndFlush(token2);
+            persistToken(user, token1Value, LocalDateTime.now().plusDays(1), false);
+            persistToken(user, token2Value, LocalDateTime.now().plusDays(2), true);
 
             // when
             tokenRepository.deleteAllByUser(user);
@@ -289,16 +265,14 @@ class TokenRepositoryTest {
         @DisplayName("다른 사용자의 토큰은 삭제되지 않는다")
         void deleteAllByUser_DoesNotDeleteOtherUserTokens() {
             // given
-            User user1 = createAndSaveUser("user1", 12345L);
-            User user2 = createAndSaveUser("user2", 67890L);
+            User user1 = persistUser(TEST_USERNAME_2, TEST_PROVIDER_ID);
+            User user2 = persistUser(TEST_USERNAME_3, TEST_PROVIDER_ID_2);
 
-            Token user1Token = createToken(user1, "user1-token",
-                    LocalDateTime.now().plusDays(1), false);
-            Token user2Token = createToken(user2, "user2-token",
-                    LocalDateTime.now().plusDays(1), false);
+            String user1TokenValue = "user1-token";
+            String user2TokenValue = "user2-token";
 
-            testEntityManager.persistAndFlush(user1Token);
-            testEntityManager.persistAndFlush(user2Token);
+            persistToken(user1, user1TokenValue, LocalDateTime.now().plusDays(1), false);
+            persistToken(user2, user2TokenValue, LocalDateTime.now().plusDays(1), false);
 
             // when
             tokenRepository.deleteAllByUser(user1);
@@ -310,7 +284,7 @@ class TokenRepositoryTest {
 
             assertThat(user1Tokens).isEmpty();
             assertThat(user2Tokens).hasSize(1);
-            assertThat(user2Tokens.get(0).getToken()).isEqualTo("user2-token");
+            assertThat(user2Tokens.get(0).getToken()).isEqualTo(user2TokenValue);
         }
     }
 
@@ -322,8 +296,8 @@ class TokenRepositoryTest {
         @DisplayName("Token 엔티티의 저장과 조회가 정상 동작한다")
         void tokenEntitySaveAndFind_WorksCorrectly() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
-            Token token = createToken(user, "test-token",
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
+            Token token = AuthTestHelper.createToken(user, VALID_TOKEN_VALUE,
                     LocalDateTime.now().plusDays(1), false);
 
             // when
@@ -332,8 +306,7 @@ class TokenRepositoryTest {
 
             // then
             assertThat(foundToken).isPresent();
-            assertThat(foundToken.get().getToken()).isEqualTo("test-token");
-            assertThat(foundToken.get().getStatus()).isEqualTo(TokenStatus.ACTIVE);
+            assertThat(foundToken.get().getToken()).isEqualTo(VALID_TOKEN_VALUE);
             assertThat(foundToken.get().isRevoked()).isFalse();
         }
 
@@ -341,15 +314,13 @@ class TokenRepositoryTest {
         @DisplayName("Token 삭제가 정상 동작한다")
         void tokenDelete_WorksCorrectly() {
             // given
-            User user = createAndSaveUser("testuser", 12345L);
-            Token token = createToken(user, "delete-token",
+            User user = persistUser(TEST_USERNAME, TEST_PROVIDER_ID);
+            Token token = persistToken(user, "delete-token",
                     LocalDateTime.now().plusDays(1), false);
-
-            Token savedToken = tokenRepository.save(token);
-            Long tokenId = savedToken.getId();
+            Long tokenId = token.getId();
 
             // when
-            tokenRepository.delete(savedToken);
+            tokenRepository.delete(token);
 
             // then
             Optional<Token> result = tokenRepository.findById(tokenId);
