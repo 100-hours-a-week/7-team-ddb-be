@@ -1,5 +1,6 @@
 package com.dolpin.domain.auth.service.token;
 
+import com.dolpin.global.helper.AuthTestHelper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -12,6 +13,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import javax.crypto.SecretKey;
 import java.util.Date;
 
+import static com.dolpin.global.constants.AuthTestConstants.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -19,14 +21,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class JwtTokenProviderTest {
 
     private JwtTokenProvider jwtTokenProvider;
-    private final String testSecretKey = "test-secret-key-for-jwt-token-provider-testing-purpose";
-    private final long testExpirationMs = 3600000L; // 1시간
 
     @BeforeEach
     void setUp() {
         jwtTokenProvider = new JwtTokenProvider();
-        ReflectionTestUtils.setField(jwtTokenProvider, "secretKey", testSecretKey);
-        ReflectionTestUtils.setField(jwtTokenProvider, "expirationMs", testExpirationMs);
+        ReflectionTestUtils.setField(jwtTokenProvider, "secretKey", TEST_SECRET_KEY);
+        ReflectionTestUtils.setField(jwtTokenProvider, "expirationMs", TEST_EXPIRATION_MS);
         jwtTokenProvider.init();
     }
 
@@ -39,8 +39,8 @@ class JwtTokenProviderTest {
         void init_WithValidSecretKey_InitializesSuccessfully() {
             // given
             JwtTokenProvider provider = new JwtTokenProvider();
-            ReflectionTestUtils.setField(provider, "secretKey", "valid-secret-key-for-testing-purpose-32chars");
-            ReflectionTestUtils.setField(provider, "expirationMs", 3600000L);
+            ReflectionTestUtils.setField(provider, "secretKey", VALID_SECRET_KEY);
+            ReflectionTestUtils.setField(provider, "expirationMs", TEST_EXPIRATION_MS);
 
             // when & then
             provider.init(); // 예외가 발생하지 않아야 함
@@ -51,8 +51,8 @@ class JwtTokenProviderTest {
         void init_WithShortSecretKey_PadsTo32Bytes() {
             // given
             JwtTokenProvider provider = new JwtTokenProvider();
-            ReflectionTestUtils.setField(provider, "secretKey", "short");
-            ReflectionTestUtils.setField(provider, "expirationMs", 3600000L);
+            ReflectionTestUtils.setField(provider, "secretKey", SHORT_SECRET_KEY);
+            ReflectionTestUtils.setField(provider, "expirationMs", TEST_EXPIRATION_MS);
 
             // when & then
             provider.init();
@@ -67,7 +67,7 @@ class JwtTokenProviderTest {
         @DisplayName("사용자 ID로 JWT 토큰을 정상적으로 생성한다")
         void generateToken_WithValidUserId_ReturnsToken() {
             // given
-            Long userId = 12345L;
+            Long userId = TEST_USER_ID;
 
             // when
             String token = jwtTokenProvider.generateToken(userId);
@@ -82,7 +82,7 @@ class JwtTokenProviderTest {
         @DisplayName("같은 사용자 ID로 생성된 토큰의 subject는 동일하다")
         void generateToken_WithSameUserId_HasSameSubject() {
             // given
-            Long userId = 12345L;
+            Long userId = TEST_USER_ID;
 
             // when
             String token1 = jwtTokenProvider.generateToken(userId);
@@ -101,7 +101,7 @@ class JwtTokenProviderTest {
         @DisplayName("토큰에 만료 시간이 올바르게 설정된다")
         void generateToken_SetsCorrectExpirationTime() {
             // given
-            Long userId = 12345L;
+            Long userId = TEST_USER_ID;
             long beforeGeneration = System.currentTimeMillis();
 
             // when
@@ -109,7 +109,7 @@ class JwtTokenProviderTest {
             long afterGeneration = System.currentTimeMillis();
 
             // then
-            SecretKey key = Keys.hmacShaKeyFor(testSecretKey.getBytes());
+            SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET_KEY.getBytes());
             Claims claims = Jwts.parser()
                     .verifyWith(key)
                     .build()
@@ -119,10 +119,8 @@ class JwtTokenProviderTest {
             Date expiration = claims.getExpiration();
             Date issuedAt = claims.getIssuedAt();
 
-            assertThat(expiration.getTime() - issuedAt.getTime()).isEqualTo(testExpirationMs);
-
-            assertThat(issuedAt.getTime()).isBetween(beforeGeneration - 1000, afterGeneration + 1000);
-
+            assertThat(expiration.getTime() - issuedAt.getTime()).isEqualTo(TEST_EXPIRATION_MS);
+            assertThat(AuthTestHelper.isWithinTimeRange(issuedAt.getTime(), beforeGeneration, 1000)).isTrue();
             assertThat(expiration.getTime()).isGreaterThan(System.currentTimeMillis());
         }
     }
@@ -135,7 +133,7 @@ class JwtTokenProviderTest {
         @DisplayName("유효한 토큰에서 사용자 ID를 정상적으로 추출한다")
         void getUserIdFromToken_WithValidToken_ReturnsUserId() {
             // given
-            Long expectedUserId = 12345L;
+            Long expectedUserId = TEST_USER_ID;
             String token = jwtTokenProvider.generateToken(expectedUserId);
 
             // when
@@ -149,7 +147,7 @@ class JwtTokenProviderTest {
         @DisplayName("잘못된 형식의 토큰에서 사용자 ID 추출 시 예외가 발생한다")
         void getUserIdFromToken_WithInvalidToken_ThrowsException() {
             // given
-            String invalidToken = "invalid.token.format";
+            String invalidToken = INVALID_TOKEN_FORMAT;
 
             // when & then
             assertThatThrownBy(() -> jwtTokenProvider.getUserIdFromToken(invalidToken))
@@ -160,13 +158,7 @@ class JwtTokenProviderTest {
         @DisplayName("다른 키로 서명된 토큰에서 사용자 ID 추출 시 예외가 발생한다")
         void getUserIdFromToken_WithTokenSignedByDifferentKey_ThrowsException() {
             // given
-            SecretKey differentKey = Keys.hmacShaKeyFor("different-secret-key-for-testing-purpose-32chars".getBytes());
-            String tokenWithDifferentKey = Jwts.builder()
-                    .subject("12345")
-                    .issuedAt(new Date())
-                    .expiration(new Date(System.currentTimeMillis() + testExpirationMs))
-                    .signWith(differentKey)
-                    .compact();
+            String tokenWithDifferentKey = AuthTestHelper.createTokenWithDifferentKey(TEST_EXPIRATION_MS);
 
             // when & then
             assertThatThrownBy(() -> jwtTokenProvider.getUserIdFromToken(tokenWithDifferentKey))
@@ -182,8 +174,7 @@ class JwtTokenProviderTest {
         @DisplayName("유효한 토큰 검증 시 true를 반환한다")
         void validateToken_WithValidToken_ReturnsTrue() {
             // given
-            Long userId = 12345L;
-            String token = jwtTokenProvider.generateToken(userId);
+            String token = jwtTokenProvider.generateToken(TEST_USER_ID);
 
             // when
             boolean isValid = jwtTokenProvider.validateToken(token);
@@ -196,7 +187,7 @@ class JwtTokenProviderTest {
         @DisplayName("잘못된 형식의 토큰 검증 시 false를 반환한다")
         void validateToken_WithInvalidFormatToken_ReturnsFalse() {
             // given
-            String invalidToken = "invalid.token.format";
+            String invalidToken = INVALID_TOKEN_FORMAT;
 
             // when
             boolean isValid = jwtTokenProvider.validateToken(invalidToken);
@@ -209,13 +200,7 @@ class JwtTokenProviderTest {
         @DisplayName("다른 키로 서명된 토큰 검증 시 false를 반환한다")
         void validateToken_WithTokenSignedByDifferentKey_ReturnsFalse() {
             // given
-            SecretKey differentKey = Keys.hmacShaKeyFor("different-secret-key-for-testing-purpose-32chars".getBytes());
-            String tokenWithDifferentKey = Jwts.builder()
-                    .subject("12345")
-                    .issuedAt(new Date())
-                    .expiration(new Date(System.currentTimeMillis() + testExpirationMs))
-                    .signWith(differentKey)
-                    .compact();
+            String tokenWithDifferentKey = AuthTestHelper.createTokenWithDifferentKey(TEST_EXPIRATION_MS);
 
             // when
             boolean isValid = jwtTokenProvider.validateToken(tokenWithDifferentKey);
@@ -228,13 +213,7 @@ class JwtTokenProviderTest {
         @DisplayName("만료된 토큰 검증 시 false를 반환한다")
         void validateToken_WithExpiredToken_ReturnsFalse() {
             // given
-            SecretKey key = Keys.hmacShaKeyFor(testSecretKey.getBytes());
-            String expiredToken = Jwts.builder()
-                    .subject("12345")
-                    .issuedAt(new Date(System.currentTimeMillis() - testExpirationMs - 1000))
-                    .expiration(new Date(System.currentTimeMillis() - 1000)) // 1초 전에 만료
-                    .signWith(key)
-                    .compact();
+            String expiredToken = AuthTestHelper.createExpiredJwtToken(TEST_SECRET_KEY);
 
             // when
             boolean isValid = jwtTokenProvider.validateToken(expiredToken);
@@ -275,7 +254,7 @@ class JwtTokenProviderTest {
             long expirationMs = jwtTokenProvider.getExpirationMs();
 
             // then
-            assertThat(expirationMs).isEqualTo(testExpirationMs);
+            assertThat(expirationMs).isEqualTo(TEST_EXPIRATION_MS);
         }
     }
 
@@ -287,7 +266,7 @@ class JwtTokenProviderTest {
         @DisplayName("토큰 생성부터 검증까지 전체 플로우가 정상 동작한다")
         void fullTokenFlow_WorksCorrectly() {
             // given
-            Long userId = 12345L;
+            Long userId = TEST_USER_ID;
 
             // when
             String token = jwtTokenProvider.generateToken(userId);
@@ -303,9 +282,9 @@ class JwtTokenProviderTest {
         @DisplayName("여러 사용자의 토큰을 동시에 처리해도 정상 동작한다")
         void multipleUserTokens_WorkCorrectly() {
             // given
-            Long userId1 = 11111L;
-            Long userId2 = 22222L;
-            Long userId3 = 33333L;
+            Long userId1 = TEST_USER_ID;
+            Long userId2 = TEST_USER_ID_2;
+            Long userId3 = TEST_USER_ID_3;
 
             // when
             String token1 = jwtTokenProvider.generateToken(userId1);
