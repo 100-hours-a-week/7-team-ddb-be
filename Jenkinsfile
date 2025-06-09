@@ -24,7 +24,7 @@ pipeline {
                     } else if (branchName == 'dev') {
                         properties([pipelineTriggers([
                             cron('30 3 * * 1-4'),
-                            cron('30 0 * * 5'),
+                            cron('0 1 * * 5'),
                             cron('30 3 * * 6,7')
                         ])])  // 월~목 12:30 + 금 9:30 + 토~일 12:30
                     } else {
