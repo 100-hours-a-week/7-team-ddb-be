@@ -2,11 +2,10 @@ package com.dolpin.domain.auth.service.token;
 
 import com.dolpin.domain.auth.dto.response.RefreshTokenResponse;
 import com.dolpin.domain.auth.entity.Token;
-import com.dolpin.domain.auth.entity.enums.TokenStatus;
+import com.dolpin.global.helper.AuthTestHelper;
 import com.dolpin.domain.auth.repository.TokenRepository;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.global.exception.BusinessException;
-import com.dolpin.global.response.ResponseStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -15,12 +14,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import static com.dolpin.global.constants.AuthTestConstants.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,7 +26,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,27 +41,6 @@ class TokenServiceTest {
     @Mock
     private JwtTokenProvider jwtTokenProvider;
 
-    private User createTestUser() {
-        return User.builder()
-                .id(1L)
-                .providerId(12345L)
-                .provider("kakao")
-                .username("testuser")
-                .build();
-    }
-
-    private Token createTestToken(User user, String tokenValue, LocalDateTime expiredAt, boolean isRevoked) {
-        return Token.builder()
-                .id(1L)
-                .user(user)
-                .status(TokenStatus.ACTIVE)
-                .token(tokenValue)
-                .createdAt(LocalDateTime.now())
-                .expiredAt(expiredAt)
-                .isRevoked(isRevoked)
-                .build();
-    }
-
     @Nested
     @DisplayName("createRefreshToken 메서드 테스트")
     class CreateRefreshTokenTest {
@@ -73,9 +49,8 @@ class TokenServiceTest {
         @DisplayName("유효한 토큰이 있는 경우 기존 토큰을 재사용한다")
         void createRefreshToken_WithExistingValidToken_ReusesExistingToken() {
             // given
-            User user = createTestUser();
-            Token existingToken = createTestToken(user, "existing-token",
-                    LocalDateTime.now().plusDays(7), false);
+            User user = AuthTestHelper.createUser();
+            Token existingToken = AuthTestHelper.createValidToken(user, EXISTING_TOKEN_VALUE);
 
             given(tokenRepository.findValidTokensByUserId(user.getId()))
                     .willReturn(List.of(existingToken));
@@ -93,17 +68,15 @@ class TokenServiceTest {
         @DisplayName("유효한 토큰이 없는 경우 새 토큰을 생성한다")
         void createRefreshToken_WithNoValidToken_CreatesNewToken() {
             // given
-            User user = createTestUser();
-            String newTokenValue = "new-refresh-token";
-            Token newToken = createTestToken(user, newTokenValue,
-                    LocalDateTime.now().plusDays(14), false);
+            User user = AuthTestHelper.createUser();
+            Token newToken = AuthTestHelper.createValidToken(user, REFRESH_TOKEN_VALUE);
 
             given(tokenRepository.findValidTokensByUserId(user.getId()))
                     .willReturn(Collections.emptyList());
             given(tokenRepository.findAllByUser(user))
                     .willReturn(Collections.emptyList());
             given(jwtTokenProvider.generateToken(user.getId()))
-                    .willReturn(newTokenValue);
+                    .willReturn(REFRESH_TOKEN_VALUE);
             given(tokenRepository.save(any(Token.class)))
                     .willReturn(newToken);
 
@@ -111,7 +84,7 @@ class TokenServiceTest {
             Token result = tokenService.createRefreshToken(user);
 
             // then
-            assertThat(result.getToken()).isEqualTo(newTokenValue);
+            assertThat(result.getToken()).isEqualTo(REFRESH_TOKEN_VALUE);
             verify(jwtTokenProvider).generateToken(user.getId());
             verify(tokenRepository).save(any(Token.class));
         }
@@ -120,43 +93,17 @@ class TokenServiceTest {
         @DisplayName("새 토큰 생성 시 만료된 토큰들을 정리한다")
         void createRefreshToken_WithExpiredTokens_CleansUpExpiredTokens() {
             // given
-            User user = createTestUser();
-            Token expiredToken1 = createTestToken(user, "expired-1",
-                    LocalDateTime.now().minusDays(1), false);
-            Token expiredToken2 = createTestToken(user, "expired-2",
-                    LocalDateTime.now().minusDays(2), false);
-
-            // Mock the isExpired method behavior
-            expiredToken1 = Token.builder()
-                    .id(1L)
-                    .user(user)
-                    .status(TokenStatus.ACTIVE)
-                    .token("expired-1")
-                    .createdAt(LocalDateTime.now().minusDays(2))
-                    .expiredAt(LocalDateTime.now().minusDays(1))
-                    .isRevoked(false)
-                    .build();
-
-            expiredToken2 = Token.builder()
-                    .id(2L)
-                    .user(user)
-                    .status(TokenStatus.ACTIVE)
-                    .token("expired-2")
-                    .createdAt(LocalDateTime.now().minusDays(3))
-                    .expiredAt(LocalDateTime.now().minusDays(2))
-                    .isRevoked(false)
-                    .build();
-
-            String newTokenValue = "new-refresh-token";
-            Token newToken = createTestToken(user, newTokenValue,
-                    LocalDateTime.now().plusDays(14), false);
+            User user = AuthTestHelper.createUser();
+            Token expiredToken1 = AuthTestHelper.createExpiredToken(user, EXPIRED_TOKEN_VALUE + "-1");
+            Token expiredToken2 = AuthTestHelper.createExpiredToken(user, EXPIRED_TOKEN_VALUE + "-2");
+            Token newToken = AuthTestHelper.createValidToken(user, REFRESH_TOKEN_VALUE);
 
             given(tokenRepository.findValidTokensByUserId(user.getId()))
                     .willReturn(Collections.emptyList());
             given(tokenRepository.findAllByUser(user))
                     .willReturn(List.of(expiredToken1, expiredToken2));
             given(jwtTokenProvider.generateToken(user.getId()))
-                    .willReturn(newTokenValue);
+                    .willReturn(REFRESH_TOKEN_VALUE);
             given(tokenRepository.save(any(Token.class)))
                     .willReturn(newToken);
 
@@ -177,19 +124,9 @@ class TokenServiceTest {
         @DisplayName("만료된 토큰들을 정상적으로 정리한다")
         void cleanupExpiredTokens_WithExpiredTokens_CleansUpTokens() {
             // given
-            User user = createTestUser();
-            Token expiredToken = Token.builder()
-                    .id(1L)
-                    .user(user)
-                    .status(TokenStatus.ACTIVE)
-                    .token("expired-token")
-                    .createdAt(LocalDateTime.now().minusDays(2))
-                    .expiredAt(LocalDateTime.now().minusDays(1))
-                    .isRevoked(false)
-                    .build();
-
-            Token validToken = createTestToken(user, "valid-token",
-                    LocalDateTime.now().plusDays(1), false);
+            User user = AuthTestHelper.createUser();
+            Token expiredToken = AuthTestHelper.createExpiredToken(user, EXPIRED_TOKEN_VALUE);
+            Token validToken = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE);
 
             given(tokenRepository.findAllByUser(user))
                     .willReturn(List.of(expiredToken, validToken));
@@ -205,9 +142,8 @@ class TokenServiceTest {
         @DisplayName("만료된 토큰이 없는 경우 정리하지 않는다")
         void cleanupExpiredTokens_WithNoExpiredTokens_DoesNotCleanup() {
             // given
-            User user = createTestUser();
-            Token validToken = createTestToken(user, "valid-token",
-                    LocalDateTime.now().plusDays(1), false);
+            User user = AuthTestHelper.createUser();
+            Token validToken = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE);
 
             given(tokenRepository.findAllByUser(user))
                     .willReturn(List.of(validToken));
@@ -228,11 +164,9 @@ class TokenServiceTest {
         @DisplayName("사용자의 모든 토큰을 무효화한다")
         void invalidateUserTokens_InvalidatesAllUserTokens() {
             // given
-            User user = createTestUser();
-            Token token1 = createTestToken(user, "token-1",
-                    LocalDateTime.now().plusDays(1), false);
-            Token token2 = createTestToken(user, "token-2",
-                    LocalDateTime.now().plusDays(2), false);
+            User user = AuthTestHelper.createUser();
+            Token token1 = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE + "-1");
+            Token token2 = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE + "-2");
 
             given(tokenRepository.findAllByUser(user))
                     .willReturn(List.of(token1, token2));
@@ -248,7 +182,7 @@ class TokenServiceTest {
         @DisplayName("토큰이 없는 사용자의 경우 정상 처리된다")
         void invalidateUserTokens_WithNoTokens_HandlesGracefully() {
             // given
-            User user = createTestUser();
+            User user = AuthTestHelper.createUser();
 
             given(tokenRepository.findAllByUser(user))
                     .willReturn(Collections.emptyList());
@@ -269,87 +203,67 @@ class TokenServiceTest {
         @DisplayName("유효한 리프레시 토큰으로 액세스 토큰을 갱신한다")
         void refreshAccessToken_WithValidRefreshToken_ReturnsNewAccessToken() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "valid-refresh-token";
-            String newAccessToken = "new-access-token";
-            long expirationMs = 3600000L;
+            User user = AuthTestHelper.createUser();
+            Token refreshToken = AuthTestHelper.createValidToken(user, VALID_REFRESH_TOKEN);
 
-            Token refreshToken = createTestToken(user, refreshTokenValue,
-                    LocalDateTime.now().plusDays(7), false);
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(VALID_REFRESH_TOKEN))
                     .willReturn(Optional.of(refreshToken));
             given(jwtTokenProvider.generateToken(user.getId()))
-                    .willReturn(newAccessToken);
+                    .willReturn(NEW_ACCESS_TOKEN);
             given(jwtTokenProvider.getExpirationMs())
-                    .willReturn(expirationMs);
+                    .willReturn(TEST_EXPIRATION_MS);
 
             // when
-            RefreshTokenResponse result = tokenService.refreshAccessToken(refreshTokenValue);
+            RefreshTokenResponse result = tokenService.refreshAccessToken(VALID_REFRESH_TOKEN);
 
             // then
-            assertThat(result.getNewAccessToken()).isEqualTo(newAccessToken);
-            assertThat(result.getExpiresIn()).isEqualTo(expirationMs / 1000);
+            assertThat(result.getNewAccessToken()).isEqualTo(NEW_ACCESS_TOKEN);
+            assertThat(result.getExpiresIn()).isEqualTo(TEST_EXPIRATION_MS / 1000);
         }
 
         @Test
         @DisplayName("존재하지 않는 리프레시 토큰으로 갱신 시 예외가 발생한다")
         void refreshAccessToken_WithNonExistentToken_ThrowsException() {
             // given
-            String refreshTokenValue = "non-existent-token";
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE))
                     .willReturn(Optional.empty());
 
             // when & then
-            assertThatThrownBy(() -> tokenService.refreshAccessToken(refreshTokenValue))
+            assertThatThrownBy(() -> tokenService.refreshAccessToken(NON_EXISTENT_TOKEN_VALUE))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("리프레시 토큰이 유효하지 않습니다");
+                    .hasMessageContaining(REFRESH_TOKEN_INVALID_MESSAGE);
         }
 
         @Test
         @DisplayName("만료된 리프레시 토큰으로 갱신 시 예외가 발생한다")
         void refreshAccessToken_WithExpiredToken_ThrowsException() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "expired-refresh-token";
+            User user = AuthTestHelper.createUser();
+            Token expiredToken = AuthTestHelper.createExpiredToken(user, EXPIRED_REFRESH_TOKEN);
 
-            Token expiredToken = Token.builder()
-                    .id(1L)
-                    .user(user)
-                    .status(TokenStatus.ACTIVE)
-                    .token(refreshTokenValue)
-                    .createdAt(LocalDateTime.now().minusDays(2))
-                    .expiredAt(LocalDateTime.now().minusDays(1))
-                    .isRevoked(false)
-                    .build();
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(EXPIRED_REFRESH_TOKEN))
                     .willReturn(Optional.of(expiredToken));
 
             // when & then
-            assertThatThrownBy(() -> tokenService.refreshAccessToken(refreshTokenValue))
+            assertThatThrownBy(() -> tokenService.refreshAccessToken(EXPIRED_REFRESH_TOKEN))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("리프레시 토큰이 만료되었습니다");
+                    .hasMessageContaining(REFRESH_TOKEN_EXPIRED_MESSAGE);
         }
 
         @Test
         @DisplayName("취소된 리프레시 토큰으로 갱신 시 예외가 발생한다")
         void refreshAccessToken_WithRevokedToken_ThrowsException() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "revoked-refresh-token";
+            User user = AuthTestHelper.createUser();
+            Token revokedToken = AuthTestHelper.createRevokedToken(user, REVOKED_TOKEN_VALUE);
 
-            Token revokedToken = createTestToken(user, refreshTokenValue,
-                    LocalDateTime.now().plusDays(1), true);
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(REVOKED_TOKEN_VALUE))
                     .willReturn(Optional.of(revokedToken));
 
             // when & then
-            assertThatThrownBy(() -> tokenService.refreshAccessToken(refreshTokenValue))
+            assertThatThrownBy(() -> tokenService.refreshAccessToken(REVOKED_TOKEN_VALUE))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("리프레시 토큰이 만료되었습니다");
+                    .hasMessageContaining(REFRESH_TOKEN_EXPIRED_MESSAGE);
         }
     }
 
@@ -361,16 +275,14 @@ class TokenServiceTest {
         @DisplayName("유효한 리프레시 토큰을 무효화한다")
         void invalidateRefreshToken_WithValidToken_InvalidatesToken() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "valid-refresh-token";
-            Token refreshToken = createTestToken(user, refreshTokenValue,
-                    LocalDateTime.now().plusDays(7), false);
+            User user = AuthTestHelper.createUser();
+            Token refreshToken = AuthTestHelper.createValidToken(user, VALID_REFRESH_TOKEN);
 
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(VALID_REFRESH_TOKEN))
                     .willReturn(Optional.of(refreshToken));
 
             // when
-            tokenService.invalidateRefreshToken(refreshTokenValue);
+            tokenService.invalidateRefreshToken(VALID_REFRESH_TOKEN);
 
             // then
             verify(tokenRepository).save(eq(refreshToken));
@@ -380,15 +292,13 @@ class TokenServiceTest {
         @DisplayName("존재하지 않는 리프레시 토큰 무효화 시 예외가 발생한다")
         void invalidateRefreshToken_WithNonExistentToken_ThrowsException() {
             // given
-            String refreshTokenValue = "non-existent-token";
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE))
                     .willReturn(Optional.empty());
 
             // when & then
-            assertThatThrownBy(() -> tokenService.invalidateRefreshToken(refreshTokenValue))
+            assertThatThrownBy(() -> tokenService.invalidateRefreshToken(NON_EXISTENT_TOKEN_VALUE))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("리프레시 토큰이 유효하지 않습니다");
+                    .hasMessageContaining(REFRESH_TOKEN_INVALID_MESSAGE);
         }
     }
 
@@ -400,16 +310,14 @@ class TokenServiceTest {
         @DisplayName("유효한 리프레시 토큰 검증 시 true를 반환한다")
         void validateRefreshToken_WithValidToken_ReturnsTrue() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "valid-refresh-token";
-            Token validToken = createTestToken(user, refreshTokenValue,
-                    LocalDateTime.now().plusDays(7), false);
+            User user = AuthTestHelper.createUser();
+            Token validToken = AuthTestHelper.createValidToken(user, VALID_REFRESH_TOKEN);
 
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(VALID_REFRESH_TOKEN))
                     .willReturn(Optional.of(validToken));
 
             // when
-            boolean result = tokenService.validateRefreshToken(refreshTokenValue);
+            boolean result = tokenService.validateRefreshToken(VALID_REFRESH_TOKEN);
 
             // then
             assertThat(result).isTrue();
@@ -419,24 +327,14 @@ class TokenServiceTest {
         @DisplayName("만료된 리프레시 토큰 검증 시 false를 반환한다")
         void validateRefreshToken_WithExpiredToken_ReturnsFalse() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "expired-refresh-token";
+            User user = AuthTestHelper.createUser();
+            Token expiredToken = AuthTestHelper.createExpiredToken(user, EXPIRED_REFRESH_TOKEN);
 
-            Token expiredToken = Token.builder()
-                    .id(1L)
-                    .user(user)
-                    .status(TokenStatus.ACTIVE)
-                    .token(refreshTokenValue)
-                    .createdAt(LocalDateTime.now().minusDays(2))
-                    .expiredAt(LocalDateTime.now().minusDays(1))
-                    .isRevoked(false)
-                    .build();
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(EXPIRED_REFRESH_TOKEN))
                     .willReturn(Optional.of(expiredToken));
 
             // when
-            boolean result = tokenService.validateRefreshToken(refreshTokenValue);
+            boolean result = tokenService.validateRefreshToken(EXPIRED_REFRESH_TOKEN);
 
             // then
             assertThat(result).isFalse();
@@ -446,13 +344,11 @@ class TokenServiceTest {
         @DisplayName("존재하지 않는 리프레시 토큰 검증 시 false를 반환한다")
         void validateRefreshToken_WithNonExistentToken_ReturnsFalse() {
             // given
-            String refreshTokenValue = "non-existent-token";
-
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE))
                     .willReturn(Optional.empty());
 
             // when
-            boolean result = tokenService.validateRefreshToken(refreshTokenValue);
+            boolean result = tokenService.validateRefreshToken(NON_EXISTENT_TOKEN_VALUE);
 
             // then
             assertThat(result).isFalse();
@@ -462,16 +358,14 @@ class TokenServiceTest {
         @DisplayName("취소된 리프레시 토큰 검증 시 false를 반환한다")
         void validateRefreshToken_WithRevokedToken_ReturnsFalse() {
             // given
-            User user = createTestUser();
-            String refreshTokenValue = "revoked-refresh-token";
-            Token revokedToken = createTestToken(user, refreshTokenValue,
-                    LocalDateTime.now().plusDays(1), true);
+            User user = AuthTestHelper.createUser();
+            Token revokedToken = AuthTestHelper.createRevokedToken(user, REVOKED_TOKEN_VALUE);
 
-            given(tokenRepository.findByToken(refreshTokenValue))
+            given(tokenRepository.findByToken(REVOKED_TOKEN_VALUE))
                     .willReturn(Optional.of(revokedToken));
 
             // when
-            boolean result = tokenService.validateRefreshToken(refreshTokenValue);
+            boolean result = tokenService.validateRefreshToken(REVOKED_TOKEN_VALUE);
 
             // then
             assertThat(result).isFalse();
