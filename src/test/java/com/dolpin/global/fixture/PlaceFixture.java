@@ -15,23 +15,35 @@ public class PlaceFixture {
         // Utility class
     }
 
-    // === 기본 장소 생성 메서드 ===
-    public static Place createPlace(String name, String category, double lat, double lng) {
+    // === 완전한 파라미터 지원 메서드 ===
+    public static Place createPlace(String name, String category, double lat, double lng,
+                                    String roadAddress, String lotAddress, String imageUrl,
+                                    String description, String phone) {
         Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat));
 
         return Place.builder()
                 .name(name)
                 .category(category)
                 .location(location)
-                .roadAddress(TestConstants.DEFAULT_ROAD_ADDRESS)
-                .lotAddress(TestConstants.DEFAULT_LOT_ADDRESS)
-                .imageUrl(TestConstants.DEFAULT_IMAGE_URL)
-                .description(TestConstants.DEFAULT_DESCRIPTION)
-                .phone(TestConstants.DEFAULT_PHONE)
+                .roadAddress(roadAddress)
+                .lotAddress(lotAddress)
+                .imageUrl(imageUrl)
+                .description(description)
+                .phone(phone)
                 .build();
     }
 
-    // === 카테고리별 장소 생성 메서드 ===
+    // === 기본값을 사용하는 편의 메서드 ===
+    public static Place createPlace(String name, String category, double lat, double lng) {
+        return createPlace(name, category, lat, lng,
+                TestConstants.DEFAULT_ROAD_ADDRESS,
+                TestConstants.DEFAULT_LOT_ADDRESS,
+                TestConstants.DEFAULT_IMAGE_URL,
+                TestConstants.DEFAULT_DESCRIPTION,
+                TestConstants.DEFAULT_PHONE);
+    }
+
+    // === 카테고리별 장소 생성 메서드 (기본값) ===
     public static Place createCafe(String name, double lat, double lng) {
         return createPlace(name, TestConstants.CAFE_CATEGORY, lat, lng);
     }
@@ -42,6 +54,25 @@ public class PlaceFixture {
 
     public static Place createBar(String name, double lat, double lng) {
         return createPlace(name, TestConstants.BAR_CATEGORY, lat, lng);
+    }
+
+    // === 카테고리별 장소 생성 메서드 (커스터마이징 가능) ===
+    public static Place createCafe(String name, double lat, double lng, String roadAddress,
+                                   String imageUrl, String description, String phone) {
+        return createPlace(name, TestConstants.CAFE_CATEGORY, lat, lng,
+                roadAddress, TestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
+    }
+
+    public static Place createRestaurant(String name, double lat, double lng, String roadAddress,
+                                         String imageUrl, String description, String phone) {
+        return createPlace(name, TestConstants.RESTAURANT_CATEGORY, lat, lng,
+                roadAddress, TestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
+    }
+
+    public static Place createBar(String name, double lat, double lng, String roadAddress,
+                                  String imageUrl, String description, String phone) {
+        return createPlace(name, TestConstants.BAR_CATEGORY, lat, lng,
+                roadAddress, TestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
     }
 
     // === 테스트용 장소 생성 메서드 (상수 활용) ===
@@ -113,6 +144,11 @@ public class PlaceFixture {
         return createPlaceMenu(place, TestConstants.LATTE_MENU, TestConstants.LATTE_PRICE);
     }
 
+    // === 커스터마이징 가능한 메뉴 생성 ===
+    public static PlaceMenu createCustomMenu(Place place, String menuName, Integer price) {
+        return createPlaceMenu(place, menuName, price);
+    }
+
     // === 기본 영업시간 생성 메서드 ===
     public static PlaceHours createMondayHours(Place place) {
         return createPlaceHours(place, TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME);
@@ -120,5 +156,14 @@ public class PlaceFixture {
 
     public static PlaceHours createTuesdayHours(Place place) {
         return createPlaceHours(place, TestConstants.TUESDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME);
+    }
+
+    // === 커스터마이징 가능한 영업시간 ===
+    public static PlaceHours createCustomHours(Place place, String dayOfWeek, String openTime, String closeTime) {
+        return createPlaceHours(place, dayOfWeek, openTime, closeTime, false);
+    }
+
+    public static PlaceHours createCustomBreakTime(Place place, String dayOfWeek, String startTime, String endTime) {
+        return createPlaceHours(place, dayOfWeek, startTime, endTime, true);
     }
 }
