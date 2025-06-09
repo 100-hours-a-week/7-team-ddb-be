@@ -26,7 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.*;
 
-import static com.dolpin.global.helper.PlaceTestHelper.*;
+import static com.dolpin.global.helper.PlaceServiceTestHelper.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.*;

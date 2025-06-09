@@ -16,7 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
 
-import static com.dolpin.global.helper.PlaceTestHelper.*;
+import static com.dolpin.global.helper.PlaceServiceTestHelper.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
@@ -37,20 +37,23 @@ class PlaceDetailServiceTest {
         @Test
         @DisplayName("정상적인 장소 상세 조회가 동작한다")
         void getPlaceDetail_WithValidId_ReturnsCompleteDetail() {
+            // Given
             Long placeId = TestConstants.PLACE_ID_1;
 
-            Place basicPlace = createBasicPlaceForSuccess();
-            Place keywordPlace = createKeywordPlace(getDefaultCafeKeywords());
-            Place menuPlace = createMenuPlace(createDefaultCafeMenus());
-            Place hoursPlace = createHoursPlace(createCompleteBusinessHoursStubs());
+            Place basicPlace = createBasicPlaceForDetail();
+            Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
+            Place menuPlace = createPlaceWithMenus(createDefaultCafeMenus());
+            Place hoursPlace = createPlaceWithHours(createCompleteBusinessHoursStubs());
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.of(keywordPlace));
             given(placeRepository.findByIdWithMenus(placeId)).willReturn(Optional.of(menuPlace));
             given(placeRepository.findByIdWithHours(placeId)).willReturn(Optional.of(hoursPlace));
 
+            // When
             PlaceDetailResponse result = placeQueryService.getPlaceDetail(placeId);
 
+            // Then
             verifyBasicPlaceInfo(result, placeId);
             verifyLocationInfo(result);
             verifyKeywordsInfo(result);
@@ -62,9 +65,11 @@ class PlaceDetailServiceTest {
         @Test
         @DisplayName("존재하지 않는 장소 ID 조회 시 예외가 발생한다")
         void getPlaceDetail_WithNonExistentId_ThrowsPlaceNotFoundException() {
+            // Given
             Long nonExistentId = TestConstants.NON_EXISTENT_PLACE_ID;
             given(placeRepository.findBasicPlaceById(nonExistentId)).willReturn(Optional.empty());
 
+            // When & Then
             assertThatThrownBy(() -> placeQueryService.getPlaceDetail(nonExistentId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
@@ -77,12 +82,14 @@ class PlaceDetailServiceTest {
         @Test
         @DisplayName("키워드 조회 실패 시 예외가 발생한다")
         void getPlaceDetail_WhenKeywordQueryFails_ThrowsException() {
+            // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            Place basicPlace = createBasicPlaceForFailure(); // 상세 메서드 호출 안됨
+            Place basicPlace = createMinimalPlaceForFailure(); // 최소한의 정보만
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.empty());
 
+            // When & Then
             assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
@@ -96,14 +103,16 @@ class PlaceDetailServiceTest {
         @Test
         @DisplayName("메뉴 조회 실패 시 예외가 발생한다")
         void getPlaceDetail_WhenMenuQueryFails_ThrowsException() {
+            // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            Place basicPlace = createBasicPlaceForFailure(); // 상세 메서드 호출 안됨
-            Place keywordPlace = createKeywordPlace(getDefaultCafeKeywords());
+            Place basicPlace = createMinimalPlaceForFailure(); // 최소한의 정보만
+            Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.of(keywordPlace));
             given(placeRepository.findByIdWithMenus(placeId)).willReturn(Optional.empty());
 
+            // When & Then
             assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
@@ -118,16 +127,18 @@ class PlaceDetailServiceTest {
         @Test
         @DisplayName("영업시간 조회 실패 시 예외가 발생한다")
         void getPlaceDetail_WhenHoursQueryFails_ThrowsException() {
+            // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            Place basicPlace = createBasicPlaceForFailure(); // 상세 메서드 호출 안됨
-            Place keywordPlace = createKeywordPlace(getDefaultCafeKeywords());
-            Place menuPlace = createMenuPlace(createDefaultCafeMenus());
+            Place basicPlace = createMinimalPlaceForFailure(); // 최소한의 정보만
+            Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
+            Place menuPlace = createPlaceWithMenus(createDefaultCafeMenus());
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.of(keywordPlace));
             given(placeRepository.findByIdWithMenus(placeId)).willReturn(Optional.of(menuPlace));
             given(placeRepository.findByIdWithHours(placeId)).willReturn(Optional.empty());
 
+            // When & Then
             assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
