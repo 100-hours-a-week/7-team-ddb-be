@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,14 +26,16 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
             "WHERE m.id = :id")
     Optional<Moment> findByIdWithImages(@Param("id") Long id);
 
-    // 특정 사용자의 Moment 목록 조회 (공개/비공개 구분)
+    // 특정 사용자의 Moment 목록 조회
     @Query("SELECT m FROM Moment m " +
             "WHERE m.userId = :userId " +
             "AND (:includePrivate = true OR m.isPublic = true) " +
+            "AND (:cursor IS NULL OR m.createdAt < :cursor) " +
             "ORDER BY m.createdAt DESC")
-    Page<Moment> findByUserIdWithVisibility(@Param("userId") Long userId,
-                                            @Param("includePrivate") boolean includePrivate,
-                                            Pageable pageable);
+    List<Moment> findByUserIdWithVisibilityWithCursor(@Param("userId") Long userId,
+                                                      @Param("includePrivate") boolean includePrivate,
+                                                      @Param("cursor") LocalDateTime cursor,
+                                                      Pageable pageable);
 
     // 특정 장소의 공개 Moment 목록 조회
     @Query("SELECT m FROM Moment m " +
@@ -41,17 +44,21 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
             "ORDER BY m.createdAt DESC")
     Page<Moment> findPublicMomentsByPlaceId(@Param("placeId") Long placeId, Pageable pageable);
 
-    // 공개 Moment 전체 목록 조회 (피드용)
+    // 공개 Moment 전체 목록 조회
     @Query("SELECT m FROM Moment m " +
             "WHERE m.isPublic = true " +
+            "AND (:cursor IS NULL OR m.createdAt < :cursor) " +
             "ORDER BY m.createdAt DESC")
-    Page<Moment> findPublicMoments(Pageable pageable);
+    List<Moment> findPublicMomentsWithCursor(@Param("cursor") LocalDateTime cursor, Pageable pageable);
 
-    // 공개 기록 + 특정 사용자의 모든 기록 조회 (로그인 사용자용)
+    // 공개 기록 + 특정 사용자의 모든 기록 조회
     @Query("SELECT m FROM Moment m " +
-            "WHERE m.isPublic = true OR m.userId = :currentUserId " +
+            "WHERE (m.isPublic = true OR m.userId = :currentUserId) " +
+            "AND (:cursor IS NULL OR m.createdAt < :cursor) " +
             "ORDER BY m.createdAt DESC")
-    Page<Moment> findPublicMomentsWithUserPrivate(@Param("currentUserId") Long currentUserId, Pageable pageable);
+    List<Moment> findPublicMomentsWithUserPrivateWithCursor(@Param("currentUserId") Long currentUserId,
+                                                            @Param("cursor") LocalDateTime cursor,
+                                                            Pageable pageable);
 
     // 동시성 보장 조회수 증가 (원자적 연산)
     @Modifying
