@@ -43,15 +43,10 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Transactional(readOnly = true)
     public MomentListResponse getAllMoments(Long currentUserId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor; // String 그대로 사용
-        int queryLimit = pageSize + 1; // hasNext 판단용
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
-        List<Moment> moments;
-        if (currentUserId != null) {
-            moments = momentRepository.findPublicMomentsWithUserPrivateNative(currentUserId, cursorString, queryLimit);
-        } else {
-            moments = momentRepository.findPublicMomentsWithCursorNative(cursorString, queryLimit);
-        }
+        List<Moment> moments = momentRepository.findPublicMomentsWithUserPrivateNative(currentUserId, cursorString, queryLimit);
 
         return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/users/moments");
     }
@@ -60,8 +55,8 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Transactional(readOnly = true)
     public MomentListResponse getMyMoments(Long userId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor; // String 그대로 사용
-        int queryLimit = pageSize + 1; // hasNext 판단용
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
         List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(userId, true, cursorString, queryLimit);
 
@@ -74,8 +69,8 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         userQueryService.getUserById(targetUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor; // String 그대로 사용
-        int queryLimit = pageSize + 1; // hasNext 판단용
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
         List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(targetUserId, false, cursorString, queryLimit);
 

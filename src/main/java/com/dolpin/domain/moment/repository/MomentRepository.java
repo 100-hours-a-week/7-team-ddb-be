@@ -25,16 +25,6 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
             "WHERE m.id = :id")
     Optional<Moment> findByIdWithImages(@Param("id") Long id);
 
-    // 네이티브 쿼리로 공개 Moment 조회 (커서 기반)
-    @Query(value = "SELECT * FROM moment m " +
-            "WHERE m.is_public = true " +
-            "AND (:cursor IS NULL OR m.created_at < CAST(:cursor AS timestamp)) " +
-            "ORDER BY m.created_at DESC " +
-            "LIMIT :limit",
-            nativeQuery = true)
-    List<Moment> findPublicMomentsWithCursorNative(@Param("cursor") String cursor,
-                                                   @Param("limit") int limit);
-
     // 네이티브 쿼리로 공개 + 사용자 기록 조회 (커서 기반)
     @Query(value = "SELECT * FROM moment m " +
             "WHERE (m.is_public = true OR m.user_id = :currentUserId) " +
