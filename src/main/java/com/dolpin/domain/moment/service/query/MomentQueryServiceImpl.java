@@ -98,6 +98,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                 .build();
     }
 
+
     @Override
     @Transactional
     public MomentDetailResponse getMomentDetail(Long momentId, Long currentUserId) {
@@ -111,11 +112,13 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         // 조회수 증가
         momentViewService.incrementViewCount(momentId);
 
+        User author = userQueryService.getUserById(moment.getUserId());
+
         boolean isOwner = moment.isOwnedBy(currentUserId);
         Long commentCount = commentRepository.countByMomentIdAndNotDeleted(momentId);
         Long viewCount = momentViewService.getViewCount(momentId);
 
-        return MomentDetailResponse.from(moment, isOwner, commentCount, viewCount);
+        return MomentDetailResponse.from(moment, isOwner, commentCount, viewCount, author);
     }
 
     private PlaceMomentListResponse.PlaceMomentDto buildPlaceMomentDto(Moment moment) {
