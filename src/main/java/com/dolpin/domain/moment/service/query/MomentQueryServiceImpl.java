@@ -43,14 +43,14 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Transactional(readOnly = true)
     public MomentListResponse getAllMoments(Long currentUserId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
-        Pageable pageable = PageRequest.of(0, pageSize + 1);
+        String cursorString = cursor; // String 그대로 사용
+        int queryLimit = pageSize + 1; // hasNext 판단용
 
         List<Moment> moments;
         if (currentUserId != null) {
-            moments = momentRepository.findPublicMomentsWithUserPrivateWithCursor(currentUserId, cursorTime, pageable);
+            moments = momentRepository.findPublicMomentsWithUserPrivateNative(currentUserId, cursorString, queryLimit);
         } else {
-            moments = momentRepository.findPublicMomentsWithCursor(cursorTime, pageable);
+            moments = momentRepository.findPublicMomentsWithCursorNative(cursorString, queryLimit);
         }
 
         return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/users/moments");
@@ -60,10 +60,10 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Transactional(readOnly = true)
     public MomentListResponse getMyMoments(Long userId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
-        Pageable pageable = PageRequest.of(0, pageSize + 1);
+        String cursorString = cursor; // String 그대로 사용
+        int queryLimit = pageSize + 1; // hasNext 판단용
 
-        List<Moment> moments = momentRepository.findByUserIdWithVisibilityWithCursor(userId, true, cursorTime, pageable);
+        List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(userId, true, cursorString, queryLimit);
 
         return buildMomentListResponse(moments, pageSize, false, cursor, "/api/v1/users/me/moments");
     }
@@ -74,10 +74,10 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         userQueryService.getUserById(targetUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
-        Pageable pageable = PageRequest.of(0, pageSize + 1);
+        String cursorString = cursor; // String 그대로 사용
+        int queryLimit = pageSize + 1; // hasNext 판단용
 
-        List<Moment> moments = momentRepository.findByUserIdWithVisibilityWithCursor(targetUserId, false, cursorTime, pageable);
+        List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(targetUserId, false, cursorString, queryLimit);
 
         return buildMomentListResponse(moments, pageSize, false, cursor, "/api/v1/users/" + targetUserId + "/moments");
     }
@@ -248,23 +248,5 @@ public class MomentQueryServiceImpl implements MomentQueryService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
-    }
-
-    /**
-     * cursor 문자열을 LocalDateTime으로 파싱
-     */
-    private LocalDateTime parseCursor(String cursor) {
-        if (cursor == null || cursor.trim().isEmpty()) {
-            return null;
-        }
-
-        try {
-            // "Z" 제거 후 파싱
-            String cleanCursor = cursor.endsWith("Z") ? cursor.substring(0, cursor.length() - 1) : cursor;
-            return LocalDateTime.parse(cleanCursor, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        } catch (Exception e) {
-            log.warn("Invalid cursor format: {}, using null instead", cursor);
-            return null;
-        }
     }
 }
