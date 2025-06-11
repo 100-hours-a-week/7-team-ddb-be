@@ -3,6 +3,7 @@ package com.dolpin.domain.moment.dto.response;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.entity.MomentImage;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -26,7 +27,10 @@ public class MomentDetailResponse {
     private PlaceDetailDto place;
     private Boolean isPublic;
     private Boolean isOwner;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private LocalDateTime createdAt;
+
     private Long commentCount;
     private Long viewCount;
     private AuthorDto author;

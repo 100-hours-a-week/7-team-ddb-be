@@ -2,6 +2,7 @@ package com.dolpin.domain.place.dto.response;
 
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.entity.PlaceBookmark;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,6 +29,8 @@ public class BookmarkResponse {
         private Long placeId;
         private String name;
         private List<String> keyword;
+
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
         private LocalDateTime createdAt;
 
         public static BookmarkDto from(PlaceBookmark bookmark, Place place) {
