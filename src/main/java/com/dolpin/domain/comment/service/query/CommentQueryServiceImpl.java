@@ -42,17 +42,17 @@ public class CommentQueryServiceImpl implements CommentQueryService {
         Moment moment = validateMomentAccess(momentId, currentUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
+        String cursorString = cursor; // String 그대로 사용
+        int queryLimit = pageSize + 1; // hasNext 판단용
 
         List<Comment> comments;
 
-        if (cursorTime != null) {
-            // 커서 기반 페이지네이션
-            Pageable pageable = PageRequest.of(0, pageSize + 1);
-            comments = commentRepository.findByMomentIdAndNotDeletedWithCursor(momentId, cursorTime, pageable);
+        if (cursorString != null && !cursorString.trim().isEmpty()) {
+            // 커서 기반 페이지네이션 (네이티브 쿼리)
+            comments = commentRepository.findByMomentIdAndNotDeletedWithCursorNative(momentId, cursorString, queryLimit);
         } else {
-            // 첫 페이지 조회
-            Pageable pageable = PageRequest.of(0, pageSize + 1);
+            // 첫 페이지 조회 (기존 JPQL 쿼리 사용)
+            Pageable pageable = PageRequest.of(0, queryLimit);
             comments = commentRepository.findByMomentIdAndNotDeleted(momentId, pageable).getContent();
         }
 
@@ -142,19 +142,5 @@ public class CommentQueryServiceImpl implements CommentQueryService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
-    }
-
-    private LocalDateTime parseCursor(String cursor) {
-        if (cursor == null || cursor.isEmpty()) {
-            return null;
-        }
-
-        try {
-            String cleanCursor = cursor.endsWith("Z") ? cursor.substring(0, cursor.length() - 1) : cursor;
-            return LocalDateTime.parse(cleanCursor, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        } catch (Exception e) {
-            log.warn("Invalid cursor format: {}", cursor);
-            return null;
-        }
     }
 }

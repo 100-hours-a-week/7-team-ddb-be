@@ -15,23 +15,25 @@ import java.util.Optional;
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 
-    // 특정 기록의 댓글 목록 조회
+    // 특정 기록의 댓글 목록 조회 (첫 페이지용)
     @Query("SELECT c FROM Comment c " +
             "WHERE c.momentId = :momentId " +
             "AND c.deletedAt IS NULL " +
             "ORDER BY c.createdAt DESC")
     Page<Comment> findByMomentIdAndNotDeleted(@Param("momentId") Long momentId, Pageable pageable);
 
-    // 커서 기반 페이지네이션을 위한 조회
-    @Query("SELECT c FROM Comment c " +
-            "WHERE c.momentId = :momentId " +
-            "AND c.deletedAt IS NULL " +
-            "AND c.createdAt < :cursor " +
-            "ORDER BY c.createdAt DESC")
-    List<Comment> findByMomentIdAndNotDeletedWithCursor(
+    // 네이티브 쿼리로 커서 기반 페이지네이션
+    @Query(value = "SELECT * FROM comment c " +
+            "WHERE c.moment_id = :momentId " +
+            "AND c.deleted_at IS NULL " +
+            "AND (:cursor IS NULL OR c.created_at < CAST(:cursor AS timestamp)) " +
+            "ORDER BY c.created_at DESC " +
+            "LIMIT :limit",
+            nativeQuery = true)
+    List<Comment> findByMomentIdAndNotDeletedWithCursorNative(
             @Param("momentId") Long momentId,
-            @Param("cursor") LocalDateTime cursor,
-            Pageable pageable);
+            @Param("cursor") String cursor,
+            @Param("limit") int limit);
 
     // 특정 기록의 댓글 개수
     @Query("SELECT COUNT(c) FROM Comment c " +
