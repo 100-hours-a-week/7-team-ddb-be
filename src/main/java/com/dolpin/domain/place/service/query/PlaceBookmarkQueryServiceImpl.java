@@ -10,8 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -38,7 +37,7 @@ public class PlaceBookmarkQueryServiceImpl implements PlaceBookmarkQueryService 
                 .map(PlaceBookmark::getPlaceId)
                 .collect(Collectors.toList());
 
-        // 장소 정보를 키워드와 함께 한 번에 조회 (N+1 문제 방지)
+        // 장소 정보를 키워드와 함께 한 번에 조회
         List<Place> places = placeRepository.findByIdsWithKeywords(placeIds);
 
         // Place ID -> Place 매핑
@@ -58,9 +57,47 @@ public class PlaceBookmarkQueryServiceImpl implements PlaceBookmarkQueryService 
                         return null;
                     }
                 })
-                .filter(dto -> dto != null) // null 필터링
+                .filter(Objects::nonNull) // null 필터링
                 .collect(Collectors.toList());
 
         return BookmarkResponse.from(bookmarkDtos);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isBookmarked(Long userId, Long placeId) {
+        if (userId == null || placeId == null) {
+            return false;
+        }
+        return bookmarkRepository.existsByUserIdAndPlaceId(userId, placeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, Boolean> getBookmarkStatusMap(Long userId, List<Long> placeIds) {
+        if (userId == null || placeIds == null || placeIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // 사용자가 북마크한 장소 ID 목록 조회
+        Set<Long> bookmarkedPlaceIds = getBookmarkedPlaceIds(userId);
+
+        // 요청된 장소들에 대한 북마크 여부 매핑
+        return placeIds.stream()
+                .collect(Collectors.toMap(
+                        placeId -> placeId,
+                        bookmarkedPlaceIds::contains
+                ));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> getBookmarkedPlaceIds(Long userId) {
+        if (userId == null) {
+            return Collections.emptySet();
+        }
+
+        List<Long> placeIds = bookmarkRepository.findPlaceIdsByUserId(userId);
+        return new HashSet<>(placeIds);
     }
 }
