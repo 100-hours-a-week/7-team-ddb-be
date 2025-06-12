@@ -19,7 +19,7 @@ public class AiMomentScheduler {
     private final AiMomentGenerationService aiMomentGenerationService;
     private final MomentRepository momentRepository;
 
-    @Scheduled(cron = "0 0 1 * * *")
+    @Scheduled(cron = "0 0 5 * * *")
     public void generateDailyAiMoment() {
 
         // 오늘 이미 돌핀이 기록을 작성했는지 확인

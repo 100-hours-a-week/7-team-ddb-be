@@ -4,6 +4,7 @@ import com.dolpin.domain.moment.dto.request.AiMomentGenerationRequest;
 import com.dolpin.domain.moment.dto.response.AiMomentGenerationResponse;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,7 @@ import org.springframework.web.client.RestTemplate;
 public class MomentAiClient {
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${ai.service.url}")
     private String aiServiceUrl;
@@ -37,11 +39,12 @@ public class MomentAiClient {
             log.info("Requesting AI moment generation for place: {} (ID: {})",
                     request.getName(), request.getId());
 
-            ResponseEntity<AiMomentGenerationResponse> response = restTemplate.exchange(
-                    url, HttpMethod.POST, entity, AiMomentGenerationResponse.class
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, String.class
             );
+            AiMomentGenerationResponse result = objectMapper.readValue(response.getBody(), AiMomentGenerationResponse.class);
 
-            AiMomentGenerationResponse result = response.getBody();
+            System.out.println(request);
 
             if (result != null) {
                 log.info("AI generated moment successfully: title={}, placeId={}",

@@ -65,6 +65,9 @@ public class AiMomentGenerationServiceImpl implements AiMomentGenerationService 
             return;
         }
 
+        log.debug("AI Response - placeId: {}, expected placeId: {}",
+                aiResponse.getPlaceId(), randomPlaceId);
+
         // 5. AI 응답으로 기록 생성
         MomentCreateRequest momentRequest = MomentCreateRequest.builder()
                 .title(aiResponse.getTitle())
