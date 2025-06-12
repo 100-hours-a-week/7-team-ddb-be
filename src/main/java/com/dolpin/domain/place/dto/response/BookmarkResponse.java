@@ -25,10 +25,10 @@ public class BookmarkResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class BookmarkDto {
-        private String imageUrl;
-        private Long placeId;
+        private String thumbnail;
+        private Long id;
         private String name;
-        private List<String> keyword;
+        private List<String> keywords;
         private Boolean isBookmarked;
 
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
@@ -41,10 +41,10 @@ public class BookmarkResponse {
                     .collect(Collectors.toList());
 
             return BookmarkDto.builder()
-                    .imageUrl(place.getImageUrl())
-                    .placeId(place.getId())
+                    .thumbnail(place.getImageUrl())
+                    .id(place.getId())
                     .name(place.getName())
-                    .keyword(keywords)
+                    .keywords(keywords)
                     .isBookmarked(true)
                     .createdAt(bookmark.getCreatedAt())
                     .build();
