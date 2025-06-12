@@ -29,6 +29,7 @@ public class BookmarkResponse {
         private Long placeId;
         private String name;
         private List<String> keyword;
+        private Boolean isBookmark;
 
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
         private LocalDateTime createdAt;
@@ -44,6 +45,7 @@ public class BookmarkResponse {
                     .placeId(place.getId())
                     .name(place.getName())
                     .keyword(keywords)
+                    .isBookmark(true)
                     .createdAt(bookmark.getCreatedAt())
                     .build();
         }
@@ -52,20 +54,6 @@ public class BookmarkResponse {
     public static BookmarkResponse from(List<BookmarkDto> bookmarks) {
         return BookmarkResponse.builder()
                 .bookmarks(bookmarks)
-                .build();
-    }
-}
-
-@Getter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-class BookmarkToggleResponse {
-    private boolean isBookmarked;
-
-    public static BookmarkToggleResponse of(boolean isBookmarked) {
-        return BookmarkToggleResponse.builder()
-                .isBookmarked(isBookmarked)
                 .build();
     }
 }
