@@ -28,9 +28,8 @@ public class PlaceSearchResponse {
         private String name;
         private String thumbnail;
         private Double distance;
-
         private Long momentCount;
-
+        private Boolean isBookmark;
         private List<String> keywords;
         private Map<String, Object> location;
 
