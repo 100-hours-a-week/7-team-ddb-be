@@ -278,7 +278,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .openingHours(openingHours)
                 .phone(place.getPhone())
                 .menu(menuList)
-                .isBookmark(isBookmarked)
+                .isBookmarked(isBookmarked)
                 .build();
     }
 
@@ -430,7 +430,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .momentCount(momentCount)
                 .keywords(keywords)
                 .location(locationMap)
-                .isBookmark(isBookmarked)
+                .isBookmarked(isBookmarked)
                 .similarityScore(null)
                 .build();
     }
@@ -462,7 +462,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .momentCount(momentCount)
                 .keywords(keywords)
                 .location(locationMap)
-                .isBookmark(isBookmarked)
+                .isBookmarked(isBookmarked)
                 .similarityScore(similarityScore)
                 .build();
     }

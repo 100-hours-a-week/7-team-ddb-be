@@ -29,7 +29,7 @@ public class BookmarkResponse {
         private Long placeId;
         private String name;
         private List<String> keyword;
-        private Boolean isBookmark;
+        private Boolean isBookmarked;
 
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
         private LocalDateTime createdAt;
@@ -45,7 +45,7 @@ public class BookmarkResponse {
                     .placeId(place.getId())
                     .name(place.getName())
                     .keyword(keywords)
-                    .isBookmark(true)
+                    .isBookmarked(true)
                     .createdAt(bookmark.getCreatedAt())
                     .build();
         }

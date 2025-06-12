@@ -29,7 +29,7 @@ public class PlaceSearchResponse {
         private String thumbnail;
         private Double distance;
         private Long momentCount;
-        private Boolean isBookmark;
+        private Boolean isBookmarked;
         private List<String> keywords;
         private Map<String, Object> location;
 
