@@ -92,4 +92,12 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
             "AND m.isPublic = true " +
             "GROUP BY m.placeId")
     List<Object[]> countPublicMomentsByPlaceIds(@Param("placeIds") List<Long> placeIds);
+
+    @Query("SELECT COUNT(m) FROM Moment m " +
+            "WHERE m.userId = :userId " +
+            "AND m.createdAt >= :startDate " +
+            "AND m.createdAt < :endDate")
+    long countByUserIdAndCreatedAtBetween(@Param("userId") Long userId,
+                                          @Param("startDate") LocalDateTime startDate,
+                                          @Param("endDate") LocalDateTime endDate);
 }
