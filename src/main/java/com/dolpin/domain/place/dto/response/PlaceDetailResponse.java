@@ -23,7 +23,7 @@ public class PlaceDetailResponse {
     private List<String> keywords;
     private String description;
     private String phone;
-
+    private Boolean isBookmark;
     private OpeningHours openingHours;
 
     private List<Menu> menu;
