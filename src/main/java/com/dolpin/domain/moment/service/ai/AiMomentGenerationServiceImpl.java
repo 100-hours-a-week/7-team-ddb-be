@@ -52,7 +52,7 @@ public class AiMomentGenerationServiceImpl implements AiMomentGenerationService 
         }
 
         // 2. 장소 세부 정보 조회
-        PlaceDetailResponse placeDetail = placeQueryService.getPlaceDetail(randomPlaceId);
+        PlaceDetailResponse placeDetail = placeQueryService.getPlaceDetailWithoutBookmark(randomPlaceId);
 
         // 3. 장소 정보를 AI에게 전달하여 기록 생성 요청
         AiMomentGenerationRequest aiRequest = buildAiRequest(placeDetail);
