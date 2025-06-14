@@ -19,7 +19,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Query("SELECT c FROM Comment c " +
             "WHERE c.momentId = :momentId " +
             "AND c.deletedAt IS NULL " +
-            "ORDER BY c.createdAt DESC")
+            "ORDER BY c.createdAt ASC")
     Page<Comment> findByMomentIdAndNotDeleted(@Param("momentId") Long momentId, Pageable pageable);
 
     // 네이티브 쿼리로 커서 기반 페이지네이션
@@ -55,16 +55,6 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     Optional<Comment> findByIdAndMomentIdAndNotDeleted(
             @Param("commentId") Long commentId,
             @Param("momentId") Long momentId);
-
-    // 특정 기록의 최근 댓글들
-    @Query("SELECT c FROM Comment c " +
-            "WHERE c.momentId = :momentId " +
-            "AND c.deletedAt IS NULL " +
-            "AND c.createdAt >= :since " +
-            "ORDER BY c.createdAt DESC")
-    List<Comment> findRecentCommentsByMomentId(
-            @Param("momentId") Long momentId,
-            @Param("since") LocalDateTime since);
 
     // 사용자가 작성한 댓글 목록
     @Query("SELECT c FROM Comment c " +
