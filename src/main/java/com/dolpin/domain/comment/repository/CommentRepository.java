@@ -26,8 +26,8 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Query(value = "SELECT * FROM comment c " +
             "WHERE c.moment_id = :momentId " +
             "AND c.deleted_at IS NULL " +
-            "AND (:cursor IS NULL OR c.created_at < CAST(:cursor AS timestamp)) " +
-            "ORDER BY c.created_at DESC " +
+            "AND (:cursor IS NULL OR c.created_at > CAST(:cursor AS timestamp)) " +
+            "ORDER BY c.created_at ASC " +
             "LIMIT :limit",
             nativeQuery = true)
     List<Comment> findByMomentIdAndNotDeletedWithCursorNative(
