@@ -27,7 +27,12 @@ public class StorageController {
     public ResponseEntity<ApiResponse<PresignedUrlResponse>> generateSignedUrl(
             @Valid @RequestBody PresignedUrlRequest presignedUrlRequest) {
 
-        // Spring Security 컨텍스트에서 인증 정보 가져오기
+        Long userId = getCurrentUserId();
+        PresignedUrlResponse response = storageService.generateSignedUrl(presignedUrlRequest, userId);
+        return ResponseEntity.ok(ApiResponse.success("presigned_url_generated_success", response));
+    }
+
+    private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated() ||
@@ -36,10 +41,6 @@ public class StorageController {
         }
 
         User userDetails = (User) authentication.getPrincipal();
-        Long userId = Long.parseLong(userDetails.getUsername());
-
-        PresignedUrlResponse response = storageService.generateSignedUrl(presignedUrlRequest, userId);
-        return ResponseEntity.ok(ApiResponse.success("presigned_url_generated_success", response));
-
+        return Long.parseLong(userDetails.getUsername());
     }
 }

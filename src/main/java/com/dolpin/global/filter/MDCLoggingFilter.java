@@ -19,7 +19,7 @@ import java.util.UUID;
 
 @Slf4j
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.LOWEST_PRECEDENCE) // 가장 나중에 실행되도록 변경
 public class MDCLoggingFilter extends OncePerRequestFilter {
 
     private static final String USER_ID_KEY = "userId";
@@ -42,8 +42,8 @@ public class MDCLoggingFilter extends OncePerRequestFilter {
             MDC.put(REQUEST_METHOD_KEY, request.getMethod());
             MDC.put(CLIENT_IP_KEY, getClientIpAddress(request));
 
-            // 사용자 ID 설정
-            setUserIdInMDC();
+            // 초기 사용자 ID 설정 (인증 전)
+            MDC.put(USER_ID_KEY, "processing");
 
             // 응답 헤더에 요청 ID 추가
             response.setHeader("X-Request-ID", requestId);
@@ -56,18 +56,22 @@ public class MDCLoggingFilter extends OncePerRequestFilter {
 
             long startTime = System.currentTimeMillis();
 
-            // 다음 필터 실행
+            // 다음 필터 실행 (인증 포함)
             filterChain.doFilter(request, response);
+
+            // 인증 완료 후 실제 사용자 ID 설정
+            setUserIdInMDC();
 
             // 요청 처리 시간 계산
             long duration = System.currentTimeMillis() - startTime;
 
-            // 요청 완료 로그
-            log.info("Request completed - {} {} - Status: {} - Duration: {}ms",
+            // 요청 완료 로그 (실제 사용자 ID와 함께)
+            log.info("Request completed - {} {} - Status: {} - Duration: {}ms - User: {}",
                     request.getMethod(),
                     request.getRequestURI(),
                     response.getStatus(),
-                    duration);
+                    duration,
+                    MDC.get(USER_ID_KEY));
 
         } finally {
             // MDC 정리 (메모리 누수 방지)
@@ -99,19 +103,21 @@ public class MDCLoggingFilter extends OncePerRequestFilter {
             if (authentication != null && authentication.isAuthenticated() &&
                     authentication.getPrincipal() instanceof UserDetails) {
                 UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-                MDC.put(USER_ID_KEY, userDetails.getUsername());
+                String userId = userDetails.getUsername();
+                MDC.put(USER_ID_KEY, userId);
+                log.debug("✅ User authenticated: {}", userId);
             } else {
                 MDC.put(USER_ID_KEY, "anonymous");
+                log.debug("❌ No authentication found");
             }
         } catch (Exception e) {
-            log.debug("Failed to set user ID in MDC", e);
+            log.debug("Failed to set user ID in MDC: {}", e.getMessage());
             MDC.put(USER_ID_KEY, "unknown");
         }
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
-
         String path = request.getRequestURI();
         return path.startsWith("/api/v1/health") ||
                 path.startsWith("/actuator") ||

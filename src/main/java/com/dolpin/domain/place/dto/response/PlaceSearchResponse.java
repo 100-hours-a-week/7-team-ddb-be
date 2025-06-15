@@ -27,10 +27,9 @@ public class PlaceSearchResponse {
         private Long id;
         private String name;
         private String thumbnail;
-        private String distance;
-
-        private String momentCount;
-
+        private Double distance;
+        private Long momentCount;
+        private Boolean isBookmarked;
         private List<String> keywords;
         private Map<String, Object> location;
 
