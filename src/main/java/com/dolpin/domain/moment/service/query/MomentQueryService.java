@@ -12,7 +12,7 @@ public interface MomentQueryService {
 
     MomentListResponse getUserMoments(Long targetUserId, Integer limit, String cursor);
 
-    PlaceMomentListResponse getPlaceMoments(Long placeId);
+    MomentListResponse getPlaceMoments(Long placeId, Integer limit, String cursor);
 
     MomentDetailResponse getMomentDetail(Long momentId, Long currentUserId);
 }

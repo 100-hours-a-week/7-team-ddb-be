@@ -79,18 +79,14 @@ public class MomentQueryServiceImpl implements MomentQueryService {
 
     @Override
     @Transactional(readOnly = true)
-    public PlaceMomentListResponse getPlaceMoments(Long placeId) {
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE);
-        Page<Moment> moments = momentRepository.findPublicMomentsByPlaceId(placeId, pageable);
+    public MomentListResponse getPlaceMoments(Long placeId, Integer limit, String cursor) {
+        int pageSize = validateAndGetLimit(limit);
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
-        List<PlaceMomentListResponse.PlaceMomentDto> momentDtos = moments.getContent().stream()
-                .map(this::buildPlaceMomentDto)
-                .collect(Collectors.toList());
+        List<Moment> moments = momentRepository.findPublicMomentsByPlaceIdNative(placeId, cursorString, queryLimit);
 
-        return PlaceMomentListResponse.builder()
-                .total(momentDtos.size())
-                .moments(momentDtos)
-                .build();
+        return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/places/" + placeId + "/moments");
     }
 
 
