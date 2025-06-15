@@ -50,11 +50,16 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
                                                   @Param("limit") int limit);
 
     // 특정 장소의 공개 Moment 목록 조회 (기존 유지)
-    @Query("SELECT m FROM Moment m " +
-            "WHERE m.placeId = :placeId " +
-            "AND m.isPublic = true " +
-            "ORDER BY m.createdAt DESC")
-    Page<Moment> findPublicMomentsByPlaceId(@Param("placeId") Long placeId, Pageable pageable);
+    @Query(value = "SELECT * FROM moment m " +
+            "WHERE m.place_id = :placeId " +
+            "AND m.is_public = true " +
+            "AND (:cursor IS NULL OR m.created_at < CAST(:cursor AS timestamp)) " +
+            "ORDER BY m.created_at DESC " +
+            "LIMIT :limit",
+            nativeQuery = true)
+    List<Moment> findPublicMomentsByPlaceIdNative(@Param("placeId") Long placeId,
+                                                  @Param("cursor") String cursor,
+                                                  @Param("limit") int limit);
 
     // 나머지 메서드들은 기존과 동일...
     @Modifying
