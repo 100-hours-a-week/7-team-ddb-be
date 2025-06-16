@@ -12,7 +12,7 @@ public class DolpinApplication {
 
 	@PostConstruct
 	public void startedTimeZoneSet() {
-		TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
+		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 	}
 
 	public static void main(String[] args) {
