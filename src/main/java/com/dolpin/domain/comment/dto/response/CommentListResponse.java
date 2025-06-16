@@ -32,7 +32,7 @@ public class CommentListResponse {
         private String content;
 
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
-        private LocalDateTime createdAt;  // 👈 이 부분에 추가!
+        private LocalDateTime createdAt;
 
         private Boolean isOwner;
     }
