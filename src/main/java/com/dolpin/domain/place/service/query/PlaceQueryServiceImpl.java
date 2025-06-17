@@ -6,6 +6,8 @@ import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.entity.PlaceHours;
 import com.dolpin.domain.place.repository.PlaceRepository;
+import com.dolpin.domain.place.service.cache.CachedPlaceSearchService;
+import com.dolpin.domain.place.service.cache.PlaceCacheService;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import com.dolpin.global.util.DayOfWeek;
@@ -33,6 +35,8 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     private final PlaceAiClient placeAiClient;
     private final MomentRepository momentRepository;
     private final PlaceBookmarkQueryService bookmarkQueryService;
+    private final PlaceCacheService placeCacheService;
+    private final CachedPlaceSearchService cachedPlaceSearchService;
 
     @Value("${place.search.default-radius}")
     private double defaultSearchRadius;
@@ -40,11 +44,19 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceCategoryResponse getAllCategories() {
-        List<String> categories = placeRepository.findDistinctCategories();
+        log.debug("Attempting to get categories from cache");
 
-        return PlaceCategoryResponse.builder()
-                .categories(categories)
-                .build();
+        try {
+            return placeCacheService.getAllCategoriesWithCache();
+        } catch (Exception e) {
+            log.warn("Cache error occurred, falling back to direct DB query: {}", e.getMessage());
+
+            // 캐시 실패 시 직접 DB 조회
+            List<String> categories = placeRepository.findDistinctCategories();
+            return PlaceCategoryResponse.builder()
+                    .categories(categories)
+                    .build();
+        }
     }
 
     @Override
@@ -375,6 +387,19 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByCategory(String category, Double lat, Double lng, Long userId) {
+        try {
+            // 캐시를 활용한 검색 시도
+            log.debug("Attempting cached category search for: {}", category);
+            return cachedPlaceSearchService.searchByCategoryWithCache(category, lat, lng, userId);
+        } catch (Exception e) {
+            log.warn("Cached search failed, falling back to original method: {}", e.getMessage());
+
+            // 캐시 실패 시 기존 로직으로 폴백
+            return searchByCategoryOriginal(category, lat, lng, userId);
+        }
+    }
+
+    private List<PlaceSearchResponse.PlaceDto> searchByCategoryOriginal(String category, Double lat, Double lng, Long userId) {
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
 
