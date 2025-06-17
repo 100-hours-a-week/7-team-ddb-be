@@ -92,4 +92,20 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     @Query(value = "SELECT id FROM place ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Long> findRandomPlaceIds(@Param("limit") int limit);
+
+    @Query("SELECT p FROM Place p " +
+            "LEFT JOIN FETCH p.keywords pk LEFT JOIN FETCH pk.keyword " +
+            "WHERE p.category = :category " +
+            "ORDER BY p.name")
+    List<Place> findByCategoryWithKeywords(@Param("category") String category);
+
+    default String generateLocationCacheKey(Double lat, Double lng, Double radius) {
+        // 0.01도 단위로 그리드 생성 (약 1km)
+        double gridSize = 0.01;
+        long latGrid = Math.round(lat / gridSize);
+        long lngGrid = Math.round(lng / gridSize);
+        long radiusGrid = Math.round(radius / 100); // 100m 단위
+
+        return String.format("grid_%d_%d_%d", latGrid, lngGrid, radiusGrid);
+    }
 }
