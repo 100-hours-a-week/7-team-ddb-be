@@ -37,20 +37,35 @@ public class CommentCommandServiceImpl implements CommentCommandService {
 
         User user = userQueryService.getUserById(userId);
 
-        Comment comment = Comment.builder()
+        // 댓글 생성
+        Comment.CommentBuilder commentBuilder = Comment.builder()
                 .momentId(momentId)
                 .userId(userId)
                 .content(request.getContent())
-                .build();
+                .depth(0);  // 기본값 설정
 
+        // 대댓글인 경우 부모 댓글 처리
+        if (request.getParentCommentId() != null) {
+            Comment parentComment = validateParentComment(request.getParentCommentId(), momentId);
+            commentBuilder.parentComment(parentComment)
+                    .depth(1);  // 대댓글은 depth 1
+        }
+
+        Comment comment = commentBuilder.build();
         Comment savedComment = commentRepository.save(comment);
 
-        log.info("Comment created: commentId={}, momentId={}, userId={}, isPrivate={}",
-                savedComment.getId(), momentId, userId, !moment.getIsPublic());
+        log.info("Comment created: commentId={}, momentId={}, userId={}, isReply={}",
+                savedComment.getId(), momentId, userId, savedComment.isReply());
 
         return CommentCreateResponse.from(savedComment, user, true);
     }
 
+    // 부모 댓글 유효성 검사 메서드 추가
+    private Comment validateParentComment(Long parentCommentId, Long momentId) {
+        return commentRepository.findValidParentComment(parentCommentId, momentId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.INVALID_PARAMETER
+                        .withMessage("유효하지 않은 부모 댓글입니다.")));
+    }
     @Override
     @Transactional
     public void deleteComment(Long momentId, Long commentId, Long userId) {
