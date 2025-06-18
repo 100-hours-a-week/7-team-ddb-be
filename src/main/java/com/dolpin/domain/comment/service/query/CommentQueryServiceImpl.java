@@ -129,6 +129,8 @@ public class CommentQueryServiceImpl implements CommentQueryService {
                         .profileImage(user.getImageUrl())
                         .build())
                 .content(comment.getContent())
+                .depth(comment.getDepth())
+                .parentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null)
                 .createdAt(comment.getCreatedAt())
                 .isOwner(comment.isOwnedBy(currentUserId))
                 .build();
