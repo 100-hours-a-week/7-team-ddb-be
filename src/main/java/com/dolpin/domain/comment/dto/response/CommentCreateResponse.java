@@ -18,6 +18,8 @@ public class CommentCreateResponse {
     private Long id;
     private UserDto user;
     private String content;
+    private Integer depth;
+    private Long parentCommentId;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private LocalDateTime createdAt;
@@ -48,6 +50,8 @@ public class CommentCreateResponse {
                 .id(comment.getId())
                 .user(UserDto.from(user))
                 .content(comment.getContent())
+                .depth(comment.getDepth())
+                .parentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null)
                 .createdAt(comment.getCreatedAt())
                 .isOwner(isOwner)
                 .momentId(comment.getMomentId())
