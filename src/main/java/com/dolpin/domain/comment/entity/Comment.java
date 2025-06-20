@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "comment")
@@ -26,6 +28,14 @@ public class Comment {
     @Column(nullable = false, length = 1000)
     private String content;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_comment_id")
+    private Comment parentComment;
+
+    @Column(name = "depth", nullable = false)
+    @Builder.Default
+    private Integer depth = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -47,13 +57,6 @@ public class Comment {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // 비즈니스 메서드
-    public void updateContent(String content) {
-        if (content != null && !content.trim().isEmpty()) {
-            this.content = content;
-        }
-    }
-
     public void softDelete() {
         this.deletedAt = LocalDateTime.now();
     }
@@ -72,5 +75,9 @@ public class Comment {
 
     public boolean canBeDeletedBy(Long userId) {
         return !isDeleted() && isOwnedBy(userId);
+    }
+
+    public boolean isReply() {
+        return this.parentComment != null;
     }
 }
