@@ -15,23 +15,37 @@ import java.util.Optional;
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 
-    // 전체 댓글 조회
-    @Query("SELECT c FROM Comment c " +
-            "WHERE c.momentId = :momentId " +
-            "AND c.deletedAt IS NULL " +
-            "ORDER BY " +
-            "CASE WHEN c.parentComment IS NULL THEN c.createdAt END ASC, " +
-            "c.parentComment.createdAt ASC, " +
-            "c.createdAt ASC")
-    Page<Comment> findByMomentIdAndNotDeleted(@Param("momentId") Long momentId, Pageable pageable);
-
-    // 전체 댓글 조회 - 커서 기반 페이지네이션
+    // 스레드 기반 정렬 - 첫 페이지용 (네이티브 쿼리)
     @Query(value = "SELECT * FROM comment c " +
             "WHERE c.moment_id = :momentId " +
             "AND c.deleted_at IS NULL " +
-            "AND (:cursor IS NULL OR c.created_at > CAST(:cursor AS timestamp)) " +
             "ORDER BY " +
-            "CASE WHEN c.parent_comment_id IS NULL THEN c.created_at END ASC, " +
+            "CASE WHEN c.parent_comment_id IS NULL THEN c.created_at " +
+            "     ELSE (SELECT parent.created_at FROM comment parent WHERE parent.id = c.parent_comment_id) " +
+            "END ASC, " +
+            "c.parent_comment_id ASC NULLS FIRST, " +
+            "c.created_at ASC " +
+            "LIMIT :limit OFFSET :offset",
+            nativeQuery = true)
+    List<Comment> findByMomentIdAndNotDeletedWithPagination(
+            @Param("momentId") Long momentId,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    // 스레드 기반 정렬 - 커서 기반 페이지네이션
+    @Query(value = "SELECT * FROM comment c " +
+            "WHERE c.moment_id = :momentId " +
+            "AND c.deleted_at IS NULL " +
+            "AND (:cursor IS NULL OR " +
+            "     CASE WHEN c.parent_comment_id IS NULL " +
+            "          THEN c.created_at > CAST(:cursor AS timestamp) " +
+            "          ELSE (SELECT parent.created_at FROM comment parent WHERE parent.id = c.parent_comment_id) > CAST(:cursor AS timestamp) " +
+            "     END) " +
+            "ORDER BY " +
+            "CASE WHEN c.parent_comment_id IS NULL THEN c.created_at " +
+            "     ELSE (SELECT parent.created_at FROM comment parent WHERE parent.id = c.parent_comment_id) " +
+            "END ASC, " +
+            "c.parent_comment_id ASC NULLS FIRST, " +
             "c.created_at ASC " +
             "LIMIT :limit",
             nativeQuery = true)
@@ -40,7 +54,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             @Param("cursor") String cursor,
             @Param("limit") int limit);
 
-    // 부모 댓글 유효성 검사
+    // 나머지 메서드들은 그대로 유지
     @Query("SELECT c FROM Comment c " +
             "WHERE c.id = :commentId " +
             "AND c.momentId = :momentId " +

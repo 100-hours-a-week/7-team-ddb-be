@@ -42,18 +42,16 @@ public class CommentQueryServiceImpl implements CommentQueryService {
         Moment moment = validateMomentAccess(momentId, currentUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor; // String 그대로 사용
         int queryLimit = pageSize + 1; // hasNext 판단용
 
         List<Comment> comments;
 
-        if (cursorString != null && !cursorString.trim().isEmpty()) {
+        if (cursor != null && !cursor.trim().isEmpty()) {
             // 커서 기반 페이지네이션 (네이티브 쿼리)
-            comments = commentRepository.findByMomentIdAndNotDeletedWithCursorNative(momentId, cursorString, queryLimit);
+            comments = commentRepository.findByMomentIdAndNotDeletedWithCursorNative(momentId, cursor, queryLimit);
         } else {
-            // 첫 페이지 조회 (기존 JPQL 쿼리 사용)
-            Pageable pageable = PageRequest.of(0, queryLimit);
-            comments = commentRepository.findByMomentIdAndNotDeleted(momentId, pageable).getContent();
+            // 첫 페이지 조회 - 스레드 정렬 사용
+            comments = commentRepository.findByMomentIdAndNotDeletedWithPagination(momentId, queryLimit, 0);
         }
 
         return buildCommentListResponse(comments, pageSize, currentUserId, momentId);
