@@ -4,25 +4,23 @@ import com.dolpin.domain.place.dto.response.PlaceAiResponse;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import com.dolpin.global.ratelimit.RateLimiter;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class PlaceAiClient {
 
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+    private final WebClient webClient;
     private final RateLimiter rateLimiter;
 
     @Value("${ai.service.url}")
@@ -36,63 +34,66 @@ public class PlaceAiClient {
         rateLimiter.init();
     }
 
+    // 기존 동기 버전 (호환성 유지)
     public PlaceAiResponse recommendPlaces(String query) {
+        return recommendPlacesAsync(query).block();
+    }
+
+    // 토큰 지원 동기 버전 (호환성 유지)
+    public PlaceAiResponse recommendPlaces(String query, String token) {
+        return recommendPlacesAsync(query, token).block();
+    }
+
+    // 새로운 비동기 버전
+    public Mono<PlaceAiResponse> recommendPlacesAsync(String query) {
         // 레이트 리밋 검사
         if (rateLimitEnabled && !rateLimiter.allowRequest("ai-service")) {
-            int remainingTime = 60;
-
-            throw new BusinessException(
+            return Mono.error(new BusinessException(
                     ResponseStatus.TOO_MANY_REQUESTS,
-                    "AI 서비스 요청 한도를 초과했습니다. " + remainingTime + "초 후에 다시 시도해주세요."
-            );
+                    "AI 서비스 요청 한도를 초과했습니다. 60초 후에 다시 시도해주세요."
+            ));
         }
 
-        return executeAiRequest(query);
+        return executeAiRequestAsync(query);
     }
 
-    // 토큰 지원
-    public PlaceAiResponse recommendPlaces(String query, String token) {
+    // 토큰 지원 비동기 버전
+    public Mono<PlaceAiResponse> recommendPlacesAsync(String query, String token) {
         // 레이트 리밋 검사 (토큰 전달)
         if (rateLimitEnabled && !rateLimiter.allowRequest("ai-service", token)) {
-            int remainingTime = 60;
-
-            throw new BusinessException(
+            return Mono.error(new BusinessException(
                     ResponseStatus.TOO_MANY_REQUESTS,
-                    "AI 서비스 요청 한도를 초과했습니다. " + remainingTime + "초 후에 다시 시도해주세요."
-            );
+                    "AI 서비스 요청 한도를 초과했습니다. 60초 후에 다시 시도해주세요."
+            ));
         }
 
-        return executeAiRequest(query);
+        return executeAiRequestAsync(query);
     }
 
-    // 공통 AI 요청 로직 (중복 제거)
-    private PlaceAiResponse executeAiRequest(String query) {
-        String requestUrl = String.format("%s/v1/recommend?text=%s", aiServiceUrl, query);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Content-Type", "application/json");
-
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    requestUrl,
-                    HttpMethod.GET,
-                    new HttpEntity<>(headers),
-                    String.class
-            );
-
-            PlaceAiResponse responseBody = objectMapper.readValue(response.getBody(), PlaceAiResponse.class);
-            return responseBody;
-
-        } catch (HttpClientErrorException | HttpServerErrorException e) {
-            log.error("Error from AI service: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
-            throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 에러가 발생했습니다");
-        } catch (JsonProcessingException e) {
-            log.error("Failed to parse AI service response: {}", e.getMessage());
-            throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 응답 처리 중 오류가 발생했습니다");
-        } catch (Exception e) {
-            log.error("Error while calling AI service: {}", e.getMessage());
-            throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 연결 중 오류가 발생했습니다");
-        }
+    // 공통 비동기 AI 요청 로직
+    private Mono<PlaceAiResponse> executeAiRequestAsync(String query) {
+        return webClient.get()
+                .uri(aiServiceUrl + "/v1/recommend?text={query}", query)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError,
+                        response -> {
+                            log.error("AI service client error: {}", response.statusCode());
+                            return Mono.error(new BusinessException(
+                                    ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 클라이언트 에러"));
+                        })
+                .onStatus(HttpStatusCode::is5xxServerError,
+                        response -> {
+                            log.error("AI service server error: {}", response.statusCode());
+                            return Mono.error(new BusinessException(
+                                    ResponseStatus.INTERNAL_SERVER_ERROR, "AI 서비스 서버 에러"));
+                        })
+                .bodyToMono(PlaceAiResponse.class)
+                .timeout(Duration.ofSeconds(30))
+                .retry(2)
+                .doOnSuccess(response -> log.debug("AI 요청 성공: query={}", query))
+                .doOnError(error -> log.error("AI 요청 실패: query={}, error={}", query, error.getMessage()));
     }
 
     public int getRemainingRequests() {
