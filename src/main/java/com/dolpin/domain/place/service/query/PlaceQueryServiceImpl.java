@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -95,15 +96,18 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByQueryWithTransactionSeparation(String query, Double lat, Double lng, String devToken, Long userId) {
-        // 1단계: DB 검색 (짧은 트랜잭션)
         List<Long> dbSearchIds = executeDbSearch(query);
 
-        // 2단계: AI 호출 (트랜잭션 없음)
-        PlaceAiResponse aiResponse = devToken != null
-                ? executeAiSearchWithDevToken(query, devToken)
-                : executeAiSearch(query);
+        PlaceAiResponse aiResponse = null;
+        try {
+            aiResponse = devToken != null
+                    ? executeAiSearchWithDevToken(query, devToken)
+                    : executeAiSearch(query);
+        } catch (Exception e) {
+            // AI 실패는 로깅만 하고 계속 진행 (글로벌 핸들러가 이미 처리함)
+            log.warn("AI 검색 실패, db검색만 반환. Query: {}", query);
+        }
 
-        // 3단계: 결과 처리 (새로운 짧은 트랜잭션)
         return processSearchResults(dbSearchIds, aiResponse, lat, lng, userId);
     }
 
@@ -111,38 +115,32 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Transactional(readOnly = true)
     protected List<Long> executeDbSearch(String query) {
         List<Long> dbSearchIds = placeRepository.findPlaceIdsByNameContaining(query);
-        log.info("DB search found {} places for query: {}", dbSearchIds.size(), query);
+        log.info("DB에서 찾은 장소 {} 쿼리: {}", dbSearchIds.size(), query);
         return dbSearchIds;
     }
 
-    // 2단계: AI 검색
     private PlaceAiResponse executeAiSearch(String query) {
-        try {
-            PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query);
-            log.info("AI service found {} places, suggested category: {}",
-                    aiResponse != null && aiResponse.getRecommendations() != null ?
-                            aiResponse.getRecommendations().size() : 0,
-                    aiResponse != null ? aiResponse.getPlaceCategory() : null);
-            return aiResponse;
-        } catch (Exception e) {
-            log.error("AI search failed for query: {}, error: {}", query, e.getMessage());
-            return null; // AI 실패해도 DB 검색 결과는 반환
-        }
+        PlaceAiResponse aiResponse = placeAiClient.recommendPlacesAsync(query)
+                .timeout(Duration.ofSeconds(30))
+                .block();
+
+        log.info("AI service found {} places, suggested category: {}",
+                aiResponse != null && aiResponse.getRecommendations() != null ?
+                        aiResponse.getRecommendations().size() : 0,
+                aiResponse != null ? aiResponse.getPlaceCategory() : null);
+        return aiResponse;
     }
 
-    // 2단계: AI 검색 with dev token
     private PlaceAiResponse executeAiSearchWithDevToken(String query, String devToken) {
-        try {
-            PlaceAiResponse aiResponse = placeAiClient.recommendPlaces(query, devToken);
-            log.info("DEV: AI service found {} places with token bypass, suggested category: {}",
-                    aiResponse != null && aiResponse.getRecommendations() != null ?
-                            aiResponse.getRecommendations().size() : 0,
-                    aiResponse != null ? aiResponse.getPlaceCategory() : null);
-            return aiResponse;
-        } catch (Exception e) {
-            log.error("AI search with dev token failed for query: {}, error: {}", query, e.getMessage());
-            return null;
-        }
+        PlaceAiResponse aiResponse = placeAiClient.recommendPlacesAsync(query, devToken)
+                .timeout(Duration.ofSeconds(30))
+                .block();
+
+        log.info("DEV: AI service found {} places with token bypass, suggested category: {}",
+                aiResponse != null && aiResponse.getRecommendations() != null ?
+                        aiResponse.getRecommendations().size() : 0,
+                aiResponse != null ? aiResponse.getPlaceCategory() : null);
+        return aiResponse;
     }
 
     // 3단계: 결과 처리
