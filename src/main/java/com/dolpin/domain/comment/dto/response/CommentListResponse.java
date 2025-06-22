@@ -30,6 +30,8 @@ public class CommentListResponse {
         private Long id;
         private UserDto user;
         private String content;
+        private Integer depth;
+        private Long parentCommentId;
 
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
         private LocalDateTime createdAt;

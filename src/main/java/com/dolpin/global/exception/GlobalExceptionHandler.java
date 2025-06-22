@@ -5,8 +5,13 @@ import com.dolpin.global.response.ResponseStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
@@ -27,6 +32,35 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getResponseStatus()));
     }
 
+    // Validation 예외 처리 추가
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
+        log.warn("Validation exception occurred: {}", e.getMessage());
+
+        // 첫 번째 필드 에러 메시지를 사용하거나, 모든 에러를 조합
+        String errorMessage = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(errorMessage)));
+    }
+
+    // 타입 변환 예외 처리 추가
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        log.warn("Type mismatch exception occurred: {}", e.getMessage());
+
+        String parameterName = e.getName();
+        String expectedType = e.getRequiredType() != null ? e.getRequiredType().getSimpleName() : "Unknown";
+        String errorMessage = String.format("Parameter '%s' should be of type %s", parameterName, expectedType);
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(errorMessage)));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException e) {
         log.warn("Illegal argument exception occurred: {}", e.getMessage());
@@ -35,7 +69,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(e.getMessage())));
     }
 
-    // PostgreSQL 관련 예외 처리 추가
+    // PostgreSQL 관련 예외 처리
     @ExceptionHandler(org.springframework.dao.InvalidDataAccessResourceUsageException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataAccessException(
             org.springframework.dao.InvalidDataAccessResourceUsageException e) {
@@ -55,7 +89,7 @@ public class GlobalExceptionHandler {
                         .withMessage("데이터베이스 접근 중 오류가 발생했습니다.")));
     }
 
-    // JPA/Hibernate 예외 처리 추가
+    // JPA/Hibernate 예외 처리
     @ExceptionHandler(org.hibernate.exception.SQLGrammarException.class)
     public ResponseEntity<ApiResponse<Object>> handleSQLGrammarException(
             org.hibernate.exception.SQLGrammarException e) {
