@@ -16,6 +16,8 @@ import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -42,27 +44,41 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Transactional(readOnly = true)
     public PlaceCategoryResponse getAllCategories() {
         List<String> categories = placeRepository.findDistinctCategories();
-
         return PlaceCategoryResponse.builder()
                 .categories(categories)
                 .build();
     }
 
     @Override
-    public PlaceSearchResponse searchPlaces(String query, Double lat, Double lng, String category, Long userId) {
-        return executeSearchLogic(query, lat, lng, category, userId, null);
+    public Mono<PlaceSearchResponse> searchPlacesAsync(String query, Double lat, Double lng, String category, Long userId) {
+        return executeSearchLogicAsync(query, lat, lng, category, userId, null);
     }
 
     @Override
-    public PlaceSearchResponse searchPlacesWithDevToken(String query, Double lat, Double lng, String category, String devToken, Long userId) {
-        return executeSearchLogic(query, lat, lng, category, userId, devToken);
+    public Mono<PlaceSearchResponse> searchPlacesWithDevTokenAsync(String query, Double lat, Double lng, String category, String devToken, Long userId) {
+        return executeSearchLogicAsync(query, lat, lng, category, userId, devToken);
     }
 
-    private PlaceSearchResponse executeSearchLogic(String query, Double lat, Double lng, String category, Long userId, String devToken) {
+    private Mono<PlaceSearchResponse> executeSearchLogicAsync(String query, Double lat, Double lng, String category, Long userId, String devToken) {
+
+        return Mono.fromCallable(() -> validateSearchParams(query, category, lat, lng))
+                .flatMap(validationResult -> {
+                    if (query != null && !query.trim().isEmpty()) {
+                        return searchByQueryAsync(query, lat, lng, devToken, userId);
+                    } else {
+                        return searchByCategoryAsync(category, lat, lng, userId);
+                    }
+                })
+                .map(placeDtos -> PlaceSearchResponse.builder()
+                        .total(placeDtos.size())
+                        .places(placeDtos)
+                        .build());
+    }
+
+    private Boolean validateSearchParams(String query, String category, Double lat, Double lng) {
         boolean hasQuery = StringUtils.isNotBlank(query);
         boolean hasCategory = StringUtils.isNotBlank(category);
 
-        // 검증 로직
         if (hasQuery && hasCategory) {
             throw new BusinessException(
                     ResponseStatus.INVALID_PARAMETER,
@@ -81,37 +97,44 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                     "위치 정보가 필요합니다");
         }
 
-        List<PlaceSearchResponse.PlaceDto> placeDtos;
-
-        if (query != null && !query.trim().isEmpty()) {
-            placeDtos = searchByQueryWithTransactionSeparation(query, lat, lng, devToken, userId);
-        } else {
-            placeDtos = searchByCategoryWithTransaction(category, lat, lng, userId);
-        }
-
-        return PlaceSearchResponse.builder()
-                .total(placeDtos.size())
-                .places(placeDtos)
-                .build();
+        return true;
     }
 
-    private List<PlaceSearchResponse.PlaceDto> searchByQueryWithTransactionSeparation(String query, Double lat, Double lng, String devToken, Long userId) {
-        List<Long> dbSearchIds = executeDbSearch(query);
+    private Mono<List<PlaceSearchResponse.PlaceDto>> searchByQueryAsync(String query, Double lat, Double lng, String devToken, Long userId) {
+        // 1. DB 검색
+        Mono<List<Long>> dbSearchMono = Mono.fromCallable(() -> executeDbSearch(query))
+                .subscribeOn(Schedulers.boundedElastic());
 
-        PlaceAiResponse aiResponse = null;
-        try {
-            aiResponse = devToken != null
-                    ? executeAiSearchWithDevToken(query, devToken)
-                    : executeAiSearch(query);
-        } catch (Exception e) {
-            // AI 실패는 로깅만 하고 계속 진행 (글로벌 핸들러가 이미 처리함)
-            log.warn("AI 검색 실패, db검색만 반환. Query: {}", query);
-        }
+        // 2. AI 검색
+        Mono<PlaceAiResponse> aiSearchMono = devToken != null
+                ? placeAiClient.recommendPlacesAsync(query, devToken)
+                : placeAiClient.recommendPlacesAsync(query);
 
-        return processSearchResults(dbSearchIds, aiResponse, lat, lng, userId);
+        // 3. AI 검색 실패 시 null로 처리
+        aiSearchMono = aiSearchMono
+                .onErrorResume(throwable -> {
+                    log.warn("AI 검색 실패, db검색만 반환. Query: {}, Error: {}", query, throwable.getMessage());
+                    return Mono.just(new PlaceAiResponse()); // 빈 응답으로 처리
+                });
+
+        // 4. 두 검색 결과를 병합하고 처리
+        return Mono.zip(dbSearchMono, aiSearchMono)
+                .flatMap(tuple -> {
+                    List<Long> dbSearchIds = tuple.getT1();
+                    PlaceAiResponse aiResponse = tuple.getT2();
+
+                    // 결과 처리를 비동기로 변환
+                    return Mono.fromCallable(() -> processSearchResults(dbSearchIds, aiResponse, lat, lng, userId))
+                            .subscribeOn(Schedulers.boundedElastic());
+                });
     }
 
-    // 1단계: DB 검색만 (짧은 트랜잭션)
+    private Mono<List<PlaceSearchResponse.PlaceDto>> searchByCategoryAsync(String category, Double lat, Double lng, Long userId) {
+        return Mono.fromCallable(() -> searchByCategory(category, lat, lng, userId))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    // DB 검색 메서드
     @Transactional(readOnly = true)
     protected List<Long> executeDbSearch(String query) {
         List<Long> dbSearchIds = placeRepository.findPlaceIdsByNameContaining(query);
@@ -119,34 +142,9 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         return dbSearchIds;
     }
 
-    private PlaceAiResponse executeAiSearch(String query) {
-        PlaceAiResponse aiResponse = placeAiClient.recommendPlacesAsync(query)
-                .timeout(Duration.ofSeconds(30))
-                .block();
-
-        log.info("AI service found {} places, suggested category: {}",
-                aiResponse != null && aiResponse.getRecommendations() != null ?
-                        aiResponse.getRecommendations().size() : 0,
-                aiResponse != null ? aiResponse.getPlaceCategory() : null);
-        return aiResponse;
-    }
-
-    private PlaceAiResponse executeAiSearchWithDevToken(String query, String devToken) {
-        PlaceAiResponse aiResponse = placeAiClient.recommendPlacesAsync(query, devToken)
-                .timeout(Duration.ofSeconds(30))
-                .block();
-
-        log.info("DEV: AI service found {} places with token bypass, suggested category: {}",
-                aiResponse != null && aiResponse.getRecommendations() != null ?
-                        aiResponse.getRecommendations().size() : 0,
-                aiResponse != null ? aiResponse.getPlaceCategory() : null);
-        return aiResponse;
-    }
-
-    // 3단계: 결과 처리
+    // 결과 처리 메서드
     @Transactional(readOnly = true)
     protected List<PlaceSearchResponse.PlaceDto> processSearchResults(List<Long> dbSearchIds, PlaceAiResponse aiResponse, Double lat, Double lng, Long userId) {
-        // 기존 로직 그대로 사용하되 트랜잭션 내에서 실행
         List<Long> aiRecommendedIds = new ArrayList<>();
         Map<Long, Double> similarityScores = new HashMap<>();
         Map<Long, List<String>> keywordsByPlaceId = new HashMap<>();
@@ -191,25 +189,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
         return result;
     }
 
-    // 카테고리 검색
-    @Transactional(readOnly = true)
-    protected List<PlaceSearchResponse.PlaceDto> searchByCategoryWithTransaction(String category, Double lat, Double lng, Long userId) {
-        return searchByCategory(category, lat, lng, userId);
-    }
-
-    // 카테고리 필터링
-    private List<Long> filterByCategoryInTransaction(List<Long> placeIds, String category) {
-        if (placeIds.isEmpty()) {
-            return placeIds;
-        }
-
-        // 장소 ID들의 카테고리를 조회해서 필터링
-        return placeRepository.findAllById(placeIds).stream()
-                .filter(place -> category.equals(place.getCategory()))
-                .map(Place::getId)
-                .collect(Collectors.toList());
-    }
-
     @Override
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetail(Long placeId, Long userId) {
@@ -220,6 +199,17 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetailWithoutBookmark(Long placeId) {
         return getPlaceDetailInternal(placeId, null);
+    }
+
+    private List<Long> filterByCategoryInTransaction(List<Long> placeIds, String category) {
+        if (placeIds.isEmpty()) {
+            return placeIds;
+        }
+
+        return placeRepository.findAllById(placeIds).stream()
+                .filter(place -> category.equals(place.getCategory()))
+                .map(Place::getId)
+                .collect(Collectors.toList());
     }
 
     private PlaceDetailResponse getPlaceDetailInternal(Long placeId, Long userId) {
@@ -262,7 +252,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .schedules(schedules)
                 .build();
 
-        // 북마크 여부 확인 (userId가 있을 때만)
         Boolean isBookmarked = userId != null ? bookmarkQueryService.isBookmarked(userId, placeId) : null;
 
         return PlaceDetailResponse.builder()
@@ -317,8 +306,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .collect(Collectors.toList());
 
         Map<Long, Long> momentCountMap = getMomentCountMap(filteredPlaceIds);
-
-        // 북마크 상태 일괄 조회
         Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService.getBookmarkStatusMap(userId, filteredPlaceIds);
 
         Map<Long, Double> distanceMap = nearbyPlaces.stream()
@@ -381,8 +368,6 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
                 .collect(Collectors.toList());
 
         Map<Long, Long> momentCountMap = getMomentCountMap(placeIds);
-
-        // 북마크 상태 일괄 조회
         Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService.getBookmarkStatusMap(userId, placeIds);
 
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
