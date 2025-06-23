@@ -34,16 +34,6 @@ public class PlaceAiClient {
         rateLimiter.init();
     }
 
-    // 기존 동기 버전 (호환성 유지)
-    public PlaceAiResponse recommendPlaces(String query) {
-        return recommendPlacesAsync(query).block();
-    }
-
-    // 토큰 지원 동기 버전 (호환성 유지)
-    public PlaceAiResponse recommendPlaces(String query, String token) {
-        return recommendPlacesAsync(query, token).block();
-    }
-
     // 새로운 비동기 버전
     public Mono<PlaceAiResponse> recommendPlacesAsync(String query) {
         // 레이트 리밋 검사
