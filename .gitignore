@@ -54,3 +54,6 @@ logs/
 
 # 백업 로그 파일들
 *.bak
+
+# redis
+/redis
