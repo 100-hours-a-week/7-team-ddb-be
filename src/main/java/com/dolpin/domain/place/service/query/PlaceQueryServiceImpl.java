@@ -6,6 +6,7 @@ import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.entity.PlaceHours;
 import com.dolpin.domain.place.repository.PlaceRepository;
+import com.dolpin.domain.place.service.cache.PlaceCacheService;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import com.dolpin.global.util.DayOfWeek;
@@ -36,6 +37,7 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     private final PlaceAiClient placeAiClient;
     private final MomentRepository momentRepository;
     private final PlaceBookmarkQueryService bookmarkQueryService;
+    private final PlaceCacheService placeCacheService;
 
     @Value("${place.search.default-radius}")
     private double defaultSearchRadius;
@@ -43,7 +45,22 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceCategoryResponse getAllCategories() {
+        // 1. 캐시에서 조회
+        List<String> cachedCategories = placeCacheService.getCachedCategories();
+        if (cachedCategories != null) {
+            log.debug("카테고리 목록 캐시 히트: count={}", cachedCategories.size());
+            return PlaceCategoryResponse.builder()
+                    .categories(cachedCategories)
+                    .build();
+        }
+
+        // 2. 캐시 미스: DB 조회 후 캐시 저장
+        log.debug("카테고리 목록 DB 조회");
         List<String> categories = placeRepository.findDistinctCategories();
+
+        // 3. 캐시 저장 (비동기)
+        placeCacheService.cacheCategories(categories);
+
         return PlaceCategoryResponse.builder()
                 .categories(categories)
                 .build();
@@ -360,58 +377,121 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     }
 
     private List<PlaceSearchResponse.PlaceDto> searchByCategory(String category, Double lat, Double lng, Long userId) {
+        // 1. 캐시에서 조회
+        List<PlaceCacheService.CategorySearchCacheItem> cachedItems =
+                placeCacheService.getCachedCategorySearchResult(category, lat, lng);
+
+        if (cachedItems != null) {
+            // 캐시 히트: 북마크 상태만 실시간으로 업데이트
+            return processCachedCategorySearchResult(cachedItems, userId);
+        }
+
+        // 2. 캐시 미스: DB 조회 후 캐시 저장
+        return loadCategorySearchFromDbAndCache(category, lat, lng, userId);
+    }
+
+    /**
+     * 캐시된 카테고리 검색 결과 처리
+     */
+    private List<PlaceSearchResponse.PlaceDto> processCachedCategorySearchResult(
+            List<PlaceCacheService.CategorySearchCacheItem> cachedItems, Long userId) {
+
+        if (cachedItems.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 북마크 상태만 실시간으로 조회
+        List<Long> placeIds = cachedItems.stream()
+                .map(PlaceCacheService.CategorySearchCacheItem::getPlaceId)
+                .collect(Collectors.toList());
+
+        Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService.getBookmarkStatusMap(userId, placeIds);
+
+        return cachedItems.stream()
+                .map(item -> convertCacheItemToDto(item, bookmarkStatusMap.getOrDefault(item.getPlaceId(), false)))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * DB에서 카테고리 검색 후 캐시 저장
+     */
+    private List<PlaceSearchResponse.PlaceDto> loadCategorySearchFromDbAndCache(
+            String category, Double lat, Double lng, Long userId) {
+
+        log.debug("카테고리 검색 DB 조회: category={}, lat={}, lng={}", category, lat, lng);
+
+        // DB 조회
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, lat, lng, defaultSearchRadius);
+
+        if (searchResults.isEmpty()) {
+            // 빈 결과도 캐시에 저장 (불필요한 반복 DB 조회 방지)
+            placeCacheService.cacheCategorySearchResult(category, lat, lng, Collections.emptyList());
+            return Collections.emptyList();
+        }
 
         List<Long> placeIds = searchResults.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
 
+        // 추가 데이터 조회
         Map<Long, Long> momentCountMap = getMomentCountMap(placeIds);
         Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService.getBookmarkStatusMap(userId, placeIds);
-
         List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
-
         Map<Long, Place> placeMap = placesWithKeywords.stream()
                 .collect(Collectors.toMap(Place::getId, place -> place));
 
-        return searchResults.stream()
+        // 캐시 아이템 생성
+        List<PlaceCacheService.CategorySearchCacheItem> cacheItems = searchResults.stream()
                 .map(placeWithDistance -> {
                     Place place = placeMap.get(placeWithDistance.getId());
-                    Boolean isBookmarked = bookmarkStatusMap.getOrDefault(placeWithDistance.getId(), false);
+                    List<String> keywords = place != null ?
+                            place.getKeywords().stream()
+                                    .map(pk -> pk.getKeyword().getKeyword())
+                                    .collect(Collectors.toList()) :
+                            Collections.emptyList();
 
-                    if (place != null) {
-                        List<String> keywords = place.getKeywords().stream()
-                                .map(pk -> pk.getKeyword().getKeyword())
-                                .collect(Collectors.toList());
-
-                        return convertToPlaceDtoFromProjection(placeWithDistance, keywords, momentCountMap, isBookmarked);
-                    } else {
-                        return convertToPlaceDtoFromProjection(placeWithDistance, Collections.emptyList(), momentCountMap, isBookmarked);
-                    }
+                    return PlaceCacheService.CategorySearchCacheItem.builder()
+                            .placeId(placeWithDistance.getId())
+                            .placeName(placeWithDistance.getName())
+                            .thumbnail(placeWithDistance.getImageUrl())
+                            .distance(convertDistance(placeWithDistance.getDistance()))
+                            .longitude(placeWithDistance.getLongitude())
+                            .latitude(placeWithDistance.getLatitude())
+                            .category(category)
+                            .keywords(keywords)
+                            .momentCount(momentCountMap.getOrDefault(placeWithDistance.getId(), 0L))
+                            .isBookmarked(null) // 캐시에는 북마크 상태 저장하지 않음 (사용자별로 다름)
+                            .build();
                 })
+                .collect(Collectors.toList());
+
+        // 캐시 저장 (비동기)
+        placeCacheService.cacheCategorySearchResult(category, lat, lng, cacheItems);
+
+        // DTO 변환 및 반환
+        return cacheItems.stream()
+                .map(item -> convertCacheItemToDto(item, bookmarkStatusMap.getOrDefault(item.getPlaceId(), false)))
                 .collect(Collectors.toList());
     }
 
-    private PlaceSearchResponse.PlaceDto convertToPlaceDtoFromProjection(
-            PlaceWithDistance placeWithDistance, List<String> keywords, Map<Long, Long> momentCountMap, Boolean isBookmarked) {
-        Double convertedDistance = convertDistance(placeWithDistance.getDistance());
-        Long momentCount = momentCountMap.getOrDefault(placeWithDistance.getId(), 0L);
+    /**
+     * 캐시 아이템을 DTO로 변환
+     */
+    private PlaceSearchResponse.PlaceDto convertCacheItemToDto(
+            PlaceCacheService.CategorySearchCacheItem cacheItem, Boolean isBookmarked) {
 
         Map<String, Object> locationMap = new HashMap<>();
         locationMap.put("type", "Point");
-        locationMap.put("coordinates", new double[]{
-                placeWithDistance.getLongitude(),
-                placeWithDistance.getLatitude()
-        });
+        locationMap.put("coordinates", new double[]{cacheItem.getLongitude(), cacheItem.getLatitude()});
 
         return PlaceSearchResponse.PlaceDto.builder()
-                .id(placeWithDistance.getId())
-                .name(placeWithDistance.getName())
-                .thumbnail(placeWithDistance.getImageUrl())
-                .distance(convertedDistance)
-                .momentCount(momentCount)
-                .keywords(keywords)
+                .id(cacheItem.getPlaceId())
+                .name(cacheItem.getPlaceName())
+                .thumbnail(cacheItem.getThumbnail())
+                .distance(cacheItem.getDistance())
+                .momentCount(cacheItem.getMomentCount())
+                .keywords(cacheItem.getKeywords())
                 .location(locationMap)
                 .isBookmarked(isBookmarked)
                 .similarityScore(null)
