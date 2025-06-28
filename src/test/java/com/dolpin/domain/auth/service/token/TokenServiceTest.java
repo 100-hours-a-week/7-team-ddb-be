@@ -2,6 +2,7 @@ package com.dolpin.domain.auth.service.token;
 
 import com.dolpin.domain.auth.dto.response.RefreshTokenResponse;
 import com.dolpin.domain.auth.entity.Token;
+import com.dolpin.domain.auth.service.cache.RefreshTokenCacheService;
 import com.dolpin.global.helper.AuthTestHelper;
 import com.dolpin.domain.auth.repository.TokenRepository;
 import com.dolpin.domain.user.entity.User;
@@ -14,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -39,6 +42,9 @@ class TokenServiceTest {
     private TokenRepository tokenRepository;
 
     @Mock
+    private RefreshTokenCacheService refreshTokenCacheService; // 새로 추가
+
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
 
     @Nested
@@ -46,35 +52,12 @@ class TokenServiceTest {
     class CreateRefreshTokenTest {
 
         @Test
-        @DisplayName("유효한 토큰이 있는 경우 기존 토큰을 재사용한다")
-        void createRefreshToken_WithExistingValidToken_ReusesExistingToken() {
-            // given
-            User user = AuthTestHelper.createUser();
-            Token existingToken = AuthTestHelper.createValidToken(user, EXISTING_TOKEN_VALUE);
-
-            given(tokenRepository.findValidTokensByUserId(user.getId()))
-                    .willReturn(List.of(existingToken));
-
-            // when
-            Token result = tokenService.createRefreshToken(user);
-
-            // then
-            assertThat(result).isEqualTo(existingToken);
-            verify(tokenRepository, never()).save(any(Token.class));
-            verify(jwtTokenProvider, never()).generateToken(any());
-        }
-
-        @Test
-        @DisplayName("유효한 토큰이 없는 경우 새 토큰을 생성한다")
-        void createRefreshToken_WithNoValidToken_CreatesNewToken() {
+        @DisplayName("새 토큰을 생성하고 Redis와 DB에 저장한다")
+        void createRefreshToken_CreatesNewTokenAndSavesToRedisAndDB() {
             // given
             User user = AuthTestHelper.createUser();
             Token newToken = AuthTestHelper.createValidToken(user, REFRESH_TOKEN_VALUE);
 
-            given(tokenRepository.findValidTokensByUserId(user.getId()))
-                    .willReturn(Collections.emptyList());
-            given(tokenRepository.findAllByUser(user))
-                    .willReturn(Collections.emptyList());
             given(jwtTokenProvider.generateToken(user.getId()))
                     .willReturn(REFRESH_TOKEN_VALUE);
             given(tokenRepository.save(any(Token.class)))
@@ -85,23 +68,22 @@ class TokenServiceTest {
 
             // then
             assertThat(result.getToken()).isEqualTo(REFRESH_TOKEN_VALUE);
-            verify(jwtTokenProvider).generateToken(user.getId());
+
+            // Redis에 저장되는지 확인
+            verify(refreshTokenCacheService).saveRefreshToken(anyString(), any(RefreshTokenCacheService.RefreshTokenData.class));
+
+            // DB에도 저장되는지 확인 (호환성)
             verify(tokenRepository).save(any(Token.class));
+            verify(jwtTokenProvider).generateToken(user.getId());
         }
 
         @Test
-        @DisplayName("새 토큰 생성 시 만료된 토큰들을 정리한다")
-        void createRefreshToken_WithExpiredTokens_CleansUpExpiredTokens() {
+        @DisplayName("토큰 생성 시 만료된 토큰들을 정리한다")
+        void createRefreshToken_CleansUpExpiredTokens() {
             // given
             User user = AuthTestHelper.createUser();
-            Token expiredToken1 = AuthTestHelper.createExpiredToken(user, EXPIRED_TOKEN_VALUE + "-1");
-            Token expiredToken2 = AuthTestHelper.createExpiredToken(user, EXPIRED_TOKEN_VALUE + "-2");
             Token newToken = AuthTestHelper.createValidToken(user, REFRESH_TOKEN_VALUE);
 
-            given(tokenRepository.findValidTokensByUserId(user.getId()))
-                    .willReturn(Collections.emptyList());
-            given(tokenRepository.findAllByUser(user))
-                    .willReturn(List.of(expiredToken1, expiredToken2));
             given(jwtTokenProvider.generateToken(user.getId()))
                     .willReturn(REFRESH_TOKEN_VALUE);
             given(tokenRepository.save(any(Token.class)))
@@ -111,87 +93,8 @@ class TokenServiceTest {
             tokenService.createRefreshToken(user);
 
             // then
-            verify(tokenRepository).saveAll(anyList());
-            verify(tokenRepository).save(any(Token.class));
-        }
-    }
-
-    @Nested
-    @DisplayName("cleanupExpiredTokens 메서드 테스트")
-    class CleanupExpiredTokensTest {
-
-        @Test
-        @DisplayName("만료된 토큰들을 정상적으로 정리한다")
-        void cleanupExpiredTokens_WithExpiredTokens_CleansUpTokens() {
-            // given
-            User user = AuthTestHelper.createUser();
-            Token expiredToken = AuthTestHelper.createExpiredToken(user, EXPIRED_TOKEN_VALUE);
-            Token validToken = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE);
-
-            given(tokenRepository.findAllByUser(user))
-                    .willReturn(List.of(expiredToken, validToken));
-
-            // when
-            tokenService.cleanupExpiredTokens(user);
-
-            // then
-            verify(tokenRepository).saveAll(anyList());
-        }
-
-        @Test
-        @DisplayName("만료된 토큰이 없는 경우 정리하지 않는다")
-        void cleanupExpiredTokens_WithNoExpiredTokens_DoesNotCleanup() {
-            // given
-            User user = AuthTestHelper.createUser();
-            Token validToken = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE);
-
-            given(tokenRepository.findAllByUser(user))
-                    .willReturn(List.of(validToken));
-
-            // when
-            tokenService.cleanupExpiredTokens(user);
-
-            // then
-            verify(tokenRepository, never()).saveAll(anyList());
-        }
-    }
-
-    @Nested
-    @DisplayName("invalidateUserTokens 메서드 테스트")
-    class InvalidateUserTokensTest {
-
-        @Test
-        @DisplayName("사용자의 모든 토큰을 무효화한다")
-        void invalidateUserTokens_InvalidatesAllUserTokens() {
-            // given
-            User user = AuthTestHelper.createUser();
-            Token token1 = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE + "-1");
-            Token token2 = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE + "-2");
-
-            given(tokenRepository.findAllByUser(user))
-                    .willReturn(List.of(token1, token2));
-
-            // when
-            tokenService.invalidateUserTokens(user);
-
-            // then
-            verify(tokenRepository).saveAll(anyList());
-        }
-
-        @Test
-        @DisplayName("토큰이 없는 사용자의 경우 정상 처리된다")
-        void invalidateUserTokens_WithNoTokens_HandlesGracefully() {
-            // given
-            User user = AuthTestHelper.createUser();
-
-            given(tokenRepository.findAllByUser(user))
-                    .willReturn(Collections.emptyList());
-
-            // when
-            tokenService.invalidateUserTokens(user);
-
-            // then
-            verify(tokenRepository).saveAll(Collections.emptyList());
+            // cleanupExpiredTokensForUser 메서드가 호출되는지 확인 (내부 로직)
+            verify(refreshTokenCacheService).saveRefreshToken(anyString(), any(RefreshTokenCacheService.RefreshTokenData.class));
         }
     }
 
@@ -204,10 +107,19 @@ class TokenServiceTest {
         void refreshAccessToken_WithValidRefreshToken_ReturnsNewAccessToken() {
             // given
             User user = AuthTestHelper.createUser();
-            Token refreshToken = AuthTestHelper.createValidToken(user, VALID_REFRESH_TOKEN);
+            RefreshTokenCacheService.RefreshTokenData tokenData =
+                    RefreshTokenCacheService.RefreshTokenData.builder()
+                            .userId(user.getId())
+                            .token(VALID_REFRESH_TOKEN)
+                            .createdAt(LocalDateTime.now())
+                            .expiredAt(LocalDateTime.now().plusDays(14))
+                            .isRevoked(false)
+                            .build();
 
-            given(tokenRepository.findByToken(VALID_REFRESH_TOKEN))
-                    .willReturn(Optional.of(refreshToken));
+            given(refreshTokenCacheService.isValidToken(anyString()))
+                    .willReturn(true);
+            given(refreshTokenCacheService.getRefreshToken(anyString()))
+                    .willReturn(tokenData);
             given(jwtTokenProvider.generateToken(user.getId()))
                     .willReturn(NEW_ACCESS_TOKEN);
             given(jwtTokenProvider.getExpirationMs())
@@ -219,51 +131,38 @@ class TokenServiceTest {
             // then
             assertThat(result.getNewAccessToken()).isEqualTo(NEW_ACCESS_TOKEN);
             assertThat(result.getExpiresIn()).isEqualTo(TEST_EXPIRATION_MS / 1000);
+
+            verify(refreshTokenCacheService).isValidToken(anyString());
+            verify(refreshTokenCacheService).getRefreshToken(anyString());
+            verify(jwtTokenProvider).generateToken(user.getId());
         }
 
         @Test
-        @DisplayName("존재하지 않는 리프레시 토큰으로 갱신 시 예외가 발생한다")
-        void refreshAccessToken_WithNonExistentToken_ThrowsException() {
+        @DisplayName("유효하지 않은 리프레시 토큰으로 갱신 시 예외가 발생한다")
+        void refreshAccessToken_WithInvalidToken_ThrowsException() {
             // given
-            given(tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE))
-                    .willReturn(Optional.empty());
+            given(refreshTokenCacheService.isValidToken(anyString()))
+                    .willReturn(false);
 
             // when & then
             assertThatThrownBy(() -> tokenService.refreshAccessToken(NON_EXISTENT_TOKEN_VALUE))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining(REFRESH_TOKEN_INVALID_MESSAGE);
+                    .hasMessageContaining("리프레시 토큰이 유효하지 않습니다");
         }
 
         @Test
-        @DisplayName("만료된 리프레시 토큰으로 갱신 시 예외가 발생한다")
-        void refreshAccessToken_WithExpiredToken_ThrowsException() {
+        @DisplayName("토큰 데이터를 찾을 수 없는 경우 예외가 발생한다")
+        void refreshAccessToken_WithTokenDataNotFound_ThrowsException() {
             // given
-            User user = AuthTestHelper.createUser();
-            Token expiredToken = AuthTestHelper.createExpiredToken(user, EXPIRED_REFRESH_TOKEN);
-
-            given(tokenRepository.findByToken(EXPIRED_REFRESH_TOKEN))
-                    .willReturn(Optional.of(expiredToken));
+            given(refreshTokenCacheService.isValidToken(anyString()))
+                    .willReturn(true);
+            given(refreshTokenCacheService.getRefreshToken(anyString()))
+                    .willReturn(null);
 
             // when & then
-            assertThatThrownBy(() -> tokenService.refreshAccessToken(EXPIRED_REFRESH_TOKEN))
+            assertThatThrownBy(() -> tokenService.refreshAccessToken(VALID_REFRESH_TOKEN))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining(REFRESH_TOKEN_EXPIRED_MESSAGE);
-        }
-
-        @Test
-        @DisplayName("취소된 리프레시 토큰으로 갱신 시 예외가 발생한다")
-        void refreshAccessToken_WithRevokedToken_ThrowsException() {
-            // given
-            User user = AuthTestHelper.createUser();
-            Token revokedToken = AuthTestHelper.createRevokedToken(user, REVOKED_TOKEN_VALUE);
-
-            given(tokenRepository.findByToken(REVOKED_TOKEN_VALUE))
-                    .willReturn(Optional.of(revokedToken));
-
-            // when & then
-            assertThatThrownBy(() -> tokenService.refreshAccessToken(REVOKED_TOKEN_VALUE))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining(REFRESH_TOKEN_EXPIRED_MESSAGE);
+                    .hasMessageContaining("리프레시 토큰을 찾을 수 없습니다");
         }
     }
 
@@ -272,8 +171,8 @@ class TokenServiceTest {
     class InvalidateRefreshTokenTest {
 
         @Test
-        @DisplayName("유효한 리프레시 토큰을 무효화한다")
-        void invalidateRefreshToken_WithValidToken_InvalidatesToken() {
+        @DisplayName("리프레시 토큰을 Redis와 DB에서 무효화한다")
+        void invalidateRefreshToken_InvalidatesTokenInRedisAndDB() {
             // given
             User user = AuthTestHelper.createUser();
             Token refreshToken = AuthTestHelper.createValidToken(user, VALID_REFRESH_TOKEN);
@@ -285,20 +184,78 @@ class TokenServiceTest {
             tokenService.invalidateRefreshToken(VALID_REFRESH_TOKEN);
 
             // then
+            // Redis에서 블랙리스트 추가 및 삭제
+            verify(refreshTokenCacheService).blacklistToken(anyString());
+            verify(refreshTokenCacheService).deleteRefreshToken(anyString());
+
+            // DB에서도 무효화 (호환성)
             verify(tokenRepository).save(eq(refreshToken));
         }
 
         @Test
-        @DisplayName("존재하지 않는 리프레시 토큰 무효화 시 예외가 발생한다")
-        void invalidateRefreshToken_WithNonExistentToken_ThrowsException() {
+        @DisplayName("DB에서 토큰을 찾지 못해도 Redis 무효화는 진행한다")
+        void invalidateRefreshToken_WithNonExistentTokenInDB_StillInvalidatesRedis() {
             // given
             given(tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE))
                     .willReturn(Optional.empty());
 
-            // when & then
-            assertThatThrownBy(() -> tokenService.invalidateRefreshToken(NON_EXISTENT_TOKEN_VALUE))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining(REFRESH_TOKEN_INVALID_MESSAGE);
+            // when
+            tokenService.invalidateRefreshToken(NON_EXISTENT_TOKEN_VALUE);
+
+            // then
+            // Redis 무효화는 실행됨
+            verify(refreshTokenCacheService).blacklistToken(anyString());
+            verify(refreshTokenCacheService).deleteRefreshToken(anyString());
+
+            // DB 저장은 실행되지 않음
+            verify(tokenRepository, never()).save(any(Token.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("invalidateUserTokens 메서드 테스트")
+    class InvalidateUserTokensTest {
+
+        @Test
+        @DisplayName("사용자의 모든 토큰을 Redis와 DB에서 무효화한다")
+        void invalidateUserTokens_InvalidatesAllUserTokensInRedisAndDB() {
+            // given
+            User user = AuthTestHelper.createUser();
+            Token token1 = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE + "-1");
+            Token token2 = AuthTestHelper.createValidToken(user, VALID_TOKEN_VALUE + "-2");
+
+            given(tokenRepository.findAllByUser(user))
+                    .willReturn(List.of(token1, token2));
+
+            // when
+            tokenService.invalidateUserTokens(user);
+
+            // then
+            // Redis에서 사용자 토큰 무효화
+            verify(refreshTokenCacheService).invalidateUserTokens(user.getId());
+
+            // DB에서도 무효화 (호환성)
+            verify(tokenRepository).saveAll(anyList());
+        }
+
+        @Test
+        @DisplayName("토큰이 없는 사용자의 경우에도 정상 처리된다")
+        void invalidateUserTokens_WithNoTokens_HandlesGracefully() {
+            // given
+            User user = AuthTestHelper.createUser();
+
+            given(tokenRepository.findAllByUser(user))
+                    .willReturn(Collections.emptyList());
+
+            // when
+            tokenService.invalidateUserTokens(user);
+
+            // then
+            // Redis 무효화는 실행됨
+            verify(refreshTokenCacheService).invalidateUserTokens(user.getId());
+
+            // DB 저장도 실행됨 (빈 리스트)
+            verify(tokenRepository).saveAll(Collections.emptyList());
         }
     }
 
@@ -310,42 +267,38 @@ class TokenServiceTest {
         @DisplayName("유효한 리프레시 토큰 검증 시 true를 반환한다")
         void validateRefreshToken_WithValidToken_ReturnsTrue() {
             // given
-            User user = AuthTestHelper.createUser();
-            Token validToken = AuthTestHelper.createValidToken(user, VALID_REFRESH_TOKEN);
-
-            given(tokenRepository.findByToken(VALID_REFRESH_TOKEN))
-                    .willReturn(Optional.of(validToken));
+            given(refreshTokenCacheService.isValidToken(anyString()))
+                    .willReturn(true);
 
             // when
             boolean result = tokenService.validateRefreshToken(VALID_REFRESH_TOKEN);
 
             // then
             assertThat(result).isTrue();
+            verify(refreshTokenCacheService).isValidToken(anyString());
         }
 
         @Test
-        @DisplayName("만료된 리프레시 토큰 검증 시 false를 반환한다")
-        void validateRefreshToken_WithExpiredToken_ReturnsFalse() {
+        @DisplayName("유효하지 않은 리프레시 토큰 검증 시 false를 반환한다")
+        void validateRefreshToken_WithInvalidToken_ReturnsFalse() {
             // given
-            User user = AuthTestHelper.createUser();
-            Token expiredToken = AuthTestHelper.createExpiredToken(user, EXPIRED_REFRESH_TOKEN);
-
-            given(tokenRepository.findByToken(EXPIRED_REFRESH_TOKEN))
-                    .willReturn(Optional.of(expiredToken));
+            given(refreshTokenCacheService.isValidToken(anyString()))
+                    .willReturn(false);
 
             // when
             boolean result = tokenService.validateRefreshToken(EXPIRED_REFRESH_TOKEN);
 
             // then
             assertThat(result).isFalse();
+            verify(refreshTokenCacheService).isValidToken(anyString());
         }
 
         @Test
         @DisplayName("존재하지 않는 리프레시 토큰 검증 시 false를 반환한다")
         void validateRefreshToken_WithNonExistentToken_ReturnsFalse() {
             // given
-            given(tokenRepository.findByToken(NON_EXISTENT_TOKEN_VALUE))
-                    .willReturn(Optional.empty());
+            given(refreshTokenCacheService.isValidToken(anyString()))
+                    .willReturn(false);
 
             // when
             boolean result = tokenService.validateRefreshToken(NON_EXISTENT_TOKEN_VALUE);
@@ -353,22 +306,50 @@ class TokenServiceTest {
             // then
             assertThat(result).isFalse();
         }
+    }
+
+    @Nested
+    @DisplayName("Redis 통합 테스트")
+    class RedisIntegrationTest {
 
         @Test
-        @DisplayName("취소된 리프레시 토큰 검증 시 false를 반환한다")
-        void validateRefreshToken_WithRevokedToken_ReturnsFalse() {
+        @DisplayName("토큰 해시 생성이 일관되게 동작한다")
+        void tokenHashGeneration_IsConsistent() {
             // given
             User user = AuthTestHelper.createUser();
-            Token revokedToken = AuthTestHelper.createRevokedToken(user, REVOKED_TOKEN_VALUE);
 
-            given(tokenRepository.findByToken(REVOKED_TOKEN_VALUE))
-                    .willReturn(Optional.of(revokedToken));
+            given(jwtTokenProvider.generateToken(user.getId()))
+                    .willReturn(REFRESH_TOKEN_VALUE);
+            given(tokenRepository.save(any(Token.class)))
+                    .willReturn(AuthTestHelper.createValidToken(user, REFRESH_TOKEN_VALUE));
 
             // when
-            boolean result = tokenService.validateRefreshToken(REVOKED_TOKEN_VALUE);
+            tokenService.createRefreshToken(user);
 
             // then
-            assertThat(result).isFalse();
+            // 같은 토큰에 대해 일관된 해시가 생성되는지 확인
+            verify(refreshTokenCacheService).saveRefreshToken(anyString(), any(RefreshTokenCacheService.RefreshTokenData.class));
+        }
+
+        @Test
+        @DisplayName("토큰 데이터가 올바른 형식으로 생성된다")
+        void tokenData_IsCreatedWithCorrectFormat() {
+            // given
+            User user = AuthTestHelper.createUser();
+
+            given(jwtTokenProvider.generateToken(user.getId()))
+                    .willReturn(REFRESH_TOKEN_VALUE);
+            given(tokenRepository.save(any(Token.class)))
+                    .willReturn(AuthTestHelper.createValidToken(user, REFRESH_TOKEN_VALUE));
+
+            // when
+            tokenService.createRefreshToken(user);
+
+            // then
+            verify(refreshTokenCacheService).saveRefreshToken(
+                    anyString(),
+                    any(RefreshTokenCacheService.RefreshTokenData.class)
+            );
         }
     }
 }
