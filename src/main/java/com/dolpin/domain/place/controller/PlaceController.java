@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/v1/places")
@@ -22,7 +23,7 @@ public class PlaceController {
     private final PlaceQueryService placeQueryService;
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<PlaceSearchResponse>> searchPlaces(
+    public Mono<ResponseEntity<ApiResponse<PlaceSearchResponse>>> searchPlaces(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
@@ -30,15 +31,15 @@ public class PlaceController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         Long userId = userDetails != null ? Long.parseLong(userDetails.getUsername()) : null;
-        PlaceSearchResponse response = placeQueryService.searchPlaces(query, lat, lng, category, userId);
 
-        return ResponseEntity.ok(ApiResponse.success("get_place_success", response));
+        return placeQueryService.searchPlacesAsync(query, lat, lng, category, userId)
+                .map(response -> ResponseEntity.ok(ApiResponse.success("get_place_success", response)))
+                .doOnSuccess(result -> log.debug("비동기 검색 완료: query={}", query));
     }
 
-    // dev 전용 엔드포인트
     @GetMapping("/search/dev")
-    @Profile("dev") // dev 프로파일에서만 활성화
-    public ResponseEntity<ApiResponse<PlaceSearchResponse>> searchPlacesForDev(
+    @Profile("dev")
+    public Mono<ResponseEntity<ApiResponse<PlaceSearchResponse>>> searchPlacesForDev(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
@@ -50,9 +51,9 @@ public class PlaceController {
                 devToken != null ? devToken.substring(0, Math.min(4, devToken.length())) + "***" : "null");
 
         Long userId = userDetails != null ? Long.parseLong(userDetails.getUsername()) : null;
-        PlaceSearchResponse response = placeQueryService.searchPlacesWithDevToken(query, lat, lng, category, devToken, userId);
 
-        return ResponseEntity.ok(ApiResponse.success("get_place_success", response));
+        return placeQueryService.searchPlacesWithDevTokenAsync(query, lat, lng, category, devToken, userId)
+                .map(response -> ResponseEntity.ok(ApiResponse.success("get_place_success", response)));
     }
 
     @GetMapping("/{place_id}")
@@ -68,9 +69,7 @@ public class PlaceController {
 
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<PlaceCategoryResponse>> getAllCategories() {
-
         PlaceCategoryResponse response = placeQueryService.getAllCategories();
-
         return ResponseEntity.ok(ApiResponse.success("get_categories_success", response));
     }
 }

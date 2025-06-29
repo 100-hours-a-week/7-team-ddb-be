@@ -20,6 +20,7 @@ public class PlaceServiceTestHelper {
     private PlaceServiceTestHelper() {
     }
 
+    // === 기본 Place Stub 생성 - 테스트별 필요한 정보만 stubbing ===
     public static Place createPlaceStub(Long id, String name, double lat, double lng) {
         Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat));
         Place place = mock(Place.class);
@@ -30,7 +31,8 @@ public class PlaceServiceTestHelper {
         return place;
     }
 
-    public static Place createBasicPlaceStub() {
+    // 성공 케이스용 - 모든 정보 포함
+    public static Place createBasicPlaceForDetail() {
         Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(TestConstants.CENTER_LNG, TestConstants.CENTER_LAT));
         Place place = mock(Place.class);
 
@@ -45,6 +47,34 @@ public class PlaceServiceTestHelper {
         return place;
     }
 
+    // 실패 케이스용 - 아무 stubbing도 하지 않음 (메서드가 호출되지 않기 때문)
+    public static Place createMinimalPlaceForFailure() {
+        return mock(Place.class);
+    }
+
+    // 키워드 조회용 Place
+    public static Place createPlaceWithKeywords(List<String> keywordStrings) {
+        Place place = mock(Place.class);
+        List<PlaceKeyword> keywordStubs = createKeywordStubs(keywordStrings);
+        when(place.getKeywords()).thenReturn(keywordStubs);
+        return place;
+    }
+
+    // 메뉴 조회용 Place
+    public static Place createPlaceWithMenus(List<PlaceMenu> menus) {
+        Place place = mock(Place.class);
+        when(place.getMenus()).thenReturn(menus);
+        return place;
+    }
+
+    // 영업시간 조회용 Place
+    public static Place createPlaceWithHours(List<PlaceHours> hours) {
+        Place place = mock(Place.class);
+        when(place.getHours()).thenReturn(hours);
+        return place;
+    }
+
+    // === 키워드 관련 Place Stub ===
     public static Place createPlaceStubWithKeywords(Long id, String name, List<String> keywordStrings) {
         Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(TestConstants.CENTER_LNG, TestConstants.CENTER_LAT));
         Place place = mock(Place.class);
@@ -79,7 +109,7 @@ public class PlaceServiceTestHelper {
         return place;
     }
 
-    // === 연관 엔티티 Mock 생성 ===
+    // === 연관 엔티티 Stub 생성 ===
     public static List<PlaceKeyword> createKeywordStubs(List<String> keywordStrings) {
         if (keywordStrings == null || keywordStrings.isEmpty()) {
             return Collections.emptyList();
