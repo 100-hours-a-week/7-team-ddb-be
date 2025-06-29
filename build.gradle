@@ -74,6 +74,10 @@ dependencies {
 
 	implementation 'org.springframework.retry:spring-retry'
 	implementation 'org.springframework:spring-aspects'
+
+	// AWS
+	implementation platform("software.amazon.awssdk:bom:2.25.15")
+	implementation 'software.amazon.awssdk:s3'
 }
 
 // QueryDSL 설정
