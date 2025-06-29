@@ -15,37 +15,52 @@ import java.util.Optional;
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 
-    // 특정 기록의 댓글 목록 조회
-    @Query("SELECT c FROM Comment c " +
-            "WHERE c.momentId = :momentId " +
-            "AND c.deletedAt IS NULL " +
-            "ORDER BY c.createdAt DESC")
-    Page<Comment> findByMomentIdAndNotDeleted(@Param("momentId") Long momentId, Pageable pageable);
-
-    // 커서 기반 페이지네이션을 위한 조회
-    @Query("SELECT c FROM Comment c " +
-            "WHERE c.momentId = :momentId " +
-            "AND c.deletedAt IS NULL " +
-            "AND c.createdAt < :cursor " +
-            "ORDER BY c.createdAt DESC")
-    List<Comment> findByMomentIdAndNotDeletedWithCursor(
+    // 스레드 기반 정렬 - 첫 페이지용 (네이티브 쿼리)
+    @Query(value = "SELECT * FROM comment c " +
+            "WHERE c.moment_id = :momentId " +
+            "AND c.deleted_at IS NULL " +
+            "ORDER BY " +
+            "CASE WHEN c.parent_comment_id IS NULL THEN c.created_at " +
+            "     ELSE (SELECT parent.created_at FROM comment parent WHERE parent.id = c.parent_comment_id) " +
+            "END ASC, " +
+            "c.parent_comment_id ASC NULLS FIRST, " +
+            "c.created_at ASC " +
+            "LIMIT :limit OFFSET :offset",
+            nativeQuery = true)
+    List<Comment> findByMomentIdAndNotDeletedWithPagination(
             @Param("momentId") Long momentId,
-            @Param("cursor") LocalDateTime cursor,
-            Pageable pageable);
+            @Param("limit") int limit,
+            @Param("offset") int offset);
 
-    // 특정 기록의 댓글 개수
-    @Query("SELECT COUNT(c) FROM Comment c " +
-            "WHERE c.momentId = :momentId " +
+    // 스레드 기반 정렬 - 커서 기반 페이지네이션
+    @Query(value = "SELECT * FROM comment c " +
+            "WHERE c.moment_id = :momentId " +
+            "AND c.deleted_at IS NULL " +
+            "AND (:cursor IS NULL OR " +
+            "     CASE WHEN c.parent_comment_id IS NULL " +
+            "          THEN c.created_at > CAST(:cursor AS timestamp) " +
+            "          ELSE (SELECT parent.created_at FROM comment parent WHERE parent.id = c.parent_comment_id) > CAST(:cursor AS timestamp) " +
+            "     END) " +
+            "ORDER BY " +
+            "CASE WHEN c.parent_comment_id IS NULL THEN c.created_at " +
+            "     ELSE (SELECT parent.created_at FROM comment parent WHERE parent.id = c.parent_comment_id) " +
+            "END ASC, " +
+            "c.parent_comment_id ASC NULLS FIRST, " +
+            "c.created_at ASC " +
+            "LIMIT :limit",
+            nativeQuery = true)
+    List<Comment> findByMomentIdAndNotDeletedWithCursorNative(
+            @Param("momentId") Long momentId,
+            @Param("cursor") String cursor,
+            @Param("limit") int limit);
+
+    // 나머지 메서드들은 그대로 유지
+    @Query("SELECT c FROM Comment c " +
+            "WHERE c.id = :commentId " +
+            "AND c.momentId = :momentId " +
             "AND c.deletedAt IS NULL")
-    long countByMomentIdAndNotDeleted(@Param("momentId") Long momentId);
+    Optional<Comment> findValidParentComment(@Param("commentId") Long commentId, @Param("momentId") Long momentId);
 
-    // 특정 사용자의 댓글 개수
-    @Query("SELECT COUNT(c) FROM Comment c " +
-            "WHERE c.userId = :userId " +
-            "AND c.deletedAt IS NULL")
-    long countByUserIdAndNotDeleted(@Param("userId") Long userId);
-
-    // 댓글 ID와 기록 ID로 댓글 조회
     @Query("SELECT c FROM Comment c " +
             "WHERE c.id = :commentId " +
             "AND c.momentId = :momentId " +
@@ -54,24 +69,11 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             @Param("commentId") Long commentId,
             @Param("momentId") Long momentId);
 
-    // 특정 기록의 최근 댓글들
-    @Query("SELECT c FROM Comment c " +
+    @Query("SELECT COUNT(c) FROM Comment c " +
             "WHERE c.momentId = :momentId " +
-            "AND c.deletedAt IS NULL " +
-            "AND c.createdAt >= :since " +
-            "ORDER BY c.createdAt DESC")
-    List<Comment> findRecentCommentsByMomentId(
-            @Param("momentId") Long momentId,
-            @Param("since") LocalDateTime since);
+            "AND c.deletedAt IS NULL")
+    long countByMomentIdAndNotDeleted(@Param("momentId") Long momentId);
 
-    // 사용자가 작성한 댓글 목록
-    @Query("SELECT c FROM Comment c " +
-            "WHERE c.userId = :userId " +
-            "AND c.deletedAt IS NULL " +
-            "ORDER BY c.createdAt DESC")
-    Page<Comment> findByUserIdAndNotDeleted(@Param("userId") Long userId, Pageable pageable);
-
-    // 여러 기록 댓글 갯수 조회
     @Query("SELECT c.momentId, COUNT(c) FROM Comment c " +
             "WHERE c.momentId IN :momentIds " +
             "AND c.deletedAt IS NULL " +

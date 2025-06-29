@@ -27,29 +27,45 @@ public class CommentCommandServiceImpl implements CommentCommandService {
     @Override
     @Transactional
     public CommentCreateResponse createComment(Long momentId, CommentCreateRequest request, Long userId) {
-        // 기록 존재 및 접근 권한 확인 (비공개 기록은 댓글 작성 불가)
+        // 기록 존재 및 접근 권한 확인
         Moment moment = validateMomentAccess(momentId, userId);
 
-        if (!moment.getIsPublic()) {
-            throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("비공개 기록에는 댓글을 작성할 수 없습니다."));
+        // 비공개 기록인 경우, 작성자 본인만 댓글 작성 가능
+        if (!moment.getIsPublic() && !moment.isOwnedBy(userId)) {
+            throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("다른 사용자의 비공개 기록에는 댓글을 작성할 수 없습니다."));
         }
 
         User user = userQueryService.getUserById(userId);
 
-        Comment comment = Comment.builder()
+        // 댓글 생성
+        Comment.CommentBuilder commentBuilder = Comment.builder()
                 .momentId(momentId)
                 .userId(userId)
                 .content(request.getContent())
-                .build();
+                .depth(0);  // 기본값 설정
 
+        // 대댓글인 경우 부모 댓글 처리
+        if (request.getParentCommentId() != null) {
+            Comment parentComment = validateParentComment(request.getParentCommentId(), momentId);
+            commentBuilder.parentComment(parentComment)
+                    .depth(1);  // 대댓글은 depth 1
+        }
+
+        Comment comment = commentBuilder.build();
         Comment savedComment = commentRepository.save(comment);
 
-        log.info("Comment created: commentId={}, momentId={}, userId={}",
-                savedComment.getId(), momentId, userId);
+        log.info("Comment created: commentId={}, momentId={}, userId={}, isReply={}",
+                savedComment.getId(), momentId, userId, savedComment.isReply());
 
         return CommentCreateResponse.from(savedComment, user, true);
     }
 
+    // 부모 댓글 유효성 검사 메서드 추가
+    private Comment validateParentComment(Long parentCommentId, Long momentId) {
+        return commentRepository.findValidParentComment(parentCommentId, momentId)
+                .orElseThrow(() -> new BusinessException(ResponseStatus.INVALID_PARAMETER
+                        .withMessage("유효하지 않은 부모 댓글입니다.")));
+    }
     @Override
     @Transactional
     public void deleteComment(Long momentId, Long commentId, Long userId) {

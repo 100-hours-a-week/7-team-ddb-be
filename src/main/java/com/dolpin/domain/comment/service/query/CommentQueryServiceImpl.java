@@ -42,18 +42,16 @@ public class CommentQueryServiceImpl implements CommentQueryService {
         Moment moment = validateMomentAccess(momentId, currentUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        LocalDateTime cursorTime = parseCursor(cursor);
+        int queryLimit = pageSize + 1; // hasNext 판단용
 
         List<Comment> comments;
 
-        if (cursorTime != null) {
-            // 커서 기반 페이지네이션
-            Pageable pageable = PageRequest.of(0, pageSize + 1);
-            comments = commentRepository.findByMomentIdAndNotDeletedWithCursor(momentId, cursorTime, pageable);
+        if (cursor != null && !cursor.trim().isEmpty()) {
+            // 커서 기반 페이지네이션 (네이티브 쿼리)
+            comments = commentRepository.findByMomentIdAndNotDeletedWithCursorNative(momentId, cursor, queryLimit);
         } else {
-            // 첫 페이지 조회
-            Pageable pageable = PageRequest.of(0, pageSize + 1);
-            comments = commentRepository.findByMomentIdAndNotDeleted(momentId, pageable).getContent();
+            // 첫 페이지 조회 - 스레드 정렬 사용
+            comments = commentRepository.findByMomentIdAndNotDeletedWithPagination(momentId, queryLimit, 0);
         }
 
         return buildCommentListResponse(comments, pageSize, currentUserId, momentId);
@@ -129,6 +127,8 @@ public class CommentQueryServiceImpl implements CommentQueryService {
                         .profileImage(user.getImageUrl())
                         .build())
                 .content(comment.getContent())
+                .depth(comment.getDepth())
+                .parentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null)
                 .createdAt(comment.getCreatedAt())
                 .isOwner(comment.isOwnedBy(currentUserId))
                 .build();
@@ -142,19 +142,5 @@ public class CommentQueryServiceImpl implements CommentQueryService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
-    }
-
-    private LocalDateTime parseCursor(String cursor) {
-        if (cursor == null || cursor.isEmpty()) {
-            return null;
-        }
-
-        try {
-            String cleanCursor = cursor.endsWith("Z") ? cursor.substring(0, cursor.length() - 1) : cursor;
-            return LocalDateTime.parse(cleanCursor, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        } catch (Exception e) {
-            log.warn("Invalid cursor format: {}", cursor);
-            return null;
-        }
     }
 }

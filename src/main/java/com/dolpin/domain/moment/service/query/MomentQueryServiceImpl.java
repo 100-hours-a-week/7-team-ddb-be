@@ -43,26 +43,24 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     @Transactional(readOnly = true)
     public MomentListResponse getAllMoments(Long currentUserId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        Pageable pageable = PageRequest.of(0, pageSize + 1);
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
-        Page<Moment> moments;
-        if (currentUserId != null) {
-            moments = momentRepository.findPublicMomentsWithUserPrivate(currentUserId, pageable);
-        } else {
-            moments = momentRepository.findPublicMoments(pageable);
-        }
+        List<Moment> moments = momentRepository.findPublicMomentsWithUserPrivateNative(currentUserId, cursorString, queryLimit);
 
-        return buildMomentListResponse(moments.getContent(), pageSize, true);
+        return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/users/moments");
     }
 
     @Override
     @Transactional(readOnly = true)
     public MomentListResponse getMyMoments(Long userId, Integer limit, String cursor) {
         int pageSize = validateAndGetLimit(limit);
-        Pageable pageable = PageRequest.of(0, pageSize + 1);
-        Page<Moment> moments = momentRepository.findByUserIdWithVisibility(userId, true, pageable);
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
-        return buildMomentListResponse(moments.getContent(), pageSize, false);
+        List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(userId, true, cursorString, queryLimit);
+
+        return buildMomentListResponse(moments, pageSize, false, cursor, "/api/v1/users/me/moments");
     }
 
     @Override
@@ -71,27 +69,26 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         userQueryService.getUserById(targetUserId);
 
         int pageSize = validateAndGetLimit(limit);
-        Pageable pageable = PageRequest.of(0, pageSize + 1);
-        Page<Moment> moments = momentRepository.findByUserIdWithVisibility(targetUserId, false, pageable);
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
-        return buildMomentListResponse(moments.getContent(), pageSize, false);
+        List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(targetUserId, false, cursorString, queryLimit);
+
+        return buildMomentListResponse(moments, pageSize, false, cursor, "/api/v1/users/" + targetUserId + "/moments");
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PlaceMomentListResponse getPlaceMoments(Long placeId) {
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE);
-        Page<Moment> moments = momentRepository.findPublicMomentsByPlaceId(placeId, pageable);
+    public MomentListResponse getPlaceMoments(Long placeId, Integer limit, String cursor) {
+        int pageSize = validateAndGetLimit(limit);
+        String cursorString = cursor;
+        int queryLimit = pageSize + 1;
 
-        List<PlaceMomentListResponse.PlaceMomentDto> momentDtos = moments.getContent().stream()
-                .map(this::buildPlaceMomentDto)
-                .collect(Collectors.toList());
+        List<Moment> moments = momentRepository.findPublicMomentsByPlaceIdNative(placeId, cursorString, queryLimit);
 
-        return PlaceMomentListResponse.builder()
-                .total(momentDtos.size())
-                .moments(momentDtos)
-                .build();
+        return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/places/" + placeId + "/moments");
     }
+
 
     @Override
     @Transactional
@@ -106,11 +103,13 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         // 조회수 증가
         momentViewService.incrementViewCount(momentId);
 
+        User author = userQueryService.getUserById(moment.getUserId());
+
         boolean isOwner = moment.isOwnedBy(currentUserId);
         Long commentCount = commentRepository.countByMomentIdAndNotDeleted(momentId);
         Long viewCount = momentViewService.getViewCount(momentId);
 
-        return MomentDetailResponse.from(moment, isOwner, commentCount, viewCount);
+        return MomentDetailResponse.from(moment, isOwner, commentCount, viewCount, author);
     }
 
     private PlaceMomentListResponse.PlaceMomentDto buildPlaceMomentDto(Moment moment) {
@@ -136,7 +135,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                 .build();
     }
 
-    private MomentListResponse buildMomentListResponse(List<Moment> moments, int pageSize, boolean includeAuthor) {
+    private MomentListResponse buildMomentListResponse(List<Moment> moments, int pageSize, boolean includeAuthor, String currentCursor, String baseUrl) {
         boolean hasNext = moments.size() > pageSize;
         List<Moment> actualMoments = hasNext ? moments.subList(0, pageSize) : moments;
 
@@ -166,9 +165,18 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                         .build())
                 .build();
 
+        // _links href 값을 API 명세에 맞게 생성
+        String selfHref = currentCursor != null
+                ? String.format("%s?limit=%d&cursor=%s", baseUrl, pageSize, currentCursor)
+                : String.format("%s?limit=%d", baseUrl, pageSize);
+
+        String nextHref = hasNext && nextCursor != null
+                ? String.format("%s?limit=%d&cursor=%s", baseUrl, pageSize, nextCursor)
+                : null;
+
         MomentListResponse.LinksDto links = MomentListResponse.LinksDto.builder()
-                .self(MomentListResponse.LinkDto.builder().href("").build())
-                .next(hasNext ? MomentListResponse.LinkDto.builder().href("").build() : null)
+                .self(MomentListResponse.LinkDto.builder().href(selfHref).build())
+                .next(nextHref != null ? MomentListResponse.LinkDto.builder().href(nextHref).build() : null)
                 .build();
 
         return MomentListResponse.builder()
@@ -185,7 +193,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         MomentListResponse.MomentSummaryDto.MomentSummaryDtoBuilder builder = MomentListResponse.MomentSummaryDto.builder()
                 .id(moment.getId())
                 .title(moment.getTitle())
-                .content(moment.getContent()) // 원본 본문 그대로 전송
+                .content(moment.getContent())
                 .thumbnail(thumbnail)
                 .imagesCount(moment.getImageCount())
                 .isPublic(moment.getIsPublic())

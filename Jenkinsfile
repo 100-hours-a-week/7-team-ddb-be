@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         SERVICE_NAME    = 'backend'
-        PROJECT_ID      = 'velvety-calling-458402-c1'
+        PROJECT_ID      = 'dolpin-2nd'
         REGION          = 'asia-northeast3'
         GAR_HOST        = 'asia-northeast3-docker.pkg.dev'
         CONTAINER_NAME  = 'backend'

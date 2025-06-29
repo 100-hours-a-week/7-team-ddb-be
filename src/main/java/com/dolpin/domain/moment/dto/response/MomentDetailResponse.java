@@ -1,7 +1,9 @@
 package com.dolpin.domain.moment.dto.response;
 
+import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.entity.MomentImage;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,9 +27,13 @@ public class MomentDetailResponse {
     private PlaceDetailDto place;
     private Boolean isPublic;
     private Boolean isOwner;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private LocalDateTime createdAt;
+
     private Long commentCount;
     private Long viewCount;
+    private AuthorDto author;
 
     @Getter
     @Builder
@@ -38,8 +44,19 @@ public class MomentDetailResponse {
         private String name;
     }
 
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AuthorDto {
+        private Long id;
+        private String nickname;
+        private String profileImage;
+    }
+
+    // ✅ 올바른 수정 방법 1: from 메서드에 author 파라미터 추가
     public static MomentDetailResponse from(Moment moment, boolean isOwner,
-                                            Long commentCount, Long viewCount) {
+                                            Long commentCount, Long viewCount, User author) {  // 👈 User author 추가
         List<String> imageUrls = moment.getImages().stream()
                 .map(MomentImage::getImageUrl)
                 .collect(Collectors.toList());
@@ -60,6 +77,11 @@ public class MomentDetailResponse {
                 .createdAt(moment.getCreatedAt())
                 .commentCount(commentCount)
                 .viewCount(viewCount)
+                .author(AuthorDto.builder()
+                        .id(author.getId())
+                        .nickname(author.getUsername())
+                        .profileImage(author.getImageUrl())
+                        .build())
                 .build();
     }
 }

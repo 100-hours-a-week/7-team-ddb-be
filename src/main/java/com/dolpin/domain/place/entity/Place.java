@@ -12,6 +12,8 @@ import java.util.List;
 @Table(name = "place")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
 public class Place {
 
     @Id
@@ -41,14 +43,17 @@ public class Place {
 
     // EAGER에서 LAZY로 변경
     @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
     private List<PlaceKeyword> keywords = new ArrayList<>();
 
     // EAGER에서 LAZY로 변경
     @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
     private List<PlaceMenu> menus = new ArrayList<>();
 
     // EAGER에서 LAZY로 변경
     @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
     private List<PlaceHours> hours = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
