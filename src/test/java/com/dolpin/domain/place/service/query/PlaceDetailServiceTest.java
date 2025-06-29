@@ -27,6 +27,9 @@ class PlaceDetailServiceTest {
     @Mock
     private PlaceRepository placeRepository;
 
+    @Mock
+    private PlaceBookmarkQueryService bookmarkQueryService;
+
     @InjectMocks
     private PlaceQueryServiceImpl placeQueryService;
 
@@ -39,6 +42,7 @@ class PlaceDetailServiceTest {
         void getPlaceDetail_WithValidId_ReturnsCompleteDetail() {
             // Given
             Long placeId = TestConstants.PLACE_ID_1;
+            Long userId = TestConstants.USER_ID_1;
 
             Place basicPlace = createBasicPlaceForDetail();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
@@ -49,9 +53,10 @@ class PlaceDetailServiceTest {
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.of(keywordPlace));
             given(placeRepository.findByIdWithMenus(placeId)).willReturn(Optional.of(menuPlace));
             given(placeRepository.findByIdWithHours(placeId)).willReturn(Optional.of(hoursPlace));
+            given(bookmarkQueryService.isBookmarked(userId, placeId)).willReturn(true);
 
             // When
-            PlaceDetailResponse result = placeQueryService.getPlaceDetail(placeId);
+            PlaceDetailResponse result = placeQueryService.getPlaceDetail(placeId, userId);
 
             // Then
             verifyBasicPlaceInfo(result, placeId);
@@ -60,6 +65,7 @@ class PlaceDetailServiceTest {
             verifyMenuInfo(result);
             verifyOpeningHoursInfo(result);
             verifyRepositoryInteractions(placeId);
+            assertThat(result.getIsBookmarked()).isTrue();
         }
 
         @Test
@@ -67,10 +73,11 @@ class PlaceDetailServiceTest {
         void getPlaceDetail_WithNonExistentId_ThrowsPlaceNotFoundException() {
             // Given
             Long nonExistentId = TestConstants.NON_EXISTENT_PLACE_ID;
+            Long userId = TestConstants.USER_ID_1;
             given(placeRepository.findBasicPlaceById(nonExistentId)).willReturn(Optional.empty());
 
             // When & Then
-            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(nonExistentId))
+            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(nonExistentId, userId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
                     .isEqualTo(ResponseStatus.PLACE_NOT_FOUND);
@@ -84,13 +91,14 @@ class PlaceDetailServiceTest {
         void getPlaceDetail_WhenKeywordQueryFails_ThrowsException() {
             // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            Place basicPlace = createMinimalPlaceForFailure(); // 최소한의 정보만
+            Long userId = TestConstants.USER_ID_1;
+            Place basicPlace = createMinimalPlaceForFailure();
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
             given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.empty());
 
             // When & Then
-            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId))
+            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId, userId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
                     .isEqualTo(ResponseStatus.PLACE_NOT_FOUND);
@@ -105,7 +113,8 @@ class PlaceDetailServiceTest {
         void getPlaceDetail_WhenMenuQueryFails_ThrowsException() {
             // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            Place basicPlace = createMinimalPlaceForFailure(); // 최소한의 정보만
+            Long userId = TestConstants.USER_ID_1;
+            Place basicPlace = createMinimalPlaceForFailure();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
@@ -113,7 +122,7 @@ class PlaceDetailServiceTest {
             given(placeRepository.findByIdWithMenus(placeId)).willReturn(Optional.empty());
 
             // When & Then
-            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId))
+            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId, userId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
                     .isEqualTo(ResponseStatus.PLACE_NOT_FOUND);
@@ -129,7 +138,8 @@ class PlaceDetailServiceTest {
         void getPlaceDetail_WhenHoursQueryFails_ThrowsException() {
             // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            Place basicPlace = createMinimalPlaceForFailure(); // 최소한의 정보만
+            Long userId = TestConstants.USER_ID_1;
+            Place basicPlace = createMinimalPlaceForFailure();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
             Place menuPlace = createPlaceWithMenus(createDefaultCafeMenus());
 
@@ -139,7 +149,7 @@ class PlaceDetailServiceTest {
             given(placeRepository.findByIdWithHours(placeId)).willReturn(Optional.empty());
 
             // When & Then
-            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId))
+            assertThatThrownBy(() -> placeQueryService.getPlaceDetail(placeId, userId))
                     .isInstanceOf(BusinessException.class)
                     .extracting("responseStatus")
                     .isEqualTo(ResponseStatus.PLACE_NOT_FOUND);
@@ -149,6 +159,31 @@ class PlaceDetailServiceTest {
             verify(placeRepository).findByIdWithMenus(placeId);
             verify(placeRepository).findByIdWithHours(placeId);
             verifyNoMoreInteractions(placeRepository);
+        }
+
+        @Test
+        @DisplayName("사용자 정보 없이 장소 상세 조회가 동작한다")
+        void getPlaceDetail_WithoutUserId_ReturnsDetailWithoutBookmark() {
+            // Given
+            Long placeId = TestConstants.PLACE_ID_1;
+
+            Place basicPlace = createBasicPlaceForDetail();
+            Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
+            Place menuPlace = createPlaceWithMenus(createDefaultCafeMenus());
+            Place hoursPlace = createPlaceWithHours(createCompleteBusinessHoursStubs());
+
+            given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
+            given(placeRepository.findByIdWithKeywords(placeId)).willReturn(Optional.of(keywordPlace));
+            given(placeRepository.findByIdWithMenus(placeId)).willReturn(Optional.of(menuPlace));
+            given(placeRepository.findByIdWithHours(placeId)).willReturn(Optional.of(hoursPlace));
+
+            // When
+            PlaceDetailResponse result = placeQueryService.getPlaceDetail(placeId, null);
+
+            // Then
+            verifyBasicPlaceInfo(result, placeId);
+            assertThat(result.getIsBookmarked()).isNull();
+            verifyNoInteractions(bookmarkQueryService);
         }
     }
 

@@ -2,6 +2,8 @@ package com.dolpin.global.constants;
 
 public final class TestConstants {
 
+    public static final Long USER_ID_1 = 1L;
+
     private TestConstants() {
     }
 
