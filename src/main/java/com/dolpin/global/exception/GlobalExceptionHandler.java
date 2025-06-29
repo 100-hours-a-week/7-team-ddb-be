@@ -213,13 +213,4 @@ public class GlobalExceptionHandler {
                                 e.getMessage().contains("OAuth")
                 ));
     }
-
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e) {
-        log.warn("Method argument type mismatch: {}", e.getMessage());
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(ResponseStatus.INVALID_PARAMETER.withMessage(e.getMessage())));
-    }
-
 }
