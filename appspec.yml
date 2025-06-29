@@ -1,0 +1,27 @@
+version: 0.0
+os: linux
+
+files:
+  - source: /
+    destination: /home/ubuntu/app
+
+hooks:
+  BeforeInstall:
+    - location: scripts/BeforeInstall.sh
+      timeout: 60
+      runas: root
+
+  AfterInstall:
+    - location: scripts/AfterInstall.sh
+      timeout: 60
+      runas: root
+
+  ApplicationStart:
+    - location: scripts/ApplicationStart.sh
+      timeout: 60
+      runas: root
+
+  ValidateService:
+    - location: scripts/NotifyDiscord.sh
+      timeout: 60
+      runas: root
