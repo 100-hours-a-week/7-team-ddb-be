@@ -216,4 +216,3 @@ public class PlaceTestHelper {
                         entry -> counts.get(entry.getValue())));
     }
 }
-

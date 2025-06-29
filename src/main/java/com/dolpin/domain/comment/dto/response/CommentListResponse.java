@@ -1,5 +1,6 @@
 package com.dolpin.domain.comment.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,7 +30,12 @@ public class CommentListResponse {
         private Long id;
         private UserDto user;
         private String content;
+        private Integer depth;
+        private Long parentCommentId;
+
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
         private LocalDateTime createdAt;
+
         private Boolean isOwner;
     }
 

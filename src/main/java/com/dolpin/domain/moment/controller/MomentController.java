@@ -69,10 +69,12 @@ public class MomentController {
      * 장소별 기록 목록 조회 (공개된 기록만)
      */
     @GetMapping("/places/{place_id}/moments")
-    public ResponseEntity<ApiResponse<PlaceMomentListResponse>> getPlaceMoments(
-            @PathVariable("place_id") Long placeId) {
+    public ResponseEntity<ApiResponse<MomentListResponse>> getPlaceMoments(
+            @PathVariable("place_id") Long placeId,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String cursor) {
 
-        PlaceMomentListResponse response = momentQueryService.getPlaceMoments(placeId);
+        MomentListResponse response = momentQueryService.getPlaceMoments(placeId, limit, cursor);
         return ResponseEntity.ok(ApiResponse.success("place_moment_list_get_success", response));
     }
 

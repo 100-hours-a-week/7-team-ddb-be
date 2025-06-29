@@ -193,20 +193,12 @@ public class PlaceServiceTestHelper {
         return new PlaceAiResponse.PlaceRecommendation(id, score, keywords);
     }
 
-    public static PlaceAiResponse.PlaceRecommendation createRecommendationStub(Long id, Double score, List<String> keywords) {
-        return createRecommendation(id, score, keywords);
-    }
-
     public static PlaceAiResponse createAiResponse(List<PlaceAiResponse.PlaceRecommendation> recommendations) {
         return createAiResponse(recommendations, null);
     }
 
     public static PlaceAiResponse createAiResponse(List<PlaceAiResponse.PlaceRecommendation> recommendations, String category) {
         return new PlaceAiResponse(recommendations, category);
-    }
-
-    public static PlaceAiResponse createAiResponseStub(List<PlaceAiResponse.PlaceRecommendation> recommendations) {
-        return createAiResponse(recommendations, null);
     }
 
     public static PlaceAiResponse createEmptyAiResponse() {
@@ -236,10 +228,6 @@ public class PlaceServiceTestHelper {
         };
     }
 
-    public static PlaceWithDistance createPlaceWithDistanceStub(Long id, String name, double lat, double lng, double distance) {
-        return createPlaceWithDistance(id, name, lat, lng, distance);
-    }
-
     // === 테스트용 데이터 세트 ===
     public static List<PlaceWithDistance> createSortTestPlaceWithDistances() {
         return List.of(
@@ -252,20 +240,12 @@ public class PlaceServiceTestHelper {
         );
     }
 
-    public static List<PlaceWithDistance> createSortTestPlaceWithDistanceStubs() {
-        return createSortTestPlaceWithDistances();
-    }
-
     public static PlaceAiResponse createSortTestAiResponse() {
         return new PlaceAiResponse(List.of(
                 createRecommendation(TestConstants.PLACE_ID_1, TestConstants.SIMILARITY_SCORE_LOW, List.of(TestConstants.ORDINARY_KEYWORD)),
                 createRecommendation(TestConstants.PLACE_ID_2, TestConstants.SIMILARITY_SCORE_HIGH, List.of(TestConstants.BEST_KEYWORD)),
                 createRecommendation(TestConstants.PLACE_ID_3, TestConstants.SIMILARITY_SCORE_MEDIUM, List.of(TestConstants.GOOD_KEYWORD))
         ), null);
-    }
-
-    public static PlaceAiResponse createSortTestAiResponseStub() {
-        return createSortTestAiResponse();
     }
 
     public static List<Place> createSortTestPlaceStubs() {

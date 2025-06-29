@@ -89,4 +89,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             "GROUP BY p.category\n" +
             "ORDER BY COUNT(*) DESC")
     List<String> findDistinctCategories();
+
+    @Query(value = "SELECT id FROM place ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
+    List<Long> findRandomPlaceIds(@Param("limit") int limit);
 }
