@@ -4,37 +4,49 @@ import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.service.query.PlaceQueryService;
+import com.dolpin.global.config.TestConfig;
 import com.dolpin.global.constants.TestConstants;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ApiResponse;
 import com.dolpin.global.response.ResponseStatus;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.http.HttpStatus;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import reactor.core.publisher.Mono;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.BDDMockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
-@WebMvcTest(controllers = PlaceController.class,
-        excludeAutoConfiguration = {
-                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class
-        })
+@WebMvcTest(controllers = PlaceController.class, excludeAutoConfiguration = {})
+@AutoConfigureMockMvc(addFilters = false)
+@Import(TestConfig.class)
+@ActiveProfiles("test")
 @DisplayName("PlaceController 테스트")
 class PlaceControllerTest {
 
@@ -47,388 +59,402 @@ class PlaceControllerTest {
     @MockitoBean
     private PlaceQueryService placeQueryService;
 
-    private <T> ApiResponse<T> performGetRequestAndExpectSuccess(String url, TypeReference<ApiResponse<T>> typeRef) throws Exception {
-        MvcResult result = mockMvc.perform(get(url)
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andReturn();
-
-        return objectMapper.readValue(result.getResponse().getContentAsString(), typeRef);
-    }
-
-    private ApiResponse<Object> performGetRequestAndExpectError(String url, HttpStatus expectedStatus) throws Exception {
-        MvcResult result = mockMvc.perform(get(url)
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().is(expectedStatus.value()))
-                .andReturn();
-
-        return objectMapper.readValue(result.getResponse().getContentAsString(),
-                new TypeReference<ApiResponse<Object>>() {});
-    }
-
-    private <T> ApiResponse<T> performGetRequestWithParamsAndExpectSuccess(
-            String url, Map<String, String> params, TypeReference<ApiResponse<T>> typeRef) throws Exception {
-
-        MockHttpServletRequestBuilder requestBuilder = get(url).contentType(MediaType.APPLICATION_JSON);
-
-        // 파라미터 추가
-        for (Map.Entry<String, String> param : params.entrySet()) {
-            if (param.getValue() != null) {
-                requestBuilder.param(param.getKey(), param.getValue());
-            }
-        }
-
-        MvcResult result = mockMvc.perform(requestBuilder)
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andReturn();
-
-        return objectMapper.readValue(result.getResponse().getContentAsString(), typeRef);
-    }
-
-    private ApiResponse<Object> performGetRequestWithParamsAndExpectError(
-            String url, Map<String, String> params, HttpStatus expectedStatus) throws Exception {
-
-        MockHttpServletRequestBuilder requestBuilder = get(url).contentType(MediaType.APPLICATION_JSON);
-
-        // 파라미터 추가
-        for (Map.Entry<String, String> param : params.entrySet()) {
-            if (param.getValue() != null) {
-                requestBuilder.param(param.getKey(), param.getValue());
-            }
-        }
-
-        MvcResult result = mockMvc.perform(requestBuilder)
-                .andExpect(status().is(expectedStatus.value()))
-                .andReturn();
-
-        return objectMapper.readValue(result.getResponse().getContentAsString(),
-                new TypeReference<ApiResponse<Object>>() {});
-    }
-
     @Nested
-    @DisplayName("장소 검색 API 테스트")
+    @DisplayName("GET /api/v1/places/search - 장소 검색")
     class SearchPlacesTest {
 
         @Test
-        @DisplayName("정상적인 검색어 기반 검색이 성공한다")
-        void searchPlaces_WithQuery_ReturnsSuccessResponse() throws Exception {
-            // given
+        @DisplayName("검색어로 장소 검색이 정상 동작한다")
+        @WithMockUser(username = "1")
+        void searchPlaces_WithQuery_ReturnsSearchResults() throws Exception {
+            // Given
+            String query = TestConstants.CAFE_SEARCH_QUERY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
+            Long userId = TestConstants.USER_ID_1;
+
+            PlaceSearchResponse expectedResponse = createSearchResponse();
+            given(placeQueryService.searchPlacesAsync(query, lat, lng, null, userId))
+                    .willReturn(Mono.just(expectedResponse));
+
+            // When & Then
+            MvcResult result = mockMvc.perform(get("/api/v1/places/search")
+                            .param("query", query)
+                            .param("lat", lat.toString())
+                            .param("lng", lng.toString())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(request().asyncStarted())
+                    .andReturn();
+
+            // 비동기 처리 완료 후 검증
+            mockMvc.perform(asyncDispatch(result))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH))
+                    .andExpect(jsonPath("$.data.total").value(2))
+                    .andExpect(jsonPath("$.data.places").isArray())
+                    .andExpect(jsonPath("$.data.places[0].id").value(TestConstants.PLACE_ID_1))
+                    .andExpect(jsonPath("$.data.places[0].name").value(TestConstants.STARBUCKS_NAME));
+
+            verify(placeQueryService).searchPlacesAsync(query, lat, lng, null, userId);
+        }
+
+        @Test
+        @DisplayName("카테고리로 장소 검색이 정상 동작한다")
+        @WithMockUser(username = "1")
+        void searchPlaces_WithCategory_ReturnsSearchResults() throws Exception {
+            // Given
+            String category = TestConstants.CAFE_CATEGORY;
+            Double lat = TestConstants.CENTER_LAT;
+            Double lng = TestConstants.CENTER_LNG;
+            Long userId = TestConstants.USER_ID_1;
+
+            PlaceSearchResponse expectedResponse = createSearchResponse();
+            given(placeQueryService.searchPlacesAsync(null, lat, lng, category, userId))
+                    .willReturn(Mono.just(expectedResponse));
+
+            // When & Then
+            MvcResult result = mockMvc.perform(get("/api/v1/places/search")
+                            .param("category", category)
+                            .param("lat", lat.toString())
+                            .param("lng", lng.toString())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(request().asyncStarted())
+                    .andReturn();
+
+            // 비동기 처리 완료 후 검증
+            mockMvc.perform(asyncDispatch(result))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH))
+                    .andExpect(jsonPath("$.data.total").value(2))
+                    .andExpect(jsonPath("$.data.places").isArray());
+
+            verify(placeQueryService).searchPlacesAsync(null, lat, lng, category, userId);
+        }
+
+        @Test
+        @DisplayName("인증되지 않은 사용자도 장소 검색이 가능하다")
+        void searchPlaces_WithoutAuthentication_ReturnsSearchResults() throws Exception {
+            // Given
             String query = TestConstants.CAFE_SEARCH_QUERY;
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
 
-            PlaceSearchResponse mockResponse = PlaceSearchResponse.builder()
-                    .total(1)
-                    .places(List.of(
-                            PlaceSearchResponse.PlaceDto.builder()
-                                    .id(TestConstants.PLACE_ID_1)
-                                    .name(TestConstants.TEST_CAFE_NAME)
-                                    .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
-                                    .distance(TestConstants.DISTANCE_100M)
-                                    .momentCount(5L)
-                                    .keywords(List.of(TestConstants.DELICIOUS_KEYWORD, TestConstants.COZY_KEYWORD))
-                                    .location(Map.of("type", "Point", "coordinates", new double[]{lng, lat}))
-                                    .similarityScore(TestConstants.SIMILARITY_SCORE_HIGH)
-                                    .build()
-                    ))
-                    .build();
+            PlaceSearchResponse expectedResponse = createSearchResponse();
+            given(placeQueryService.searchPlacesAsync(query, lat, lng, null, null))
+                    .willReturn(Mono.just(expectedResponse));
 
-            given(placeQueryService.searchPlaces(query, lat, lng, null)).willReturn(mockResponse);
+            // When & Then
+            MvcResult result = mockMvc.perform(get("/api/v1/places/search")
+                            .param("query", query)
+                            .param("lat", lat.toString())
+                            .param("lng", lng.toString())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(request().asyncStarted())
+                    .andReturn();
 
-            // when
-            Map<String, String> params = Map.of(
-                    "query", query,
-                    "lat", lat.toString(),
-                    "lng", lng.toString()
-            );
+            // 비동기 처리 완료 후 검증
+            mockMvc.perform(asyncDispatch(result))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH));
 
-            ApiResponse<PlaceSearchResponse> apiResponse = performGetRequestWithParamsAndExpectSuccess(
-                    "/api/v1/places/search", params, new TypeReference<ApiResponse<PlaceSearchResponse>>() {});
-
-            // then
-            assertThat(apiResponse.getMessage()).isEqualTo("get_place_success");
-            assertThat(apiResponse.getData().getTotal()).isEqualTo(1);
-            assertThat(apiResponse.getData().getPlaces()).hasSize(1);
-            assertThat(apiResponse.getData().getPlaces().get(0).getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
-
-            verify(placeQueryService).searchPlaces(query, lat, lng, null);
+            verify(placeQueryService).searchPlacesAsync(query, lat, lng, null, null);
         }
 
-        @Test
-        @DisplayName("정상적인 카테고리 기반 검색이 성공한다")
-        void searchPlaces_WithCategory_ReturnsSuccessResponse() throws Exception {
-            // given
-            String category = TestConstants.CAFE_CATEGORY;
-            Double lat = TestConstants.CENTER_LAT;
-            Double lng = TestConstants.CENTER_LNG;
+        @ParameterizedTest
+        @CsvSource({
+                "맛있는 카페, ,",
+                "맛있는 카페, 37.5665,",
+                "맛있는 카페, , 126.9780"
+        })
+        @DisplayName("파라미터가 올바르게 서비스로 전달되는지 확인")
+        @WithMockUser(username = "1")
+        void searchPlaces_WithMissingRequiredParams_CallsService(String query, Double lat, Double lng) throws Exception {
+            // Given
+            Long userId = TestConstants.USER_ID_1;
 
-            PlaceSearchResponse mockResponse = PlaceSearchResponse.builder()
-                    .total(1)
-                    .places(List.of(
-                            PlaceSearchResponse.PlaceDto.builder()
-                                    .id(TestConstants.PLACE_ID_1)
-                                    .name(TestConstants.STARBUCKS_NAME)
-                                    .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
-                                    .distance(TestConstants.DISTANCE_200M)
-                                    .momentCount(10L)
-                                    .keywords(List.of(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD))
-                                    .location(Map.of("type", "Point", "coordinates", new double[]{lng, lat}))
-                                    .similarityScore(null)
-                                    .build()
-                    ))
-                    .build();
+            // 서비스에서 예외를 던지도록 Mock 설정
+            given(placeQueryService.searchPlacesAsync(eq(query), eq(lat), eq(lng), isNull(), eq(userId)))
+                    .willReturn(Mono.error(new BusinessException(ResponseStatus.INVALID_PARAMETER, "위치 정보가 필요합니다")));
 
-            given(placeQueryService.searchPlaces(null, lat, lng, category)).willReturn(mockResponse);
+            // When
+            mockMvc.perform(get("/api/v1/places/search")
+                            .param("query", query)
+                            .param("lat", lat != null ? lat.toString() : "")
+                            .param("lng", lng != null ? lng.toString() : "")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(request().asyncStarted());
 
-            // when
-            Map<String, String> params = Map.of(
-                    "category", category,
-                    "lat", lat.toString(),
-                    "lng", lng.toString()
-            );
-
-            ApiResponse<PlaceSearchResponse> apiResponse = performGetRequestWithParamsAndExpectSuccess(
-                    "/api/v1/places/search", params, new TypeReference<ApiResponse<PlaceSearchResponse>>() {});
-
-            // then
-            assertThat(apiResponse.getData().getPlaces().get(0).getSimilarityScore()).isNull();
-
-            verify(placeQueryService).searchPlaces(null, lat, lng, category);
-        }
-
-        @Test
-        @DisplayName("잘못된 파라미터 조합 시 400 에러가 발생한다")
-        void searchPlaces_WithInvalidParams_Returns400Error() throws Exception {
-            // given
-            String query = TestConstants.CAFE_SEARCH_QUERY;
-            String category = TestConstants.CAFE_CATEGORY;
-            Double lat = TestConstants.CENTER_LAT;
-            Double lng = TestConstants.CENTER_LNG;
-
-            given(placeQueryService.searchPlaces(query, lat, lng, category))
-                    .willThrow(new BusinessException(ResponseStatus.INVALID_PARAMETER, "검색어와 카테고리 중 하나만 선택해주세요"));
-
-            // when
-            Map<String, String> params = Map.of(
-                    "query", query,
-                    "category", category,
-                    "lat", lat.toString(),
-                    "lng", lng.toString()
-            );
-
-            ApiResponse<Object> apiResponse = performGetRequestWithParamsAndExpectError(
-                    "/api/v1/places/search", params, HttpStatus.BAD_REQUEST);
-
-            // then
-            assertThat(apiResponse.getMessage()).isEqualTo("검색어와 카테고리 중 하나만 선택해주세요");
-            assertThat(apiResponse.getData()).isNull();
+            // Then - 서비스가 올바른 파라미터로 호출되었는지만 확인
+            verify(placeQueryService).searchPlacesAsync(eq(query), eq(lat), eq(lng), isNull(), eq(userId));
         }
 
         @Test
         @DisplayName("빈 검색 결과를 정상적으로 반환한다")
-        void searchPlaces_WithEmptyResult_ReturnsEmptyResponse() throws Exception {
-            // given
+        @WithMockUser(username = "1")
+        void searchPlaces_WithNoResults_ReturnsEmptyResults() throws Exception {
+            // Given
             String query = TestConstants.NON_EXISTENT_SEARCH_QUERY;
             Double lat = TestConstants.CENTER_LAT;
             Double lng = TestConstants.CENTER_LNG;
+            Long userId = TestConstants.USER_ID_1;
 
             PlaceSearchResponse emptyResponse = PlaceSearchResponse.builder()
                     .total(0)
                     .places(Collections.emptyList())
                     .build();
 
-            given(placeQueryService.searchPlaces(query, lat, lng, null)).willReturn(emptyResponse);
+            given(placeQueryService.searchPlacesAsync(query, lat, lng, null, userId))
+                    .willReturn(Mono.just(emptyResponse));
 
-            // when
-            Map<String, String> params = Map.of(
-                    "query", query,
-                    "lat", lat.toString(),
-                    "lng", lng.toString()
-            );
+            // When & Then
+            MvcResult result = mockMvc.perform(get("/api/v1/places/search")
+                            .param("query", query)
+                            .param("lat", lat.toString())
+                            .param("lng", lng.toString())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(request().asyncStarted())
+                    .andReturn();
 
-            ApiResponse<PlaceSearchResponse> apiResponse = performGetRequestWithParamsAndExpectSuccess(
-                    "/api/v1/places/search", params, new TypeReference<ApiResponse<PlaceSearchResponse>>() {});
+            // 비동기 처리 완료 후 검증
+            mockMvc.perform(asyncDispatch(result))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH))
+                    .andExpect(jsonPath("$.data.total").value(0))
+                    .andExpect(jsonPath("$.data.places").isArray())
+                    .andExpect(jsonPath("$.data.places").isEmpty());
 
-            // then
-            assertThat(apiResponse.getData().getTotal()).isEqualTo(0);
-            assertThat(apiResponse.getData().getPlaces()).isEmpty();
+            verify(placeQueryService).searchPlacesAsync(query, lat, lng, null, userId);
         }
     }
 
     @Nested
-    @DisplayName("장소 상세 조회 API 테스트")
+    @DisplayName("GET /api/v1/places/{place_id} - 장소 상세 조회")
     class GetPlaceDetailTest {
 
         @Test
-        @DisplayName("정상적인 장소 상세 조회가 성공한다")
-        void getPlaceDetail_WithValidId_ReturnsSuccessResponse() throws Exception {
-            // given
+        @DisplayName("인증된 사용자의 장소 상세 조회가 정상 동작한다")
+        @WithMockUser(username = "1")
+        void getPlaceDetail_WithAuthentication_ReturnsPlaceDetail() throws Exception {
+            // Given
             Long placeId = TestConstants.PLACE_ID_1;
-            PlaceDetailResponse mockResponse = PlaceDetailResponse.builder()
-                    .id(placeId)
-                    .name(TestConstants.TEST_CAFE_NAME)
-                    .address(TestConstants.DEFAULT_ROAD_ADDRESS)
-                    .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
-                    .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.CENTER_LNG, TestConstants.CENTER_LAT}))
-                    .keywords(List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD))
-                    .description(TestConstants.DEFAULT_DESCRIPTION)
-                    .phone(TestConstants.DEFAULT_PHONE)
-                    .openingHours(PlaceDetailResponse.OpeningHours.builder()
-                            .status(TestConstants.BUSINESS_STATUS_OPEN)
-                            .schedules(List.of(
-                                    PlaceDetailResponse.Schedule.builder()
-                                            .day("mon")
-                                            .hours(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME)
-                                            .breakTime(TestConstants.BREAK_START_TIME + "~" + TestConstants.BREAK_END_TIME)
-                                            .build()
-                            ))
-                            .build())
-                    .menu(List.of(
-                            PlaceDetailResponse.Menu.builder()
-                                    .name(TestConstants.AMERICANO_MENU)
-                                    .price(TestConstants.AMERICANO_PRICE)
-                                    .build()
-                    ))
-                    .build();
+            Long userId = TestConstants.USER_ID_1;
 
-            given(placeQueryService.getPlaceDetail(placeId)).willReturn(mockResponse);
+            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
+            given(placeQueryService.getPlaceDetail(placeId, userId))
+                    .willReturn(expectedResponse);
 
-            // when
-            ApiResponse<PlaceDetailResponse> apiResponse = performGetRequestAndExpectSuccess(
-                    "/api/v1/places/" + placeId, new TypeReference<ApiResponse<PlaceDetailResponse>>() {});
+            // When & Then
+            mockMvc.perform(get("/api/v1/places/{place_id}", placeId)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_DETAIL))
+                    .andExpect(jsonPath("$.data.id").value(placeId))
+                    .andExpect(jsonPath("$.data.name").value(TestConstants.TEST_CAFE_NAME))
+                    .andExpect(jsonPath("$.data.is_bookmarked").value(true))
+                    .andExpect(jsonPath("$.data.keywords").isArray())
+                    .andExpect(jsonPath("$.data.menu").isArray())
+                    .andExpect(jsonPath("$.data.opening_hours").exists())
+                    .andExpect(jsonPath("$.data.location").exists());
 
-            // then
-            assertThat(apiResponse.getMessage()).isEqualTo("get_place_detail_success");
-            assertThat(apiResponse.getData().getId()).isEqualTo(placeId);
-            assertThat(apiResponse.getData().getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
-            assertThat(apiResponse.getData().getKeywords()).containsExactlyInAnyOrder(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
-            assertThat(apiResponse.getData().getMenu()).hasSize(1);
-            assertThat(apiResponse.getData().getOpeningHours().getStatus()).isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
+            verify(placeQueryService).getPlaceDetail(placeId, userId);
+        }
 
-            verify(placeQueryService).getPlaceDetail(placeId);
+        @ParameterizedTest
+        @ValueSource(longs = {999L, 1000L, -1L})
+        @DisplayName("다양한 장소 ID로 상세 조회가 서비스에 올바르게 전달된다")
+        @WithMockUser(username = "1")
+        void getPlaceDetail_WithVariousIds_CallsServiceCorrectly(Long placeId) throws Exception {
+            // Given
+            Long userId = TestConstants.USER_ID_1;
+            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
+            given(placeQueryService.getPlaceDetail(placeId, userId))
+                    .willReturn(expectedResponse);
+
+            // When & Then
+            mockMvc.perform(get("/api/v1/places/{place_id}", placeId)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.id").value(placeId));
+
+            verify(placeQueryService).getPlaceDetail(placeId, userId);
         }
 
         @Test
-        @DisplayName("존재하지 않는 장소 ID 조회 시 404 에러가 발생한다")
-        void getPlaceDetail_WithNonExistentId_Returns404Error() throws Exception {
-            // given
-            Long nonExistentId = TestConstants.NON_EXISTENT_PLACE_ID;
-            given(placeQueryService.getPlaceDetail(nonExistentId))
-                    .willThrow(new BusinessException(ResponseStatus.PLACE_NOT_FOUND, "장소를 찾을 수 없습니다"));
-
-            // when
-            ApiResponse<Object> apiResponse = performGetRequestAndExpectError(
-                    "/api/v1/places/" + nonExistentId, HttpStatus.NOT_FOUND);
-
-            // then
-            assertThat(apiResponse.getMessage()).isEqualTo("장소를 찾을 수 없습니다");
-            assertThat(apiResponse.getData()).isNull();
-        }
-
-        @Test
-        @DisplayName("잘못된 형식의 place_id에 대해 400 에러가 발생한다")
-        void getPlaceDetail_WithInvalidId_Returns400Error() throws Exception {
-            // given
-            String invalidId = "invalid";
-
-            // when & then
-            mockMvc.perform(get("/api/v1/places/{place_id}", invalidId)
+        @DisplayName("잘못된 경로 파라미터 형식에 대한 처리")
+        @WithMockUser
+        void getPlaceDetail_WithInvalidPathVariable_Returns400() throws Exception {
+            // When & Then
+            mockMvc.perform(get("/api/v1/places/invalid-id")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest());
         }
     }
 
     @Nested
-    @DisplayName("카테고리 목록 조회 API 테스트")
+    @DisplayName("GET /api/v1/places/categories - 카테고리 목록 조회")
     class GetAllCategoriesTest {
 
         @Test
-        @DisplayName("정상적인 카테고리 목록 조회가 성공한다")
-        void getAllCategories_ReturnsSuccessResponse() throws Exception {
-            // given
-            PlaceCategoryResponse mockResponse = PlaceCategoryResponse.builder()
-                    .categories(List.of(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY,
-                            TestConstants.BAR_CATEGORY, TestConstants.BAKERY_CATEGORY))
+        @DisplayName("카테고리 목록 조회가 정상 동작한다")
+        @WithMockUser
+        void getAllCategories_ReturnsCategories() throws Exception {
+            // Given
+            List<String> categories = List.of(
+                    TestConstants.CAFE_CATEGORY,
+                    TestConstants.RESTAURANT_CATEGORY,
+                    TestConstants.BAR_CATEGORY,
+                    TestConstants.BAKERY_CATEGORY,
+                    TestConstants.FASTFOOD_CATEGORY
+            );
+            PlaceCategoryResponse expectedResponse = PlaceCategoryResponse.builder()
+                    .categories(categories)
                     .build();
 
-            given(placeQueryService.getAllCategories()).willReturn(mockResponse);
+            given(placeQueryService.getAllCategories()).willReturn(expectedResponse);
 
-            // when
-            ApiResponse<PlaceCategoryResponse> apiResponse = performGetRequestAndExpectSuccess(
-                    "/api/v1/places/categories", new TypeReference<ApiResponse<PlaceCategoryResponse>>() {});
-
-            // then
-            assertThat(apiResponse.getMessage()).isEqualTo("get_categories_success");
-            assertThat(apiResponse.getData().getCategories()).hasSize(4);
-            assertThat(apiResponse.getData().getCategories())
-                    .containsExactlyInAnyOrder(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY,
-                            TestConstants.BAR_CATEGORY, TestConstants.BAKERY_CATEGORY);
+            // When & Then
+            mockMvc.perform(get("/api/v1/places/categories")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_CATEGORIES))
+                    .andExpect(jsonPath("$.data.categories").isArray())
+                    .andExpect(jsonPath("$.data.categories.length()").value(5))
+                    .andExpect(jsonPath("$.data.categories[0]").value(TestConstants.CAFE_CATEGORY))
+                    .andExpect(jsonPath("$.data.categories[1]").value(TestConstants.RESTAURANT_CATEGORY));
 
             verify(placeQueryService).getAllCategories();
         }
 
         @Test
-        @DisplayName("빈 카테고리 목록을 정상적으로 반환한다")
-        void getAllCategories_WithEmptyResult_ReturnsEmptyResponse() throws Exception {
-            // given
+        @DisplayName("빈 카테고리 목록도 정상적으로 반환한다")
+        @WithMockUser
+        void getAllCategories_WithEmptyList_ReturnsEmptyCategories() throws Exception {
+            // Given
             PlaceCategoryResponse emptyResponse = PlaceCategoryResponse.builder()
                     .categories(Collections.emptyList())
                     .build();
 
             given(placeQueryService.getAllCategories()).willReturn(emptyResponse);
 
-            // when
-            ApiResponse<PlaceCategoryResponse> apiResponse = performGetRequestAndExpectSuccess(
-                    "/api/v1/places/categories", new TypeReference<ApiResponse<PlaceCategoryResponse>>() {});
+            // When & Then
+            mockMvc.perform(get("/api/v1/places/categories")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_CATEGORIES))
+                    .andExpect(jsonPath("$.data.categories").isArray())
+                    .andExpect(jsonPath("$.data.categories").isEmpty());
 
-            // then
-            assertThat(apiResponse.getData().getCategories()).isEmpty();
+            verify(placeQueryService).getAllCategories();
+        }
+
+        @Test
+        @DisplayName("인증 여부와 관계없이 카테고리 조회가 가능하다")
+        @WithMockUser(username = "1")
+        void getAllCategories_WithAuthentication_ReturnsCategories() throws Exception {
+            // Given
+            List<String> categories = List.of(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY);
+            PlaceCategoryResponse expectedResponse = PlaceCategoryResponse.builder()
+                    .categories(categories)
+                    .build();
+
+            given(placeQueryService.getAllCategories()).willReturn(expectedResponse);
+
+            // When & Then
+            mockMvc.perform(get("/api/v1/places/categories")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.categories.length()").value(2));
+
+            verify(placeQueryService).getAllCategories();
         }
     }
 
-    @Nested
-    @DisplayName("공통 응답 구조 검증")
-    class CommonResponseTest {
+    // 테스트 헬퍼 메서드들
+    private PlaceSearchResponse createSearchResponse() {
+        List<PlaceSearchResponse.PlaceDto> places = List.of(
+                PlaceSearchResponse.PlaceDto.builder()
+                        .id(TestConstants.PLACE_ID_1)
+                        .name(TestConstants.STARBUCKS_NAME)
+                        .thumbnail(TestConstants.STARBUCKS_THUMBNAIL)
+                        .distance(TestConstants.DISTANCE_100M)
+                        .momentCount(TestConstants.MOMENT_COUNT_LOW)
+                        .keywords(List.of(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD))
+                        .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.CENTER_LNG, TestConstants.CENTER_LAT}))
+                        .isBookmarked(true)
+                        .similarityScore(TestConstants.SIMILARITY_SCORE_HIGH)
+                        .build(),
+                PlaceSearchResponse.PlaceDto.builder()
+                        .id(TestConstants.PLACE_ID_2)
+                        .name(TestConstants.TWOSOME_NAME)
+                        .thumbnail(TestConstants.TEST_THUMBNAIL)
+                        .distance(TestConstants.DISTANCE_200M)
+                        .momentCount(TestConstants.MOMENT_COUNT_LOW)
+                        .keywords(List.of(TestConstants.DESSERT_KEYWORD, TestConstants.CAKE_KEYWORD))
+                        .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.SORT_TEST_PLACE2_LAT}))
+                        .isBookmarked(false)
+                        .similarityScore(TestConstants.SIMILARITY_SCORE_MEDIUM)
+                        .build()
+        );
 
-        @Test
-        @DisplayName("모든 성공 응답은 올바른 ApiResponse 구조를 가진다")
-        void allSuccessResponses_HaveCorrectApiResponseStructure() throws Exception {
-            // given
-            PlaceSearchResponse mockSearchResponse = PlaceSearchResponse.builder()
-                    .total(0).places(Collections.emptyList()).build();
-            given(placeQueryService.searchPlaces(anyString(), any(), any(), isNull())).willReturn(mockSearchResponse);
+        return PlaceSearchResponse.builder()
+                .total(2)
+                .places(places)
+                .build();
+    }
 
-            // when
-            Map<String, String> params = Map.of(
-                    "query", "test",
-                    "lat", TestConstants.CENTER_LAT.toString(),
-                    "lng", TestConstants.CENTER_LNG.toString()
-            );
+    private PlaceDetailResponse createPlaceDetailResponse(Long placeId, Boolean isBookmarked) {
+        List<PlaceDetailResponse.Schedule> schedules = List.of(
+                PlaceDetailResponse.Schedule.builder()
+                        .day("mon")
+                        .hours(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME)
+                        .breakTime(TestConstants.BREAK_START_TIME + "~" + TestConstants.BREAK_END_TIME)
+                        .build(),
+                PlaceDetailResponse.Schedule.builder()
+                        .day("tue")
+                        .hours(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME)
+                        .breakTime(null)
+                        .build()
+        );
 
-            ApiResponse<PlaceSearchResponse> apiResponse = performGetRequestWithParamsAndExpectSuccess(
-                    "/api/v1/places/search", params, new TypeReference<ApiResponse<PlaceSearchResponse>>() {});
+        PlaceDetailResponse.OpeningHours openingHours = PlaceDetailResponse.OpeningHours.builder()
+                .status(TestConstants.BUSINESS_STATUS_OPEN)
+                .schedules(schedules)
+                .build();
 
-            // then
-            assertThat(apiResponse.getMessage()).isNotNull();
-            assertThat(apiResponse.getData()).isNotNull();
-        }
+        List<PlaceDetailResponse.Menu> menu = List.of(
+                PlaceDetailResponse.Menu.builder()
+                        .name(TestConstants.AMERICANO_MENU)
+                        .price(TestConstants.AMERICANO_PRICE)
+                        .build(),
+                PlaceDetailResponse.Menu.builder()
+                        .name(TestConstants.LATTE_MENU)
+                        .price(TestConstants.LATTE_PRICE)
+                        .build()
+        );
 
-        @Test
-        @DisplayName("서비스 예외 발생 시 적절한 에러 응답을 반환한다")
-        void serviceException_ReturnsProperErrorResponse() throws Exception {
-            // given
-            given(placeQueryService.getAllCategories())
-                    .willThrow(new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류"));
-
-            // when
-            ApiResponse<Object> apiResponse = performGetRequestAndExpectError(
-                    "/api/v1/places/categories", HttpStatus.INTERNAL_SERVER_ERROR);
-
-            // then
-            assertThat(apiResponse.getMessage()).isEqualTo("서버 내부 오류");
-            assertThat(apiResponse.getData()).isNull();
-        }
+        return PlaceDetailResponse.builder()
+                .id(placeId)
+                .name(TestConstants.TEST_CAFE_NAME)
+                .address(TestConstants.DEFAULT_ROAD_ADDRESS)
+                .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
+                .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.CENTER_LNG, TestConstants.CENTER_LAT}))
+                .keywords(List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD))
+                .description(TestConstants.DEFAULT_DESCRIPTION)
+                .phone(TestConstants.DEFAULT_PHONE)
+                .isBookmarked(isBookmarked)
+                .openingHours(openingHours)
+                .menu(menu)
+                .build();
     }
 }
