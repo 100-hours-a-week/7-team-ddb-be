@@ -17,7 +17,7 @@ echo "▶ DB 비밀번호 시크릿 조회 및 병합"
 cp /home/ubuntu/.env /home/ubuntu/.env.final
 
 SECRET_JSON=$(aws secretsmanager get-secret-value \
-  --secret-id ${ENV_NAME}/rds/credentials \
+  --secret-id ${ENV_NAME}/rds/credentials/secret \
   --query SecretString \
   --output text)
 
