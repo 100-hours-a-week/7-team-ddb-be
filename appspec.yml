@@ -13,15 +13,15 @@ hooks:
 
   AfterInstall:
     - location: scripts/AfterInstall.sh
-      timeout: 60
+      timeout: 120
       runas: root
 
   ApplicationStart:
     - location: scripts/ApplicationStart.sh
-      timeout: 60
+      timeout: 180
       runas: root
 
   ValidateService:
     - location: scripts/NotifyDiscord.sh
-      timeout: 60
+      timeout: 120
       runas: root
