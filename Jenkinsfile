@@ -56,9 +56,15 @@ pipeline {
             }
         }
 
+        stage('Test') {
+            steps {
+                sh './gradlew test'
+            }
+        }
+        
         stage('Build JAR') {
             steps {
-                sh './gradlew clean build --exclude-task test'
+                sh './gradlew clean build -x test'
             }
         }
 
