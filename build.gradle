@@ -75,7 +75,6 @@ dependencies {
 	implementation 'org.springframework.retry:spring-retry'
 	implementation 'org.springframework:spring-aspects'
 
-	// Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
 	implementation 'org.apache.commons:commons-pool2'
@@ -87,6 +86,9 @@ dependencies {
 	// 캐시 추상화
 	implementation 'org.springframework.boot:spring-boot-starter-cache'
 
+
+	implementation platform("software.amazon.awssdk:bom:2.25.15")
+	implementation 'software.amazon.awssdk:s3'
 
 }
 
