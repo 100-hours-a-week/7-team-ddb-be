@@ -136,22 +136,6 @@ public class Moment {
         }
     }
 
-    public void removeImage(MomentImage image) {
-        this.images.remove(image);
-        image.setMoment(null);
-        // 순서 재정렬
-        reorderImageSequences();
-    }
-
-    public void reorderImages(List<MomentImage> newOrderImages) {
-        this.images.clear();
-        for (int i = 0; i < newOrderImages.size(); i++) {
-            MomentImage image = newOrderImages.get(i);
-            image.updateSequence(i);
-            this.images.add(image);
-            image.setMoment(this);
-        }
-    }
 
     public void togglePublic() {
         this.isPublic = !this.isPublic;
@@ -159,13 +143,6 @@ public class Moment {
 
     public void setPublic(boolean isPublic) {
         this.isPublic = isPublic;
-    }
-
-    // 내부 헬퍼 메서드
-    private void reorderImageSequences() {
-        for (int i = 0; i < this.images.size(); i++) {
-            this.images.get(i).updateSequence(i);
-        }
     }
 
     // 비즈니스 로직 메서드
