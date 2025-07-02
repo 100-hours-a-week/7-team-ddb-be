@@ -89,7 +89,7 @@ public class MomentCommandServiceImpl implements MomentCommandService {
     public void deleteMoment(Long userId, Long momentId) {
         // Moment 조회 및 권한 검증
         Moment moment = momentRepository.findBasicMomentById(momentId)
-                .orElseThrow(() -> new BusinessException(ResponseStatus.USER_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")));
+                .orElseThrow(() -> new BusinessException(ResponseStatus.USER_NOT_FOUND.withMessage("사용자를 찾을 수 없습니다.")));
 
         validateOwnership(moment, userId);
 

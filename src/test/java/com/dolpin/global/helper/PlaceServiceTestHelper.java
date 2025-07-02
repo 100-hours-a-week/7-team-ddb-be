@@ -3,7 +3,7 @@ package com.dolpin.global.helper;
 import com.dolpin.domain.place.dto.response.PlaceAiResponse;
 import com.dolpin.domain.place.dto.response.PlaceWithDistance;
 import com.dolpin.domain.place.entity.*;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -27,22 +27,22 @@ public class PlaceServiceTestHelper {
         when(place.getId()).thenReturn(id);
         when(place.getName()).thenReturn(name);
         when(place.getLocation()).thenReturn(location);
-        when(place.getImageUrl()).thenReturn(TestConstants.DEFAULT_IMAGE_URL);
+        when(place.getImageUrl()).thenReturn(PlaceTestConstants.DEFAULT_IMAGE_URL);
         return place;
     }
 
     // 성공 케이스용 - 모든 정보 포함
     public static Place createBasicPlaceForDetail() {
-        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(TestConstants.CENTER_LNG, TestConstants.CENTER_LAT));
+        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(PlaceTestConstants.CENTER_LNG, PlaceTestConstants.CENTER_LAT));
         Place place = mock(Place.class);
 
-        when(place.getId()).thenReturn(TestConstants.PLACE_ID_1);
-        when(place.getName()).thenReturn(TestConstants.TEST_CAFE_NAME);
+        when(place.getId()).thenReturn(PlaceTestConstants.PLACE_ID_1);
+        when(place.getName()).thenReturn(PlaceTestConstants.TEST_CAFE_NAME);
         when(place.getLocation()).thenReturn(location);
-        when(place.getRoadAddress()).thenReturn(TestConstants.DEFAULT_ROAD_ADDRESS);
-        when(place.getImageUrl()).thenReturn(TestConstants.DEFAULT_IMAGE_URL);
-        when(place.getDescription()).thenReturn(TestConstants.DEFAULT_DESCRIPTION);
-        when(place.getPhone()).thenReturn(TestConstants.DEFAULT_PHONE);
+        when(place.getRoadAddress()).thenReturn(PlaceTestConstants.DEFAULT_ROAD_ADDRESS);
+        when(place.getImageUrl()).thenReturn(PlaceTestConstants.DEFAULT_IMAGE_URL);
+        when(place.getDescription()).thenReturn(PlaceTestConstants.DEFAULT_DESCRIPTION);
+        when(place.getPhone()).thenReturn(PlaceTestConstants.DEFAULT_PHONE);
 
         return place;
     }
@@ -76,13 +76,13 @@ public class PlaceServiceTestHelper {
 
     // === 키워드 관련 Place Stub ===
     public static Place createPlaceStubWithKeywords(Long id, String name, List<String> keywordStrings) {
-        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(TestConstants.CENTER_LNG, TestConstants.CENTER_LAT));
+        Point location = GEOMETRY_FACTORY.createPoint(new Coordinate(PlaceTestConstants.CENTER_LNG, PlaceTestConstants.CENTER_LAT));
         Place place = mock(Place.class);
 
         when(place.getId()).thenReturn(id);
         when(place.getName()).thenReturn(name);
         when(place.getLocation()).thenReturn(location);
-        when(place.getImageUrl()).thenReturn(TestConstants.DEFAULT_IMAGE_URL);
+        when(place.getImageUrl()).thenReturn(PlaceTestConstants.DEFAULT_IMAGE_URL);
 
         List<PlaceKeyword> keywordStubs = createKeywordStubs(keywordStrings);
         when(place.getKeywords()).thenReturn(keywordStubs);
@@ -155,35 +155,35 @@ public class PlaceServiceTestHelper {
     // === 기본 테스트 데이터 ===
     public static List<PlaceMenu> createDefaultCafeMenus() {
         return List.of(
-                createMenuStub(TestConstants.AMERICANO_MENU, TestConstants.AMERICANO_PRICE),
-                createMenuStub(TestConstants.LATTE_MENU, TestConstants.LATTE_PRICE)
+                createMenuStub(PlaceTestConstants.AMERICANO_MENU, PlaceTestConstants.AMERICANO_PRICE),
+                createMenuStub(PlaceTestConstants.LATTE_MENU, PlaceTestConstants.LATTE_PRICE)
         );
     }
 
     public static List<String> getDefaultCafeKeywords() {
-        return List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
+        return List.of(PlaceTestConstants.COZY_KEYWORD, PlaceTestConstants.DELICIOUS_KEYWORD);
     }
 
     public static List<String> getChainStoreKeywords() {
-        return List.of(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD);
+        return List.of(PlaceTestConstants.CHAIN_STORE_KEYWORD, PlaceTestConstants.SPACIOUS_KEYWORD);
     }
 
     public static List<String> getDessertKeywords() {
-        return List.of(TestConstants.DESSERT_KEYWORD, TestConstants.CAKE_KEYWORD);
+        return List.of(PlaceTestConstants.DESSERT_KEYWORD, PlaceTestConstants.CAKE_KEYWORD);
     }
 
     public static List<PlaceHours> createCompleteBusinessHoursStubs() {
         List<PlaceHours> hours = new ArrayList<>();
 
-        hours.add(createHoursStub(TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME, false));
-        hours.add(createHoursStub(TestConstants.MONDAY, TestConstants.BREAK_START_TIME, TestConstants.BREAK_END_TIME, true));
+        hours.add(createHoursStub(PlaceTestConstants.MONDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.CLOSE_TIME, false));
+        hours.add(createHoursStub(PlaceTestConstants.MONDAY, PlaceTestConstants.BREAK_START_TIME, PlaceTestConstants.BREAK_END_TIME, true));
 
-        String[] workingDays = {TestConstants.TUESDAY, TestConstants.WEDNESDAY, TestConstants.THURSDAY, TestConstants.FRIDAY, TestConstants.SATURDAY};
+        String[] workingDays = {PlaceTestConstants.TUESDAY, PlaceTestConstants.WEDNESDAY, PlaceTestConstants.THURSDAY, PlaceTestConstants.FRIDAY, PlaceTestConstants.SATURDAY};
         for (String day : workingDays) {
-            hours.add(createHoursStub(day, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME, false));
+            hours.add(createHoursStub(day, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.CLOSE_TIME, false));
         }
 
-        hours.add(createHoursStub(TestConstants.SUNDAY, null, null, false));
+        hours.add(createHoursStub(PlaceTestConstants.SUNDAY, null, null, false));
 
         return hours;
     }
@@ -207,9 +207,9 @@ public class PlaceServiceTestHelper {
 
     // === PlaceWithDistance 구현체 생성 ===
     public static PlaceWithDistance createPlaceWithDistance(Long id, String name, double lat, double lng, double distance) {
-        return createPlaceWithDistance(id, name, TestConstants.CAFE_CATEGORY,
-                TestConstants.DEFAULT_ROAD_ADDRESS, TestConstants.DEFAULT_LOT_ADDRESS,
-                TestConstants.DEFAULT_IMAGE_URL, lat, lng, distance);
+        return createPlaceWithDistance(id, name, PlaceTestConstants.CAFE_CATEGORY,
+                PlaceTestConstants.DEFAULT_ROAD_ADDRESS, PlaceTestConstants.DEFAULT_LOT_ADDRESS,
+                PlaceTestConstants.DEFAULT_IMAGE_URL, lat, lng, distance);
     }
 
     public static PlaceWithDistance createPlaceWithDistance(Long id, String name, String category,
@@ -231,28 +231,28 @@ public class PlaceServiceTestHelper {
     // === 테스트용 데이터 세트 ===
     public static List<PlaceWithDistance> createSortTestPlaceWithDistances() {
         return List.of(
-                createPlaceWithDistance(TestConstants.PLACE_ID_1, TestConstants.ORDINARY_CAFE_NAME,
-                        TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.DISTANCE_100M),
-                createPlaceWithDistance(TestConstants.PLACE_ID_2, TestConstants.BEST_CAFE_NAME,
-                        TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.DISTANCE_200M),
-                createPlaceWithDistance(TestConstants.PLACE_ID_3, TestConstants.GOOD_CAFE_NAME,
-                        TestConstants.SORT_TEST_PLACE3_LAT, TestConstants.SORT_TEST_PLACE3_LNG, TestConstants.DISTANCE_300M)
+                createPlaceWithDistance(PlaceTestConstants.PLACE_ID_1, PlaceTestConstants.ORDINARY_CAFE_NAME,
+                        PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.DISTANCE_100M),
+                createPlaceWithDistance(PlaceTestConstants.PLACE_ID_2, PlaceTestConstants.BEST_CAFE_NAME,
+                        PlaceTestConstants.SORT_TEST_PLACE2_LAT, PlaceTestConstants.SORT_TEST_PLACE2_LNG, PlaceTestConstants.DISTANCE_200M),
+                createPlaceWithDistance(PlaceTestConstants.PLACE_ID_3, PlaceTestConstants.GOOD_CAFE_NAME,
+                        PlaceTestConstants.SORT_TEST_PLACE3_LAT, PlaceTestConstants.SORT_TEST_PLACE3_LNG, PlaceTestConstants.DISTANCE_300M)
         );
     }
 
     public static PlaceAiResponse createSortTestAiResponse() {
         return new PlaceAiResponse(List.of(
-                createRecommendation(TestConstants.PLACE_ID_1, TestConstants.SIMILARITY_SCORE_LOW, List.of(TestConstants.ORDINARY_KEYWORD)),
-                createRecommendation(TestConstants.PLACE_ID_2, TestConstants.SIMILARITY_SCORE_HIGH, List.of(TestConstants.BEST_KEYWORD)),
-                createRecommendation(TestConstants.PLACE_ID_3, TestConstants.SIMILARITY_SCORE_MEDIUM, List.of(TestConstants.GOOD_KEYWORD))
+                createRecommendation(PlaceTestConstants.PLACE_ID_1, PlaceTestConstants.SIMILARITY_SCORE_LOW, List.of(PlaceTestConstants.ORDINARY_KEYWORD)),
+                createRecommendation(PlaceTestConstants.PLACE_ID_2, PlaceTestConstants.SIMILARITY_SCORE_HIGH, List.of(PlaceTestConstants.BEST_KEYWORD)),
+                createRecommendation(PlaceTestConstants.PLACE_ID_3, PlaceTestConstants.SIMILARITY_SCORE_MEDIUM, List.of(PlaceTestConstants.GOOD_KEYWORD))
         ), null);
     }
 
     public static List<Place> createSortTestPlaceStubs() {
         return List.of(
-                createPlaceStubWithKeywords(TestConstants.PLACE_ID_1, TestConstants.ORDINARY_CAFE_NAME, List.of(TestConstants.ORDINARY_KEYWORD)),
-                createPlaceStubWithKeywords(TestConstants.PLACE_ID_2, TestConstants.BEST_CAFE_NAME, List.of(TestConstants.BEST_KEYWORD)),
-                createPlaceStubWithKeywords(TestConstants.PLACE_ID_3, TestConstants.GOOD_CAFE_NAME, List.of(TestConstants.GOOD_KEYWORD))
+                createPlaceStubWithKeywords(PlaceTestConstants.PLACE_ID_1, PlaceTestConstants.ORDINARY_CAFE_NAME, List.of(PlaceTestConstants.ORDINARY_KEYWORD)),
+                createPlaceStubWithKeywords(PlaceTestConstants.PLACE_ID_2, PlaceTestConstants.BEST_CAFE_NAME, List.of(PlaceTestConstants.BEST_KEYWORD)),
+                createPlaceStubWithKeywords(PlaceTestConstants.PLACE_ID_3, PlaceTestConstants.GOOD_CAFE_NAME, List.of(PlaceTestConstants.GOOD_KEYWORD))
         );
     }
 

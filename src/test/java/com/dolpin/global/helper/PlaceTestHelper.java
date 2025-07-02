@@ -2,7 +2,7 @@ package com.dolpin.global.helper;
 
 import com.dolpin.domain.place.dto.response.PlaceWithDistance;
 import com.dolpin.domain.place.entity.*;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import com.dolpin.global.fixture.PlaceFixture;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.stereotype.Component;
@@ -103,30 +103,30 @@ public class PlaceTestHelper {
     // === 테스트 데이터 세트 생성 ===
     public List<Place> savePlacesForCategoryTest(TestEntityManager entityManager) {
         Place cafe1 = savePlace(entityManager, PlaceFixture.createCafe(
-                TestConstants.TEST_CAFE_NAME + "1", TestConstants.CENTER_LAT, TestConstants.CENTER_LNG));
+                PlaceTestConstants.TEST_CAFE_NAME + "1", PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG));
         Place cafe2 = savePlace(entityManager, PlaceFixture.createCafe(
-                TestConstants.TEST_CAFE_NAME + "2", TestConstants.NEAR_LAT, TestConstants.NEAR_LNG));
+                PlaceTestConstants.TEST_CAFE_NAME + "2", PlaceTestConstants.NEAR_LAT, PlaceTestConstants.NEAR_LNG));
         Place cafe3 = savePlace(entityManager, PlaceFixture.createCafe(
-                TestConstants.TEST_CAFE_NAME + "3", TestConstants.BAR_LAT, TestConstants.BAR_LNG));
+                PlaceTestConstants.TEST_CAFE_NAME + "3", PlaceTestConstants.BAR_LAT, PlaceTestConstants.BAR_LNG));
 
         Place restaurant1 = savePlace(entityManager, PlaceFixture.createRestaurant(
-                TestConstants.TEST_RESTAURANT_NAME + "1", TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG));
+                PlaceTestConstants.TEST_RESTAURANT_NAME + "1", PlaceTestConstants.RESTAURANT1_LAT, PlaceTestConstants.RESTAURANT1_LNG));
         Place restaurant2 = savePlace(entityManager, PlaceFixture.createRestaurant(
-                TestConstants.TEST_RESTAURANT_NAME + "2", TestConstants.RESTAURANT2_LAT, TestConstants.RESTAURANT2_LNG));
+                PlaceTestConstants.TEST_RESTAURANT_NAME + "2", PlaceTestConstants.RESTAURANT2_LAT, PlaceTestConstants.RESTAURANT2_LNG));
 
         Place bar = savePlace(entityManager, PlaceFixture.createBar(
-                TestConstants.TEST_BAR_NAME + "1", TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG));
+                PlaceTestConstants.TEST_BAR_NAME + "1", PlaceTestConstants.SORT_TEST_FAR_LAT, PlaceTestConstants.SORT_TEST_FAR_LNG));
 
         return List.of(cafe1, cafe2, cafe3, restaurant1, restaurant2, bar);
     }
 
     public List<Place> setupSortTestData(TestEntityManager entityManager) {
-        Place place1 = PlaceFixture.createCafe(TestConstants.BEST_CAFE_NAME,
-                TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
-        Place place2 = PlaceFixture.createCafe(TestConstants.GOOD_CAFE_NAME,
-                TestConstants.SORT_TEST_PLACE2_LAT, TestConstants.SORT_TEST_PLACE2_LNG);
-        Place place3 = PlaceFixture.createCafe(TestConstants.ORDINARY_CAFE_NAME,
-                TestConstants.SORT_TEST_PLACE3_LAT, TestConstants.SORT_TEST_PLACE3_LNG);
+        Place place1 = PlaceFixture.createCafe(PlaceTestConstants.BEST_CAFE_NAME,
+                PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
+        Place place2 = PlaceFixture.createCafe(PlaceTestConstants.GOOD_CAFE_NAME,
+                PlaceTestConstants.SORT_TEST_PLACE2_LAT, PlaceTestConstants.SORT_TEST_PLACE2_LNG);
+        Place place3 = PlaceFixture.createCafe(PlaceTestConstants.ORDINARY_CAFE_NAME,
+                PlaceTestConstants.SORT_TEST_PLACE3_LAT, PlaceTestConstants.SORT_TEST_PLACE3_LNG);
 
         Place saved1 = savePlace(entityManager, place1);
         Place saved2 = savePlace(entityManager, place2);
@@ -146,7 +146,7 @@ public class PlaceTestHelper {
     public Place saveBasicCafeWithAllData(TestEntityManager entityManager) {
         Place cafe = PlaceFixture.createBasicCafe();
 
-        List<String> keywords = List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
+        List<String> keywords = List.of(PlaceTestConstants.COZY_KEYWORD, PlaceTestConstants.DELICIOUS_KEYWORD);
         List<PlaceMenu> menus = List.of(
                 PlaceFixture.createAmericanoMenu(cafe),
                 PlaceFixture.createLatteMenu(cafe)
@@ -169,8 +169,8 @@ public class PlaceTestHelper {
     public void assertPlaceBasicInfo(Place place, String expectedName, String expectedCategory) {
         assertThat(place.getName()).isEqualTo(expectedName);
         assertThat(place.getCategory()).isEqualTo(expectedCategory);
-        assertThat(place.getRoadAddress()).isEqualTo(TestConstants.DEFAULT_ROAD_ADDRESS);
-        assertThat(place.getImageUrl()).isEqualTo(TestConstants.DEFAULT_IMAGE_URL);
+        assertThat(place.getRoadAddress()).isEqualTo(PlaceTestConstants.DEFAULT_ROAD_ADDRESS);
+        assertThat(place.getImageUrl()).isEqualTo(PlaceTestConstants.DEFAULT_IMAGE_URL);
     }
 
     public void assertPlaceLocation(Place place, double expectedLat, double expectedLng) {

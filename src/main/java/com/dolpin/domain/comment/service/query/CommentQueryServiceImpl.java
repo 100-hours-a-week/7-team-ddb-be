@@ -59,7 +59,7 @@ public class CommentQueryServiceImpl implements CommentQueryService {
 
     private Moment validateMomentAccess(Long momentId, Long currentUserId) {
         Moment moment = momentRepository.findBasicMomentById(momentId)
-                .orElseThrow(() -> new BusinessException(ResponseStatus.USER_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")));
+                .orElseThrow(() -> new BusinessException(ResponseStatus.MOMENT_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")));
 
         if (!moment.canBeViewedBy(currentUserId)) {
             throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다."));

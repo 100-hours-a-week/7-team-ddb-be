@@ -60,7 +60,7 @@ public final class UserTestConstants {
     public static final String SUCCESS_MESSAGE_USER_DELETE = "user_delete_success";
 
     // === 에러 메시지 상수 ===
-    public static final String ERROR_MESSAGE_USER_NOT_FOUND = "사용자를 찾을 수 없습니다.";
+    public static final String ERROR_MESSAGE_USER_NOT_FOUND = "기록을 찾을 수 없습니다.";
     public static final String ERROR_MESSAGE_NICKNAME_DUPLICATE = "이미 존재하는 닉네임입니다.";
     public static final String ERROR_MESSAGE_PRIVACY_AGREEMENT_REQUIRED = "개인정보 동의 여부는 필수입니다";
     public static final String ERROR_MESSAGE_INVALID_OAUTH_INFO = "유효하지 않은 소셜 로그인 정보";
