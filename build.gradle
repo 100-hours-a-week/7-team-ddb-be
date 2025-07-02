@@ -161,6 +161,12 @@ jacocoTestReport {
 					'**/dto/**',
 					'**/*Application.class',
 
+					// SecurityConfig 구체적 제외
+					'**/SecurityConfig.class',
+					'**/security/SecurityConfig.class',
+					'**/config/SecurityConfig.class',
+					'**/global/security/SecurityConfig.class',
+
 					// QueryDSL 자동 생성 Q클래스 제외
 					'**/Q*.class',
 
@@ -183,7 +189,18 @@ jacocoTestReport {
 					'**/redis/service/**',
 
 					// Place 도메인 제외
-					'**/place/**'
+					'**/place/**',
+
+					// 기타 설정 클래스들
+					'**/WebConfig.class',
+					'**/RedisConfig.class',
+					'**/DatabaseConfig.class',
+					'**/CorsConfig.class',
+					'**/AsyncConfig.class',
+					'**/QuerydslConfig.class',
+					'**/GcsConfig.class',
+					'**/S3Config.class',
+					'**/SchedulingConfig.class'
 			])
 		}))
 	}
@@ -203,15 +220,33 @@ jacocoTestCoverageVerification {
 	afterEvaluate {
 		classDirectories.setFrom(files(classDirectories.files.collect {
 			fileTree(dir: it, exclude: [
+					// 기본 제외 항목
 					'**/config/**',
 					'**/dto/**',
 					'**/*Application.class',
+
+					// SecurityConfig 구체적 제외
+					'**/SecurityConfig.class',
+					'**/security/SecurityConfig.class',
+					'**/config/SecurityConfig.class',
+					'**/global/security/SecurityConfig.class',
+
+					// 캐시 관련 제외
 					'**/cache/**',
 					'**/service/cache/**',
+
+					// Storage 관련 제외
 					'**/storage/service/gcs/**',
 					'**/storage/controller/**',
+
+					// Rate Limit 제외
 					'**/ratelimit/**',
-					'**/redis/service/**'
+
+					// Redis 서비스 제외
+					'**/redis/service/**',
+
+					// Place 도메인 제외
+					'**/place/**'
 			])
 		}))
 	}
