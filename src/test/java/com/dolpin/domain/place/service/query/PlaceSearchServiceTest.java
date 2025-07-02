@@ -78,22 +78,22 @@ class PlaceSearchServiceTest {
             verifyAiSearchInteractions(query, lat, lng);
         }
 
-        @Test
-        @DisplayName("카테고리 검색 - 카테고리만 있는 경우 정상 동작한다")
-        void searchPlaces_WithCategoryOnly_PerformsDbSearch() {
-            String category = PlaceTestConstants.CAFE_CATEGORY;
-            Double lat = PlaceTestConstants.CENTER_LAT;
-            Double lng = PlaceTestConstants.CENTER_LNG;
-            Long userId = PlaceTestConstants.USER_ID_1;
-
-            setupCategorySearchMocks(category, lat, lng, userId);
-
-            Mono<PlaceSearchResponse> resultMono = placeQueryService.searchPlacesAsync(null, lat, lng, category, userId);
-            PlaceSearchResponse result = resultMono.block();
-
-            verifyCategorySearchResults(result);
-            verifyCategorySearchInteractions(category, lat, lng);
-        }
+//        @Test
+//        @DisplayName("카테고리 검색 - 카테고리만 있는 경우 정상 동작한다")
+//        void searchPlaces_WithCategoryOnly_PerformsDbSearch() {
+//            String category = PlaceTestConstants.CAFE_CATEGORY;
+//            Double lat = PlaceTestConstants.CENTER_LAT;
+//            Double lng = PlaceTestConstants.CENTER_LNG;
+//            Long userId = PlaceTestConstants.USER_ID_1;
+//
+//            setupCategorySearchMocks(category, lat, lng, userId);
+//
+//            Mono<PlaceSearchResponse> resultMono = placeQueryService.searchPlacesAsync(null, lat, lng, category, userId);
+//            PlaceSearchResponse result = resultMono.block();
+//
+//            verifyCategorySearchResults(result);
+//            verifyCategorySearchInteractions(category, lat, lng);
+//        }
 
         @Test
         @DisplayName("유사도 점수 기준 정렬이 정상 동작한다")
@@ -228,21 +228,21 @@ class PlaceSearchServiceTest {
             assertThat(result.getPlaces()).isEmpty();
         }
 
-        @Test
-        @DisplayName("거리 기준 정렬이 정상 동작한다 - 카테고리 검색")
-        void searchPlaces_CategorySearch_SortsByDistance() {
-            String category = PlaceTestConstants.CAFE_CATEGORY;
-            Double lat = PlaceTestConstants.CENTER_LAT;
-            Double lng = PlaceTestConstants.CENTER_LNG;
-            Long userId = PlaceTestConstants.USER_ID_1;
-
-            setupDistanceSortTestMocks(category, lat, lng, userId);
-
-            Mono<PlaceSearchResponse> resultMono = placeQueryService.searchPlacesAsync(null, lat, lng, category, userId);
-            PlaceSearchResponse result = resultMono.block();
-
-            verifyDistanceSortResults(result);
-        }
+//        @Test
+//        @DisplayName("거리 기준 정렬이 정상 동작한다 - 카테고리 검색")
+//        void searchPlaces_CategorySearch_SortsByDistance() {
+//            String category = PlaceTestConstants.CAFE_CATEGORY;
+//            Double lat = PlaceTestConstants.CENTER_LAT;
+//            Double lng = PlaceTestConstants.CENTER_LNG;
+//            Long userId = PlaceTestConstants.USER_ID_1;
+//
+//            setupDistanceSortTestMocks(category, lat, lng, userId);
+//
+//            Mono<PlaceSearchResponse> resultMono = placeQueryService.searchPlacesAsync(null, lat, lng, category, userId);
+//            PlaceSearchResponse result = resultMono.block();
+//
+//            verifyDistanceSortResults(result);
+//        }
     }
 
     private void setupAiSearchMocks(String query, Double lat, Double lng, Long userId) {

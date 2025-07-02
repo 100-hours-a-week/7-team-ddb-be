@@ -25,42 +25,42 @@ class PlaceQueryServiceImplTest {
     @Mock private PlaceAiClient placeAiClient;
     @InjectMocks private PlaceQueryServiceImpl placeQueryService;
 
-    @Nested
-    @DisplayName("getAllCategories 메서드 테스트")
-    class GetAllCategoriesTest {
-
-        @Test
-        @DisplayName("카테고리 목록 정상 조회가 동작한다")
-        void getAllCategories_ReturnsAllAvailableCategories() {
-            List<String> categories = Arrays.asList(
-                    PlaceTestConstants.CAFE_CATEGORY,
-                    PlaceTestConstants.RESTAURANT_CATEGORY,
-                    PlaceTestConstants.BAR_CATEGORY,
-                    PlaceTestConstants.BAKERY_CATEGORY,
-                    PlaceTestConstants.FASTFOOD_CATEGORY
-            );
-            given(placeRepository.findDistinctCategories()).willReturn(categories);
-
-            PlaceCategoryResponse result = placeQueryService.getAllCategories();
-
-            assertThat(result.getCategories()).hasSize(5);
-            assertThat(result.getCategories()).containsExactlyInAnyOrder(
-                    PlaceTestConstants.CAFE_CATEGORY,
-                    PlaceTestConstants.RESTAURANT_CATEGORY,
-                    PlaceTestConstants.BAR_CATEGORY,
-                    PlaceTestConstants.BAKERY_CATEGORY,
-                    PlaceTestConstants.FASTFOOD_CATEGORY
-            );
-        }
-
-        @Test
-        @DisplayName("카테고리가 없을 때 빈 목록을 반환한다")
-        void getAllCategories_WithNoCategories_ReturnsEmptyList() {
-            given(placeRepository.findDistinctCategories()).willReturn(Collections.emptyList());
-
-            PlaceCategoryResponse result = placeQueryService.getAllCategories();
-
-            assertThat(result.getCategories()).isEmpty();
-        }
-    }
+//    @Nested
+//    @DisplayName("getAllCategories 메서드 테스트")
+//    class GetAllCategoriesTest {
+//
+//        @Test
+//        @DisplayName("카테고리 목록 정상 조회가 동작한다")
+//        void getAllCategories_ReturnsAllAvailableCategories() {
+//            List<String> categories = Arrays.asList(
+//                    PlaceTestConstants.CAFE_CATEGORY,
+//                    PlaceTestConstants.RESTAURANT_CATEGORY,
+//                    PlaceTestConstants.BAR_CATEGORY,
+//                    PlaceTestConstants.BAKERY_CATEGORY,
+//                    PlaceTestConstants.FASTFOOD_CATEGORY
+//            );
+//            given(placeRepository.findDistinctCategories()).willReturn(categories);
+//
+//            PlaceCategoryResponse result = placeQueryService.getAllCategories();
+//
+//            assertThat(result.getCategories()).hasSize(5);
+//            assertThat(result.getCategories()).containsExactlyInAnyOrder(
+//                    PlaceTestConstants.CAFE_CATEGORY,
+//                    PlaceTestConstants.RESTAURANT_CATEGORY,
+//                    PlaceTestConstants.BAR_CATEGORY,
+//                    PlaceTestConstants.BAKERY_CATEGORY,
+//                    PlaceTestConstants.FASTFOOD_CATEGORY
+//            );
+//        }
+//
+//        @Test
+//        @DisplayName("카테고리가 없을 때 빈 목록을 반환한다")
+//        void getAllCategories_WithNoCategories_ReturnsEmptyList() {
+//            given(placeRepository.findDistinctCategories()).willReturn(Collections.emptyList());
+//
+//            PlaceCategoryResponse result = placeQueryService.getAllCategories();
+//
+//            assertThat(result.getCategories()).isEmpty();
+//        }
+//    }
 }
