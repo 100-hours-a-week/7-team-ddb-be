@@ -7,6 +7,7 @@ import com.dolpin.domain.moment.dto.response.PlaceMomentListResponse;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.domain.moment.service.MomentViewService;
+import com.dolpin.domain.moment.service.cache.MomentCacheService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.global.exception.BusinessException;
@@ -35,6 +36,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     private final UserQueryService userQueryService;
     private final CommentRepository commentRepository;
     private final MomentViewService momentViewService;
+    private final MomentCacheService momentCacheService;
 
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 50;
@@ -139,15 +141,22 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         boolean hasNext = moments.size() > pageSize;
         List<Moment> actualMoments = hasNext ? moments.subList(0, pageSize) : moments;
 
+        // 빈 결과 처리 추가
+        if (actualMoments.isEmpty()) {
+            return buildEmptyMomentListResponse(pageSize, baseUrl);
+        }
+
         // 댓글 수 한 번에 조회
         List<Long> momentIds = actualMoments.stream()
                 .map(Moment::getId)
                 .collect(Collectors.toList());
 
-        Map<Long, Long> commentCountMap = getCommentCountMap(momentIds);
+        Map<Long, Long> commentCountMap = getCommentCountMapWithCache(momentIds);
+
+        Map<Long, Long> viewCountMap = getViewCountMapWithCache(actualMoments);
 
         List<MomentListResponse.MomentSummaryDto> momentDtos = actualMoments.stream()
-                .map(moment -> buildMomentSummaryDto(moment, includeAuthor, commentCountMap))
+                .map(moment -> buildMomentSummaryDto(moment, includeAuthor, commentCountMap, viewCountMap))
                 .collect(Collectors.toList());
 
         String nextCursor = null;
@@ -187,7 +196,8 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     }
 
     private MomentListResponse.MomentSummaryDto buildMomentSummaryDto(Moment moment, boolean includeAuthor,
-                                                                      Map<Long, Long> commentCountMap) {
+                                                                      Map<Long, Long> commentCountMap,
+                                                                      Map<Long, Long> viewCountMap) { // 👈 viewCountMap 파라미터 추가
         String thumbnail = moment.getThumbnailUrl();
 
         MomentListResponse.MomentSummaryDto.MomentSummaryDtoBuilder builder = MomentListResponse.MomentSummaryDto.builder()
@@ -199,7 +209,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                 .isPublic(moment.getIsPublic())
                 .createdAt(moment.getCreatedAt())
                 .commentCount(commentCountMap.getOrDefault(moment.getId(), 0L))
-                .viewCount(moment.getViewCount());
+                .viewCount(viewCountMap.getOrDefault(moment.getId(), 0L)); // 👈 캐시에서 조회한 값 사용
 
         if (includeAuthor) {
             User author = userQueryService.getUserById(moment.getUserId());
@@ -211,6 +221,37 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         }
 
         return builder.build();
+    }
+
+    private Map<Long, Long> getCommentCountMapWithCache(List<Long> momentIds) {
+        if (momentIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        // 1. 캐시에서 댓글 수 조회
+        Map<Long, Long> cachedCommentCounts = momentCacheService.getCommentCounts(momentIds);
+
+        // 2. 캐시 미스인 기록들 추출
+        List<Long> missedMomentIds = momentIds.stream()
+                .filter(momentId -> !cachedCommentCounts.containsKey(momentId))
+                .collect(Collectors.toList());
+
+        Map<Long, Long> result = new HashMap<>(cachedCommentCounts);
+
+        // 3. 캐시 미스인 경우 DB에서 조회
+        if (!missedMomentIds.isEmpty()) {
+            Map<Long, Long> dbCommentCounts = getCommentCountMap(missedMomentIds); // 기존 메서드 활용
+            result.putAll(dbCommentCounts);
+
+            // 4. DB에서 조회한 데이터 캐싱
+            momentCacheService.cacheCommentCountsBatch(dbCommentCounts);
+
+            log.debug("댓글 수 조회: 캐시 히트 {}/{}, DB 조회 {}/{}",
+                    cachedCommentCounts.size(), momentIds.size(),
+                    missedMomentIds.size(), momentIds.size());
+        }
+
+        return result;
     }
 
     private Map<Long, Long> getCommentCountMap(List<Long> momentIds) {
@@ -242,5 +283,66 @@ public class MomentQueryServiceImpl implements MomentQueryService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
+    }
+
+    /**
+     * 캐시를 활용한 조회 수 조회
+     */
+    private Map<Long, Long> getViewCountMapWithCache(List<Moment> moments) {
+        List<Long> momentIds = moments.stream().map(Moment::getId).collect(Collectors.toList());
+
+        if (momentIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        // 캐시에서 조회 수 조회
+        Map<Long, Long> cachedViewCounts = momentCacheService.getViewCounts(momentIds);
+
+        // 캐시 미스인 기록들 추출
+        List<Long> missedMomentIds = momentIds.stream()
+                .filter(momentId -> !cachedViewCounts.containsKey(momentId))
+                .collect(Collectors.toList());
+
+        Map<Long, Long> result = new HashMap<>(cachedViewCounts);
+
+        // 캐시 미스인 경우 Moment 엔티티에서 조회
+        if (!missedMomentIds.isEmpty()) {
+            Map<Long, Long> dbViewCounts = new HashMap<>();
+            for (Moment moment : moments) {
+                if (missedMomentIds.contains(moment.getId())) {
+                    dbViewCounts.put(moment.getId(), moment.getViewCount());
+                }
+            }
+            result.putAll(dbViewCounts);
+
+            // DB에서 조회한 데이터 캐싱
+            momentCacheService.cacheViewCountsBatch(dbViewCounts);
+        }
+
+        return result;
+    }
+
+    /**
+     * 빈 응답 생성
+     */
+    private MomentListResponse buildEmptyMomentListResponse(int pageSize, String baseUrl) {
+        MomentListResponse.MetaDto meta = MomentListResponse.MetaDto.builder()
+                .pagination(MomentListResponse.PaginationDto.builder()
+                        .limit(pageSize)
+                        .nextCursor(null)
+                        .hasNext(false)
+                        .build())
+                .build();
+
+        MomentListResponse.LinksDto links = MomentListResponse.LinksDto.builder()
+                .self(MomentListResponse.LinkDto.builder().href(baseUrl + "?limit=" + pageSize).build())
+                .next(null)
+                .build();
+
+        return MomentListResponse.builder()
+                .moments(List.of())
+                .meta(meta)
+                .links(links)
+                .build();
     }
 }
