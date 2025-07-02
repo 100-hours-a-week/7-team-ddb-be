@@ -3,7 +3,7 @@ package com.dolpin.domain.place.repository;
 import com.dolpin.domain.place.dto.response.PlaceWithDistance;
 import com.dolpin.domain.place.entity.*;
 import com.dolpin.global.config.TestConfig;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import com.dolpin.global.fixture.PlaceFixture;
 import com.dolpin.global.helper.PlaceTestHelper;
 import org.junit.jupiter.api.DisplayName;
@@ -90,8 +90,8 @@ class PlaceRepositoryTest {
 
             // then
             assertThat(result).isPresent();
-            assertThat(result.get().getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
-            assertThat(result.get().getCategory()).isEqualTo(TestConstants.CAFE_CATEGORY);
+            assertThat(result.get().getName()).isEqualTo(PlaceTestConstants.TEST_CAFE_NAME);
+            assertThat(result.get().getCategory()).isEqualTo(PlaceTestConstants.CAFE_CATEGORY);
         }
 
         @Test
@@ -101,7 +101,7 @@ class PlaceRepositoryTest {
             testHelper.clearPersistenceContext(entityManager);
 
             // when
-            Optional<Place> result = placeRepository.findBasicPlaceById(TestConstants.NON_EXISTENT_PLACE_ID);
+            Optional<Place> result = placeRepository.findBasicPlaceById(PlaceTestConstants.NON_EXISTENT_PLACE_ID);
 
             // then
             assertThat(result).isEmpty();
@@ -116,7 +116,7 @@ class PlaceRepositoryTest {
         @DisplayName("키워드를 포함한 장소 정보 조회가 정상 동작한다")
         void findByIdWithKeywords_ReturnsPlaceWithKeywords() {
             // given
-            List<String> expectedKeywords = List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
+            List<String> expectedKeywords = List.of(PlaceTestConstants.COZY_KEYWORD, PlaceTestConstants.DELICIOUS_KEYWORD);
             Place place = PlaceFixture.createBasicCafe();
             Place savedPlace = testHelper.savePlaceWithKeywords(entityManager, place, expectedKeywords);
             testHelper.clearPersistenceContext(entityManager);
@@ -156,8 +156,8 @@ class PlaceRepositoryTest {
             // given
             Place place = PlaceFixture.createBasicCafe();
             List<PlaceMenu> expectedMenus = List.of(
-                    PlaceFixture.createPlaceMenu(place, TestConstants.AMERICANO_MENU, TestConstants.AMERICANO_PRICE),
-                    PlaceFixture.createPlaceMenu(place, TestConstants.LATTE_MENU, TestConstants.LATTE_PRICE)
+                    PlaceFixture.createPlaceMenu(place, PlaceTestConstants.AMERICANO_MENU, PlaceTestConstants.AMERICANO_PRICE),
+                    PlaceFixture.createPlaceMenu(place, PlaceTestConstants.LATTE_MENU, PlaceTestConstants.LATTE_PRICE)
             );
             Place savedPlace = testHelper.savePlaceWithMenus(entityManager, place, expectedMenus);
             testHelper.clearPersistenceContext(entityManager);
@@ -167,13 +167,13 @@ class PlaceRepositoryTest {
 
             // then
             assertThat(result).isPresent();
-            assertThat(result.get().getMenus()).hasSize(TestConstants.EXPECTED_MENU_COUNT);
+            assertThat(result.get().getMenus()).hasSize(PlaceTestConstants.EXPECTED_MENU_COUNT);
 
             List<String> actualMenuNames = result.get().getMenus().stream()
                     .map(PlaceMenu::getMenuName)
                     .toList();
             assertThat(actualMenuNames).containsExactlyInAnyOrder(
-                    TestConstants.AMERICANO_MENU, TestConstants.LATTE_MENU);
+                    PlaceTestConstants.AMERICANO_MENU, PlaceTestConstants.LATTE_MENU);
         }
 
         @Test
@@ -198,20 +198,20 @@ class PlaceRepositoryTest {
             List<String> actualDays = result.get().getHours().stream()
                     .map(PlaceHours::getDayOfWeek)
                     .toList();
-            assertThat(actualDays).containsExactlyInAnyOrder(TestConstants.MONDAY, TestConstants.TUESDAY);
+            assertThat(actualDays).containsExactlyInAnyOrder(PlaceTestConstants.MONDAY, PlaceTestConstants.TUESDAY);
         }
 
         @Test
         @DisplayName("여러 ID로 키워드 포함 장소들 조회가 정상 동작한다")
         void findByIdsWithKeywords_ReturnsPlacesWithKeywords() {
             // given
-            Place place1 = PlaceFixture.createCafe(TestConstants.TEST_CAFE_NAME + "1",
-                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
-            Place place2 = PlaceFixture.createCafe(TestConstants.TEST_CAFE_NAME + "2",
-                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+            Place place1 = PlaceFixture.createCafe(PlaceTestConstants.TEST_CAFE_NAME + "1",
+                    PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
+            Place place2 = PlaceFixture.createCafe(PlaceTestConstants.TEST_CAFE_NAME + "2",
+                    PlaceTestConstants.NEAR_LAT, PlaceTestConstants.NEAR_LNG);
 
             Place savedPlace1 = testHelper.savePlaceWithKeywords(entityManager, place1,
-                    List.of(TestConstants.GOOD_KEYWORD));
+                    List.of(PlaceTestConstants.GOOD_KEYWORD));
             Place savedPlace2 = testHelper.savePlace(entityManager, place2);
             testHelper.clearPersistenceContext(entityManager);
 
@@ -222,7 +222,7 @@ class PlaceRepositoryTest {
             // then
             assertThat(results).hasSize(2);
             assertThat(results.stream().map(Place::getName))
-                    .containsExactlyInAnyOrder(TestConstants.TEST_CAFE_NAME + "1", TestConstants.TEST_CAFE_NAME + "2");
+                    .containsExactlyInAnyOrder(PlaceTestConstants.TEST_CAFE_NAME + "1", PlaceTestConstants.TEST_CAFE_NAME + "2");
         }
     }
 
@@ -245,22 +245,22 @@ class PlaceRepositoryTest {
 
             // when
             List<PlaceWithDistance> results = placeRepository.findPlacesWithinRadiusByIds(
-                    placeIds, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.SMALL_RADIUS);
+                    placeIds, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.SMALL_RADIUS);
 
             // then
             assertThat(results).hasSize(1);
-            assertThat(results.get(0).getName()).isEqualTo(TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME);
-            assertThat(results.get(0).getDistance()).isLessThan(TestConstants.SMALL_RADIUS);
+            assertThat(results.get(0).getName()).isEqualTo(PlaceTestConstants.NEARBY_PREFIX + PlaceTestConstants.TEST_CAFE_NAME);
+            assertThat(results.get(0).getDistance()).isLessThan(PlaceTestConstants.SMALL_RADIUS);
         }
 
         @Test
         @DisplayName("반경이 매우 클 때 모든 장소가 조회된다")
         void findPlacesWithinRadiusByIds_WithLargeRadius_ReturnsAllPlaces() {
             // given
-            Place place1 = PlaceFixture.createCafe(TestConstants.TEST_CAFE_NAME + "1",
-                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
-            Place place2 = PlaceFixture.createCafe(TestConstants.TEST_CAFE_NAME + "2",
-                    TestConstants.FAR_LAT, TestConstants.FAR_LNG);
+            Place place1 = PlaceFixture.createCafe(PlaceTestConstants.TEST_CAFE_NAME + "1",
+                    PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
+            Place place2 = PlaceFixture.createCafe(PlaceTestConstants.TEST_CAFE_NAME + "2",
+                    PlaceTestConstants.FAR_LAT, PlaceTestConstants.FAR_LNG);
 
             Place savedPlace1 = testHelper.savePlace(entityManager, place1);
             Place savedPlace2 = testHelper.savePlace(entityManager, place2);
@@ -270,7 +270,7 @@ class PlaceRepositoryTest {
 
             // when
             List<PlaceWithDistance> results = placeRepository.findPlacesWithinRadiusByIds(
-                    placeIds, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.LARGE_RADIUS);
+                    placeIds, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.LARGE_RADIUS);
 
             // then
             assertThat(results).hasSize(2);
@@ -280,13 +280,13 @@ class PlaceRepositoryTest {
         @DisplayName("ID 목록으로 검색 시 결과가 거리순으로 정렬된다")
         void findPlacesWithinRadiusByIds_ResultsOrderedByDistance() {
             // given
-            String nearCafeName = TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME;
-            String farCafeName = TestConstants.FAR_PREFIX + TestConstants.TEST_CAFE_NAME;
+            String nearCafeName = PlaceTestConstants.NEARBY_PREFIX + PlaceTestConstants.TEST_CAFE_NAME;
+            String farCafeName = PlaceTestConstants.FAR_PREFIX + PlaceTestConstants.TEST_CAFE_NAME;
 
             Place nearPlace = PlaceFixture.createCafe(nearCafeName,
-                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+                    PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
             Place farPlace = PlaceFixture.createCafe(farCafeName,
-                    TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG);
+                    PlaceTestConstants.SORT_TEST_FAR_LAT, PlaceTestConstants.SORT_TEST_FAR_LNG);
 
             Place savedNearPlace = testHelper.savePlace(entityManager, nearPlace);
             Place savedFarPlace = testHelper.savePlace(entityManager, farPlace);
@@ -296,7 +296,7 @@ class PlaceRepositoryTest {
 
             // when
             List<PlaceWithDistance> results = placeRepository.findPlacesWithinRadiusByIds(
-                    placeIds, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.LARGE_RADIUS);
+                    placeIds, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.LARGE_RADIUS);
 
             // then
             assertThat(results).hasSize(2);
@@ -318,25 +318,25 @@ class PlaceRepositoryTest {
 
             // when
             List<PlaceWithDistance> results = placeRepository.findPlacesByCategoryWithinRadius(
-                    TestConstants.CAFE_CATEGORY, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.SMALL_RADIUS);
+                    PlaceTestConstants.CAFE_CATEGORY, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.SMALL_RADIUS);
 
             // then
             assertThat(results).hasSize(1);
-            assertThat(results.get(0).getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
-            assertThat(results.get(0).getCategory()).isEqualTo(TestConstants.CAFE_CATEGORY);
+            assertThat(results.get(0).getName()).isEqualTo(PlaceTestConstants.TEST_CAFE_NAME);
+            assertThat(results.get(0).getCategory()).isEqualTo(PlaceTestConstants.CAFE_CATEGORY);
         }
 
         @Test
         @DisplayName("카테고리별 검색 결과가 거리순으로 정렬된다")
         void findPlacesByCategoryWithinRadius_ResultsOrderedByDistance() {
             // given
-            String nearCafeName = TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME;
-            String farCafeName = TestConstants.FAR_PREFIX + TestConstants.TEST_CAFE_NAME;
+            String nearCafeName = PlaceTestConstants.NEARBY_PREFIX + PlaceTestConstants.TEST_CAFE_NAME;
+            String farCafeName = PlaceTestConstants.FAR_PREFIX + PlaceTestConstants.TEST_CAFE_NAME;
 
             Place nearCafe = PlaceFixture.createCafe(nearCafeName,
-                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+                    PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
             Place farCafe = PlaceFixture.createCafe(farCafeName,
-                    TestConstants.SORT_TEST_FAR_LAT, TestConstants.SORT_TEST_FAR_LNG);
+                    PlaceTestConstants.SORT_TEST_FAR_LAT, PlaceTestConstants.SORT_TEST_FAR_LNG);
 
             testHelper.savePlace(entityManager, nearCafe);
             testHelper.savePlace(entityManager, farCafe);
@@ -344,7 +344,7 @@ class PlaceRepositoryTest {
 
             // when
             List<PlaceWithDistance> results = placeRepository.findPlacesByCategoryWithinRadius(
-                    TestConstants.CAFE_CATEGORY, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.LARGE_RADIUS);
+                    PlaceTestConstants.CAFE_CATEGORY, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.LARGE_RADIUS);
 
             // then
             assertThat(results).hasSize(2);
@@ -363,7 +363,7 @@ class PlaceRepositoryTest {
 
             // when
             List<PlaceWithDistance> results = placeRepository.findPlacesByCategoryWithinRadius(
-                    TestConstants.NON_EXISTENT_CATEGORY, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG, TestConstants.SMALL_RADIUS);
+                    PlaceTestConstants.NON_EXISTENT_CATEGORY, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG, PlaceTestConstants.SMALL_RADIUS);
 
             // then
             assertThat(results).isEmpty();
@@ -392,9 +392,9 @@ class PlaceRepositoryTest {
 
             // then
             assertThat(categories).containsExactlyInAnyOrder(
-                    TestConstants.CAFE_CATEGORY,
-                    TestConstants.RESTAURANT_CATEGORY,
-                    TestConstants.BAR_CATEGORY);
+                    PlaceTestConstants.CAFE_CATEGORY,
+                    PlaceTestConstants.RESTAURANT_CATEGORY,
+                    PlaceTestConstants.BAR_CATEGORY);
         }
 
         @Test
@@ -409,9 +409,9 @@ class PlaceRepositoryTest {
 
             // then
             assertThat(categories).hasSize(3);
-            assertThat(categories.get(0)).isEqualTo(TestConstants.CAFE_CATEGORY);  // 3개
-            assertThat(categories.get(1)).isEqualTo(TestConstants.RESTAURANT_CATEGORY);  // 2개
-            assertThat(categories.get(2)).isEqualTo(TestConstants.BAR_CATEGORY);  // 1개
+            assertThat(categories.get(0)).isEqualTo(PlaceTestConstants.CAFE_CATEGORY);  // 3개
+            assertThat(categories.get(1)).isEqualTo(PlaceTestConstants.RESTAURANT_CATEGORY);  // 2개
+            assertThat(categories.get(2)).isEqualTo(PlaceTestConstants.BAR_CATEGORY);  // 1개
         }
 
         @Test
@@ -436,10 +436,10 @@ class PlaceRepositoryTest {
         @DisplayName("이름으로 장소 ID 검색이 정상 동작한다")
         void findPlaceIdsByNameContaining_ReturnsMatchingIds() {
             // given
-            Place cafe1 = PlaceFixture.createCafe(TestConstants.TEST_CAFE_NAME,
-                    TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
-            Place cafe2 = PlaceFixture.createCafe(TestConstants.ORDINARY_CAFE_NAME,
-                    TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+            Place cafe1 = PlaceFixture.createCafe(PlaceTestConstants.TEST_CAFE_NAME,
+                    PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
+            Place cafe2 = PlaceFixture.createCafe(PlaceTestConstants.ORDINARY_CAFE_NAME,
+                    PlaceTestConstants.NEAR_LAT, PlaceTestConstants.NEAR_LNG);
             Place restaurant = PlaceFixture.createBasicRestaurant();
 
             testHelper.savePlace(entityManager, cafe1);

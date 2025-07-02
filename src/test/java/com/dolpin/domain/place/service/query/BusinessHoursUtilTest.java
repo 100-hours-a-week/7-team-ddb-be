@@ -2,7 +2,7 @@ package com.dolpin.domain.place.service.query;
 
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.entity.PlaceHours;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import com.dolpin.global.util.BusinessTimeUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -48,12 +48,12 @@ class BusinessHoursUtilTest {
 
         private static Stream<Arguments> distanceFormatTestCases() {
             return Stream.of(
-                    Arguments.of(TestConstants.Distance.DISTANCE_500M_DOUBLE, TestConstants.Distance.DISTANCE_500M_TEXT),
-                    Arguments.of(TestConstants.Distance.DISTANCE_999M_DOUBLE, TestConstants.Distance.DISTANCE_1000M_TEXT),
-                    Arguments.of(TestConstants.Distance.DISTANCE_1000M_DOUBLE, TestConstants.Distance.DISTANCE_1KM_TEXT),
-                    Arguments.of(TestConstants.Distance.DISTANCE_1500M_DOUBLE, TestConstants.Distance.DISTANCE_1_5KM_TEXT),
-                    Arguments.of(TestConstants.Distance.DISTANCE_2340M_DOUBLE, TestConstants.Distance.DISTANCE_2_3KM_TEXT),
-                    Arguments.of(TestConstants.Distance.DISTANCE_10000M_DOUBLE, TestConstants.Distance.DISTANCE_10KM_TEXT)
+                    Arguments.of(PlaceTestConstants.Distance.DISTANCE_500M_DOUBLE, PlaceTestConstants.Distance.DISTANCE_500M_TEXT),
+                    Arguments.of(PlaceTestConstants.Distance.DISTANCE_999M_DOUBLE, PlaceTestConstants.Distance.DISTANCE_1000M_TEXT),
+                    Arguments.of(PlaceTestConstants.Distance.DISTANCE_1000M_DOUBLE, PlaceTestConstants.Distance.DISTANCE_1KM_TEXT),
+                    Arguments.of(PlaceTestConstants.Distance.DISTANCE_1500M_DOUBLE, PlaceTestConstants.Distance.DISTANCE_1_5KM_TEXT),
+                    Arguments.of(PlaceTestConstants.Distance.DISTANCE_2340M_DOUBLE, PlaceTestConstants.Distance.DISTANCE_2_3KM_TEXT),
+                    Arguments.of(PlaceTestConstants.Distance.DISTANCE_10000M_DOUBLE, PlaceTestConstants.Distance.DISTANCE_10KM_TEXT)
             );
         }
 
@@ -62,7 +62,7 @@ class BusinessHoursUtilTest {
         void formatDistance_WithNull_ReturnsDefault() {
             String result = BusinessTimeUtil.formatDistance(null);
 
-            assertThat(result).isEqualTo(TestConstants.DISTANCE_ZERO_TEXT);
+            assertThat(result).isEqualTo(PlaceTestConstants.DISTANCE_ZERO_TEXT);
         }
 
         @ParameterizedTest
@@ -76,11 +76,11 @@ class BusinessHoursUtilTest {
 
         private static Stream<Arguments> timeParsingTestCases() {
             return Stream.of(
-                    Arguments.of(TestConstants.Time.TIME_09_30, TestConstants.Time.MINUTES_570),
-                    Arguments.of(TestConstants.Time.TIME_12_00, TestConstants.Time.MINUTES_720),
-                    Arguments.of(TestConstants.Time.TIME_18_45, TestConstants.Time.MINUTES_1125),
-                    Arguments.of(TestConstants.Time.TIME_23_59, TestConstants.Time.MINUTES_1439),
-                    Arguments.of(TestConstants.Time.TIME_00_00, TestConstants.Time.MINUTES_0)
+                    Arguments.of(PlaceTestConstants.Time.TIME_09_30, PlaceTestConstants.Time.MINUTES_570),
+                    Arguments.of(PlaceTestConstants.Time.TIME_12_00, PlaceTestConstants.Time.MINUTES_720),
+                    Arguments.of(PlaceTestConstants.Time.TIME_18_45, PlaceTestConstants.Time.MINUTES_1125),
+                    Arguments.of(PlaceTestConstants.Time.TIME_23_59, PlaceTestConstants.Time.MINUTES_1439),
+                    Arguments.of(PlaceTestConstants.Time.TIME_00_00, PlaceTestConstants.Time.MINUTES_0)
             );
         }
 
@@ -91,13 +91,13 @@ class BusinessHoursUtilTest {
 
             List<PlaceDetailResponse.Schedule> result = BusinessTimeUtil.buildDaySchedules(placeHours);
 
-            assertThat(result).hasSize(TestConstants.EXPECTED_WEEKDAYS_COUNT);
+            assertThat(result).hasSize(PlaceTestConstants.EXPECTED_WEEKDAYS_COUNT);
 
             Optional<PlaceDetailResponse.Schedule> monday = result.stream()
                     .filter(s -> "mon".equals(s.getDay())).findFirst();
             assertThat(monday).isPresent();
-            assertThat(monday.get().getHours()).isEqualTo(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME);
-            assertThat(monday.get().getBreakTime()).isEqualTo(TestConstants.BREAK_START_TIME + "~" + TestConstants.BREAK_END_TIME);
+            assertThat(monday.get().getHours()).isEqualTo(PlaceTestConstants.OPEN_TIME + "~" + PlaceTestConstants.CLOSE_TIME);
+            assertThat(monday.get().getBreakTime()).isEqualTo(PlaceTestConstants.BREAK_START_TIME + "~" + PlaceTestConstants.BREAK_END_TIME);
 
             Optional<PlaceDetailResponse.Schedule> sunday = result.stream()
                     .filter(s -> "sun".equals(s.getDay())).findFirst();
@@ -118,9 +118,9 @@ class BusinessHoursUtilTest {
 
         private static Stream<Arguments> businessStatusTestCases() {
             return Stream.of(
-                    Arguments.of(Collections.emptyList(), TestConstants.BUSINESS_STATUS_UNKNOWN),
-                    Arguments.of(null, TestConstants.BUSINESS_STATUS_UNKNOWN),
-                    Arguments.of(createClosedDayHours(), TestConstants.BUSINESS_STATUS_HOLIDAY)
+                    Arguments.of(Collections.emptyList(), PlaceTestConstants.BUSINESS_STATUS_UNKNOWN),
+                    Arguments.of(null, PlaceTestConstants.BUSINESS_STATUS_UNKNOWN),
+                    Arguments.of(createClosedDayHours(), PlaceTestConstants.BUSINESS_STATUS_HOLIDAY)
             );
         }
 
@@ -128,13 +128,13 @@ class BusinessHoursUtilTest {
         @DisplayName("determineBusinessStatus 영업 중 반환 테스트")
         void determineBusinessStatus_WhenWithinOpenHours_ReturnsOpen() {
             ZonedDateTime testTime = ZonedDateTime.of(2025, 5, 26, 12, 0, 0, 0, ZoneId.of("Asia/Seoul")); // 월요일 12시
-            PlaceHours todayHours = createPlaceHours(TestConstants.MONDAY, TestConstants.FULL_DAY_START, TestConstants.FULL_DAY_END, false);
+            PlaceHours todayHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.FULL_DAY_START, PlaceTestConstants.FULL_DAY_END, false);
 
             mockedDateTime = Mockito.mockStatic(ZonedDateTime.class);
             mockedDateTime.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(testTime);
             String status = BusinessTimeUtil.determineBusinessStatus(List.of(todayHours));
 
-            assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
+            assertThat(status).isEqualTo(PlaceTestConstants.BUSINESS_STATUS_OPEN);
         }
 
         @Test
@@ -142,27 +142,27 @@ class BusinessHoursUtilTest {
         void determineBusinessStatus_WhenDuringBreakTime_ReturnsBreak() {
             ZonedDateTime testTime = ZonedDateTime.of(2025, 5, 26, 12, 30, 0, 0, ZoneId.of("Asia/Seoul")); // 월요일 12:30
 
-            PlaceHours openSlot = createPlaceHours(TestConstants.MONDAY, TestConstants.FULL_DAY_START, TestConstants.FULL_DAY_END, false);
-            PlaceHours breakSlot = createPlaceHours(TestConstants.MONDAY, TestConstants.LUNCH_BREAK_START, TestConstants.LUNCH_BREAK_END, true);
+            PlaceHours openSlot = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.FULL_DAY_START, PlaceTestConstants.FULL_DAY_END, false);
+            PlaceHours breakSlot = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.LUNCH_BREAK_START, PlaceTestConstants.LUNCH_BREAK_END, true);
 
             mockedDateTime = Mockito.mockStatic(ZonedDateTime.class);
             mockedDateTime.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(testTime);
             String status = BusinessTimeUtil.determineBusinessStatus(List.of(openSlot, breakSlot));
 
-            assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_BREAK);
+            assertThat(status).isEqualTo(PlaceTestConstants.BUSINESS_STATUS_BREAK);
         }
 
         @Test
         @DisplayName("determineBusinessStatus 영업 종료 반환 테스트")
         void determineBusinessStatus_WhenAfterCloseTime_ReturnsClosed() {
             ZonedDateTime testTime = ZonedDateTime.of(2025, 5, 26, 22, 0, 0, 0, ZoneId.of("Asia/Seoul")); // 월요일 22시
-            PlaceHours earlyClose = createPlaceHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.EARLY_CLOSE_TIME, false);
+            PlaceHours earlyClose = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.EARLY_CLOSE_TIME, false);
 
             mockedDateTime = Mockito.mockStatic(ZonedDateTime.class);
             mockedDateTime.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(testTime);
             String status = BusinessTimeUtil.determineBusinessStatus(List.of(earlyClose));
 
-            assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_CLOSED);
+            assertThat(status).isEqualTo(PlaceTestConstants.BUSINESS_STATUS_CLOSED);
         }
     }
 
@@ -174,26 +174,26 @@ class BusinessHoursUtilTest {
         @DisplayName("자정을 넘어가는 영업시간 - 영업 중 상태")
         void determineBusinessStatus_WithMidnightCrossing_WhenOpen_ReturnsOpen() {
             ZonedDateTime lateNight = ZonedDateTime.of(2025, 5, 26, 1, 30, 0, 0, ZoneId.of("Asia/Seoul"));
-            PlaceHours mondayEarlyHours = createPlaceHours(TestConstants.MONDAY, TestConstants.TWENTY_FOUR_HOUR_START, TestConstants.LATE_NIGHT_CLOSE, false);
+            PlaceHours mondayEarlyHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.TWENTY_FOUR_HOUR_START, PlaceTestConstants.LATE_NIGHT_CLOSE, false);
 
             mockedDateTime = Mockito.mockStatic(ZonedDateTime.class);
             mockedDateTime.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(lateNight);
             String status = BusinessTimeUtil.determineBusinessStatus(List.of(mondayEarlyHours));
 
-            assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
+            assertThat(status).isEqualTo(PlaceTestConstants.BUSINESS_STATUS_OPEN);
         }
 
         @Test
         @DisplayName("자정을 넘어가는 영업시간 - 영업 종료 상태")
         void determineBusinessStatus_WithMidnightCrossing_WhenClosed_ReturnsClosed() {
             ZonedDateTime earlyMorning = ZonedDateTime.of(2025, 5, 26, 3, 0, 0, 0, ZoneId.of("Asia/Seoul"));
-            PlaceHours mondayEarlyHours = createPlaceHours(TestConstants.MONDAY, TestConstants.TWENTY_FOUR_HOUR_START, TestConstants.LATE_NIGHT_CLOSE, false);
+            PlaceHours mondayEarlyHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.TWENTY_FOUR_HOUR_START, PlaceTestConstants.LATE_NIGHT_CLOSE, false);
 
             mockedDateTime = Mockito.mockStatic(ZonedDateTime.class);
             mockedDateTime.when(() -> ZonedDateTime.now(ZoneId.of("Asia/Seoul"))).thenReturn(earlyMorning);
             String status = BusinessTimeUtil.determineBusinessStatus(List.of(mondayEarlyHours));
 
-            assertThat(status).isEqualTo(TestConstants.BUSINESS_STATUS_CLOSED);
+            assertThat(status).isEqualTo(PlaceTestConstants.BUSINESS_STATUS_CLOSED);
         }
 
         @Test
@@ -206,7 +206,7 @@ class BusinessHoursUtilTest {
                     ZonedDateTime.of(2025, 5, 26, 23, 59, 0, 0, ZoneId.of("Asia/Seoul"))
             );
 
-            PlaceHours twentyFourHours = createPlaceHours(TestConstants.MONDAY, TestConstants.TWENTY_FOUR_HOUR_START, TestConstants.TWENTY_FOUR_HOUR_END, false);
+            PlaceHours twentyFourHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.TWENTY_FOUR_HOUR_START, PlaceTestConstants.TWENTY_FOUR_HOUR_END, false);
 
             for (ZonedDateTime testTime : testTimes) {
                 if (mockedDateTime != null) {
@@ -218,21 +218,21 @@ class BusinessHoursUtilTest {
 
                 assertThat(status)
                         .as("시간 %s에서 24시간 운영 상태 확인", testTime.toLocalTime())
-                        .isEqualTo(TestConstants.BUSINESS_STATUS_OPEN);
+                        .isEqualTo(PlaceTestConstants.BUSINESS_STATUS_OPEN);
             }
         }
 
         @Test
         @DisplayName("경계 시간 테스트 - 오픈/마감 시각 정확한 처리")
         void determineBusinessStatus_AtBoundaryTimes_HandlesExactly() {
-            PlaceHours normalHours = createPlaceHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.TEST_CLOSE_TIME_18, false);
+            PlaceHours normalHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.TEST_CLOSE_TIME_18, false);
 
             Map<ZonedDateTime, String> boundaryTests = Map.of(
-                    ZonedDateTime.of(2025, 5, 26, 9, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN,
-                    ZonedDateTime.of(2025, 5, 26, 8, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_CLOSED,
-                    ZonedDateTime.of(2025, 5, 26, 17, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN,
-                    ZonedDateTime.of(2025, 5, 26, 18, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_CLOSED,
-                    ZonedDateTime.of(2025, 5, 26, 18, 1, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_CLOSED
+                    ZonedDateTime.of(2025, 5, 26, 9, 0, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_OPEN,
+                    ZonedDateTime.of(2025, 5, 26, 8, 59, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_CLOSED,
+                    ZonedDateTime.of(2025, 5, 26, 17, 59, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_OPEN,
+                    ZonedDateTime.of(2025, 5, 26, 18, 0, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_CLOSED,
+                    ZonedDateTime.of(2025, 5, 26, 18, 1, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_CLOSED
             );
 
             for (Map.Entry<ZonedDateTime, String> test : boundaryTests.entrySet()) {
@@ -255,15 +255,15 @@ class BusinessHoursUtilTest {
         @Test
         @DisplayName("브레이크 타임 경계 시간 테스트")
         void determineBusinessStatus_AtBreakTimeBoundaries_HandlesExactly() {
-            PlaceHours normalHours = createPlaceHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.TEST_CLOSE_TIME_18, false);
-            PlaceHours breakHours = createPlaceHours(TestConstants.MONDAY, TestConstants.LUNCH_BREAK_START, TestConstants.LUNCH_BREAK_END, true);
+            PlaceHours normalHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.TEST_CLOSE_TIME_18, false);
+            PlaceHours breakHours = createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.LUNCH_BREAK_START, PlaceTestConstants.LUNCH_BREAK_END, true);
 
             Map<ZonedDateTime, String> breakBoundaryTests = Map.of(
-                    ZonedDateTime.of(2025, 5, 26, 11, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN,
-                    ZonedDateTime.of(2025, 5, 26, 12, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_BREAK,
-                    ZonedDateTime.of(2025, 5, 26, 12, 30, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_BREAK,
-                    ZonedDateTime.of(2025, 5, 26, 12, 59, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_BREAK,
-                    ZonedDateTime.of(2025, 5, 26, 13, 0, 0, 0, ZoneId.of("Asia/Seoul")), TestConstants.BUSINESS_STATUS_OPEN
+                    ZonedDateTime.of(2025, 5, 26, 11, 59, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_OPEN,
+                    ZonedDateTime.of(2025, 5, 26, 12, 0, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_BREAK,
+                    ZonedDateTime.of(2025, 5, 26, 12, 30, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_BREAK,
+                    ZonedDateTime.of(2025, 5, 26, 12, 59, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_BREAK,
+                    ZonedDateTime.of(2025, 5, 26, 13, 0, 0, 0, ZoneId.of("Asia/Seoul")), PlaceTestConstants.BUSINESS_STATUS_OPEN
             );
 
             for (Map.Entry<ZonedDateTime, String> test : breakBoundaryTests.entrySet()) {
@@ -297,17 +297,17 @@ class BusinessHoursUtilTest {
         List<PlaceHours> hours = new ArrayList<>();
 
         // 월요일 - 정규 영업시간 + 브레이크 타임
-        hours.add(createPlaceHours(TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME, false));
-        hours.add(createPlaceHours(TestConstants.MONDAY, TestConstants.BREAK_START_TIME, TestConstants.BREAK_END_TIME, true));
+        hours.add(createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.CLOSE_TIME, false));
+        hours.add(createPlaceHours(PlaceTestConstants.MONDAY, PlaceTestConstants.BREAK_START_TIME, PlaceTestConstants.BREAK_END_TIME, true));
 
         // 화~토 - 정규 영업시간만
-        String[] workingDays = {TestConstants.TUESDAY, TestConstants.WEDNESDAY, TestConstants.THURSDAY, TestConstants.FRIDAY, TestConstants.SATURDAY};
+        String[] workingDays = {PlaceTestConstants.TUESDAY, PlaceTestConstants.WEDNESDAY, PlaceTestConstants.THURSDAY, PlaceTestConstants.FRIDAY, PlaceTestConstants.SATURDAY};
         for (String day : workingDays) {
-            hours.add(createPlaceHours(day, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME, false));
+            hours.add(createPlaceHours(day, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.CLOSE_TIME, false));
         }
 
         // 일요일 - 휴무
-        hours.add(createPlaceHours(TestConstants.SUNDAY, null, null, false));
+        hours.add(createPlaceHours(PlaceTestConstants.SUNDAY, null, null, false));
 
         return hours;
     }
@@ -315,13 +315,13 @@ class BusinessHoursUtilTest {
     private static List<PlaceHours> createClosedDayHours() {
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
         String currentDay = switch (now.getDayOfWeek()) {
-            case MONDAY -> TestConstants.MONDAY;
-            case TUESDAY -> TestConstants.TUESDAY;
-            case WEDNESDAY -> TestConstants.WEDNESDAY;
-            case THURSDAY -> TestConstants.THURSDAY;
-            case FRIDAY -> TestConstants.FRIDAY;
-            case SATURDAY -> TestConstants.SATURDAY;
-            case SUNDAY -> TestConstants.SUNDAY;
+            case MONDAY -> PlaceTestConstants.MONDAY;
+            case TUESDAY -> PlaceTestConstants.TUESDAY;
+            case WEDNESDAY -> PlaceTestConstants.WEDNESDAY;
+            case THURSDAY -> PlaceTestConstants.THURSDAY;
+            case FRIDAY -> PlaceTestConstants.FRIDAY;
+            case SATURDAY -> PlaceTestConstants.SATURDAY;
+            case SUNDAY -> PlaceTestConstants.SUNDAY;
         };
 
         return List.of(createPlaceHours(currentDay, null, null, false));

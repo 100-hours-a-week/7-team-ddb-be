@@ -3,7 +3,7 @@ package com.dolpin.domain.place.service.query;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.entity.*;
 import com.dolpin.domain.place.repository.PlaceRepository;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -41,8 +41,8 @@ class PlaceDetailServiceTest {
         @DisplayName("정상적인 장소 상세 조회가 동작한다")
         void getPlaceDetail_WithValidId_ReturnsCompleteDetail() {
             // Given
-            Long placeId = TestConstants.PLACE_ID_1;
-            Long userId = TestConstants.USER_ID_1;
+            Long placeId = PlaceTestConstants.PLACE_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
 
             Place basicPlace = createBasicPlaceForDetail();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
@@ -72,8 +72,8 @@ class PlaceDetailServiceTest {
         @DisplayName("존재하지 않는 장소 ID 조회 시 예외가 발생한다")
         void getPlaceDetail_WithNonExistentId_ThrowsPlaceNotFoundException() {
             // Given
-            Long nonExistentId = TestConstants.NON_EXISTENT_PLACE_ID;
-            Long userId = TestConstants.USER_ID_1;
+            Long nonExistentId = PlaceTestConstants.NON_EXISTENT_PLACE_ID;
+            Long userId = PlaceTestConstants.USER_ID_1;
             given(placeRepository.findBasicPlaceById(nonExistentId)).willReturn(Optional.empty());
 
             // When & Then
@@ -90,8 +90,8 @@ class PlaceDetailServiceTest {
         @DisplayName("키워드 조회 실패 시 예외가 발생한다")
         void getPlaceDetail_WhenKeywordQueryFails_ThrowsException() {
             // Given
-            Long placeId = TestConstants.PLACE_ID_1;
-            Long userId = TestConstants.USER_ID_1;
+            Long placeId = PlaceTestConstants.PLACE_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
             Place basicPlace = createMinimalPlaceForFailure();
 
             given(placeRepository.findBasicPlaceById(placeId)).willReturn(Optional.of(basicPlace));
@@ -112,8 +112,8 @@ class PlaceDetailServiceTest {
         @DisplayName("메뉴 조회 실패 시 예외가 발생한다")
         void getPlaceDetail_WhenMenuQueryFails_ThrowsException() {
             // Given
-            Long placeId = TestConstants.PLACE_ID_1;
-            Long userId = TestConstants.USER_ID_1;
+            Long placeId = PlaceTestConstants.PLACE_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
             Place basicPlace = createMinimalPlaceForFailure();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
 
@@ -137,8 +137,8 @@ class PlaceDetailServiceTest {
         @DisplayName("영업시간 조회 실패 시 예외가 발생한다")
         void getPlaceDetail_WhenHoursQueryFails_ThrowsException() {
             // Given
-            Long placeId = TestConstants.PLACE_ID_1;
-            Long userId = TestConstants.USER_ID_1;
+            Long placeId = PlaceTestConstants.PLACE_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
             Place basicPlace = createMinimalPlaceForFailure();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
             Place menuPlace = createPlaceWithMenus(createDefaultCafeMenus());
@@ -165,7 +165,7 @@ class PlaceDetailServiceTest {
         @DisplayName("사용자 정보 없이 장소 상세 조회가 동작한다")
         void getPlaceDetail_WithoutUserId_ReturnsDetailWithoutBookmark() {
             // Given
-            Long placeId = TestConstants.PLACE_ID_1;
+            Long placeId = PlaceTestConstants.PLACE_ID_1;
 
             Place basicPlace = createBasicPlaceForDetail();
             Place keywordPlace = createPlaceWithKeywords(getDefaultCafeKeywords());
@@ -189,35 +189,35 @@ class PlaceDetailServiceTest {
 
     private void verifyBasicPlaceInfo(PlaceDetailResponse result, Long expectedId) {
         assertThat(result.getId()).isEqualTo(expectedId);
-        assertThat(result.getName()).isEqualTo(TestConstants.TEST_CAFE_NAME);
-        assertThat(result.getAddress()).isEqualTo(TestConstants.DEFAULT_ROAD_ADDRESS);
-        assertThat(result.getPhone()).isEqualTo(TestConstants.DEFAULT_PHONE);
-        assertThat(result.getDescription()).isEqualTo(TestConstants.DEFAULT_DESCRIPTION);
-        assertThat(result.getThumbnail()).isEqualTo(TestConstants.DEFAULT_IMAGE_URL);
+        assertThat(result.getName()).isEqualTo(PlaceTestConstants.TEST_CAFE_NAME);
+        assertThat(result.getAddress()).isEqualTo(PlaceTestConstants.DEFAULT_ROAD_ADDRESS);
+        assertThat(result.getPhone()).isEqualTo(PlaceTestConstants.DEFAULT_PHONE);
+        assertThat(result.getDescription()).isEqualTo(PlaceTestConstants.DEFAULT_DESCRIPTION);
+        assertThat(result.getThumbnail()).isEqualTo(PlaceTestConstants.DEFAULT_IMAGE_URL);
     }
 
     private void verifyLocationInfo(PlaceDetailResponse result) {
         assertThat(result.getLocation()).containsEntry("type", "Point");
         double[] coordinates = (double[]) result.getLocation().get("coordinates");
-        assertThat(coordinates).containsExactly(TestConstants.CENTER_LNG, TestConstants.CENTER_LAT);
+        assertThat(coordinates).containsExactly(PlaceTestConstants.CENTER_LNG, PlaceTestConstants.CENTER_LAT);
     }
 
     private void verifyKeywordsInfo(PlaceDetailResponse result) {
         assertThat(result.getKeywords()).containsExactlyInAnyOrder(
-                TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD);
+                PlaceTestConstants.COZY_KEYWORD, PlaceTestConstants.DELICIOUS_KEYWORD);
     }
 
     private void verifyMenuInfo(PlaceDetailResponse result) {
-        assertThat(result.getMenu()).hasSize(TestConstants.EXPECTED_MENU_COUNT);
+        assertThat(result.getMenu()).hasSize(PlaceTestConstants.EXPECTED_MENU_COUNT);
         assertThat(result.getMenu()).extracting(PlaceDetailResponse.Menu::getName)
-                .containsExactlyInAnyOrder(TestConstants.AMERICANO_MENU, TestConstants.LATTE_MENU);
+                .containsExactlyInAnyOrder(PlaceTestConstants.AMERICANO_MENU, PlaceTestConstants.LATTE_MENU);
         assertThat(result.getMenu()).extracting(PlaceDetailResponse.Menu::getPrice)
-                .containsExactlyInAnyOrder(TestConstants.AMERICANO_PRICE, TestConstants.LATTE_PRICE);
+                .containsExactlyInAnyOrder(PlaceTestConstants.AMERICANO_PRICE, PlaceTestConstants.LATTE_PRICE);
     }
 
     private void verifyOpeningHoursInfo(PlaceDetailResponse result) {
         assertThat(result.getOpeningHours()).isNotNull();
-        assertThat(result.getOpeningHours().getSchedules()).hasSize(TestConstants.EXPECTED_WEEKDAYS_COUNT);
+        assertThat(result.getOpeningHours().getSchedules()).hasSize(PlaceTestConstants.EXPECTED_WEEKDAYS_COUNT);
     }
 
     private void verifyRepositoryInteractions(Long placeId) {

@@ -3,7 +3,7 @@ package com.dolpin.domain.place.service.query;
 import com.dolpin.domain.place.client.PlaceAiClient;
 import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.repository.PlaceRepository;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,11 +33,11 @@ class PlaceQueryServiceImplTest {
         @DisplayName("카테고리 목록 정상 조회가 동작한다")
         void getAllCategories_ReturnsAllAvailableCategories() {
             List<String> categories = Arrays.asList(
-                    TestConstants.CAFE_CATEGORY,
-                    TestConstants.RESTAURANT_CATEGORY,
-                    TestConstants.BAR_CATEGORY,
-                    TestConstants.BAKERY_CATEGORY,
-                    TestConstants.FASTFOOD_CATEGORY
+                    PlaceTestConstants.CAFE_CATEGORY,
+                    PlaceTestConstants.RESTAURANT_CATEGORY,
+                    PlaceTestConstants.BAR_CATEGORY,
+                    PlaceTestConstants.BAKERY_CATEGORY,
+                    PlaceTestConstants.FASTFOOD_CATEGORY
             );
             given(placeRepository.findDistinctCategories()).willReturn(categories);
 
@@ -45,11 +45,11 @@ class PlaceQueryServiceImplTest {
 
             assertThat(result.getCategories()).hasSize(5);
             assertThat(result.getCategories()).containsExactlyInAnyOrder(
-                    TestConstants.CAFE_CATEGORY,
-                    TestConstants.RESTAURANT_CATEGORY,
-                    TestConstants.BAR_CATEGORY,
-                    TestConstants.BAKERY_CATEGORY,
-                    TestConstants.FASTFOOD_CATEGORY
+                    PlaceTestConstants.CAFE_CATEGORY,
+                    PlaceTestConstants.RESTAURANT_CATEGORY,
+                    PlaceTestConstants.BAR_CATEGORY,
+                    PlaceTestConstants.BAKERY_CATEGORY,
+                    PlaceTestConstants.FASTFOOD_CATEGORY
             );
         }
 
