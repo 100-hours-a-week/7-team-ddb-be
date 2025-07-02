@@ -159,7 +159,6 @@ jacocoTestReport {
 					// 기본 제외 항목
 					'**/config/**',
 					'**/dto/**',
-					'**/entity/**',
 					'**/*Application.class',
 
 					// QueryDSL 자동 생성 Q클래스 제외
@@ -174,6 +173,7 @@ jacocoTestReport {
 
 					// Storage 관련 제외
 					'**/storage/service/gcs/**',
+					'**/storage/service/s3/**',
 					'**/storage/controller/**',
 
 					// Rate Limit 제외
@@ -203,10 +203,8 @@ jacocoTestCoverageVerification {
 	afterEvaluate {
 		classDirectories.setFrom(files(classDirectories.files.collect {
 			fileTree(dir: it, exclude: [
-					// 위와 동일한 제외 패턴
 					'**/config/**',
 					'**/dto/**',
-					'**/entity/**',
 					'**/*Application.class',
 					'**/cache/**',
 					'**/service/cache/**',
