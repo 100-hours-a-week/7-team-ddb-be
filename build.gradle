@@ -2,6 +2,7 @@ plugins {
 	id 'org.springframework.boot' version '3.4.4'
 	id 'io.spring.dependency-management' version '1.1.4'
 	id 'java'
+	id 'jacoco'
 }
 
 group = 'com.dolpin'
@@ -133,5 +134,87 @@ tasks.withType(JavaCompile) {
 clean {
 	doLast {
 		delete querydslGeneratedDir
+	}
+}
+
+jacoco {
+	toolVersion = "0.8.8"
+}
+
+test {
+	useJUnitPlatform()
+	finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+		html.required = true
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+					// 기본 제외 항목
+					'**/config/**',
+					'**/dto/**',
+					'**/entity/**',
+					'**/*Application.class',
+
+					// QueryDSL 자동 생성 Q클래스 제외
+					'**/Q*.class',
+
+					// Lombok 자동 생성 코드 제외
+					'**/*$Builder.class',
+
+					// 캐시 관련 제외
+					'**/cache/**',
+					'**/service/cache/**',
+
+					// Storage 관련 제외
+					'**/storage/service/gcs/**',
+					'**/storage/controller/**',
+
+					// Rate Limit 제외
+					'**/ratelimit/**',
+
+					// Redis 서비스 제외
+					'**/redis/service/**',
+
+					// Place 도메인 제외
+					'**/place/**'
+			])
+		}))
+	}
+}
+
+jacocoTestCoverageVerification {
+	violationRules {
+		rule {
+			limit {
+				counter = 'LINE'
+				value = 'COVEREDRATIO'
+				minimum = 0.70
+			}
+		}
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+					// 위와 동일한 제외 패턴
+					'**/config/**',
+					'**/dto/**',
+					'**/entity/**',
+					'**/*Application.class',
+					'**/cache/**',
+					'**/service/cache/**',
+					'**/storage/service/gcs/**',
+					'**/storage/controller/**',
+					'**/ratelimit/**',
+					'**/redis/service/**'
+			])
+		}))
 	}
 }
