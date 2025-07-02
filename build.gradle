@@ -78,6 +78,7 @@ dependencies {
 	// Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
+	implementation 'org.apache.commons:commons-pool2'
 
 	// JSON 직렬화
 	implementation 'com.fasterxml.jackson.core:jackson-databind'
@@ -85,6 +86,8 @@ dependencies {
 
 	// 캐시 추상화
 	implementation 'org.springframework.boot:spring-boot-starter-cache'
+
+
 }
 
 // QueryDSL 설정
