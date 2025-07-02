@@ -28,7 +28,10 @@ public enum ResponseStatus {
     PLACE_NOT_FOUND(HttpStatus.NOT_FOUND, "장소를 찾을 수 없습니다."),
 
     // 호출
-    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "너무 많은 요청이 발생했습니다");
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "너무 많은 요청이 발생했습니다"),
+
+    // 기록
+    MOMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "기록을 찾을 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private String message;
