@@ -9,7 +9,7 @@ CONFIG_PATH="/home/ubuntu/app/promtail/promtail.yaml"
 POSITIONS_DIR="/home/ubuntu/app/promtail/positions"
 
 mkdir -p "$POSITIONS_DIR"
-chown -R 10001:10001 positions
+chown -R 10001:10001 "$POSITIONS_DIR"
 
 docker stop promtail || true
 docker rm promtail || true
