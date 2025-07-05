@@ -16,7 +16,7 @@ scrape_configs:
         labels:
           job: spring-info-log
           compose_service: dolpin
-          env: "${env}"
+          env: $ENV
           __path__: /var/log/spring/dolpin-info*.log
     pipeline_stages:
       - regex:
@@ -38,7 +38,7 @@ scrape_configs:
         labels:
           job: spring-error-log
           compose_service: dolpin
-          env: "${env}"
+          env: $ENV
           __path__: /var/log/spring/dolpin-error*.log
     pipeline_stages:
       - regex:
@@ -60,7 +60,7 @@ scrape_configs:
         labels:
           job: spring-warn-log
           compose_service: dolpin
-          env: "${env}"
+          env: $ENV
           __path__: /var/log/spring/dolpin-warn*.log
     pipeline_stages:
       - regex:
@@ -82,7 +82,7 @@ scrape_configs:
         labels:
           job: spring-debug-log
           compose_service: dolpin
-          env: "${env}"
+          env: $ENV
           __path__: /var/log/spring/dolpin-debug*.log
     pipeline_stages:
       - regex:
@@ -104,7 +104,7 @@ scrape_configs:
         labels:
           job: spring-all-log
           compose_service: dolpin
-          env: "${env}"
+          env: $ENV
           __path__: /var/log/spring/dolpin-all*.log
     pipeline_stages:
       - regex:
