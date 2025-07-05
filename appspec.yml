@@ -20,6 +20,11 @@ hooks:
     - location: scripts/ApplicationStart.sh
       timeout: 180
       runas: root
+  
+  RunPromtail:
+    - location: scripts/RunPromtail.sh
+      timeout: 180
+      runas: root
 
   ValidateService:
     - location: scripts/NotifyDiscord.sh
