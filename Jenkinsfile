@@ -87,6 +87,7 @@ pipeline {
                 set -e
 
                 mkdir -p deploy/scripts
+                mkdir -p deploy/promtail/
                 cp -r appspec.yml deploy/
                 cp -r scripts/* deploy/scripts/
                 cp -r promtail/* deploy/promtail/
