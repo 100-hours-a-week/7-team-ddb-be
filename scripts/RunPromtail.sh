@@ -6,7 +6,10 @@ echo "▶ Promtail Docker 컨테이너 실행"
 ENV_NAME=$(echo "$DEPLOYMENT_GROUP_NAME" | cut -d'-' -f2)
 LOG_DIR="/home/ubuntu/logs"
 CONFIG_PATH="/home/ubuntu/app/promtail/promtail.yaml"
+TEMPLATE_PATH="/home/ubuntu/app/promtail/promtail.yaml.tmpl"
 POSITIONS_DIR="/home/ubuntu/app/promtail/positions"
+
+sed "s|\$ENV|$ENV_NAME|g" "$TEMPLATE_PATH" > "$CONFIG_PATH"
 
 mkdir -p "$POSITIONS_DIR"
 chown -R 10001:10001 "$POSITIONS_DIR"
