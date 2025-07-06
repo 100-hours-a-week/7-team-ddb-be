@@ -5,6 +5,7 @@ import com.dolpin.domain.comment.dto.response.CommentCreateResponse;
 import com.dolpin.domain.comment.dto.response.CommentListResponse;
 import com.dolpin.domain.comment.service.command.CommentCommandService;
 import com.dolpin.domain.comment.service.query.CommentQueryService;
+import com.dolpin.global.redis.service.DuplicatePreventionService;
 import com.dolpin.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class CommentController {
 
     private final CommentQueryService commentQueryService;
     private final CommentCommandService commentCommandService;
+    private final DuplicatePreventionService duplicatePreventionService;
 
     @GetMapping("/{moment_id}/comments")
     public ResponseEntity<ApiResponse<CommentListResponse>> getComments(
@@ -44,10 +46,14 @@ public class CommentController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         Long userId = Long.parseLong(userDetails.getUsername());
-        CommentCreateResponse response = commentCommandService.createComment(momentId, request, userId);
+        String lockKey = duplicatePreventionService.generateKey(userId, "createComment", momentId);
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("comment_created", response));
+        // Redisson 락으로 중복 요청 방지 (대기 0초, 점유 3초)
+        return duplicatePreventionService.executeWithLock(lockKey, 0, 3, () -> {
+            CommentCreateResponse response = commentCommandService.createComment(momentId, request, userId);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("comment_created", response));
+        });
     }
 
     @DeleteMapping("/{moment_id}/comments/{comment_id}")
