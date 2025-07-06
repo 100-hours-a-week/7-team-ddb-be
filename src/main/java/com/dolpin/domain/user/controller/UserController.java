@@ -10,6 +10,7 @@ import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.response.ApiResponse;
+import com.dolpin.global.redis.service.DuplicatePreventionService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class UserController {
     private final UserCommandService userCommandService;
     private final UserQueryService userQueryService;
     private final CookieService cookieService;
+    private final DuplicatePreventionService duplicatePreventionService; // 추가
 
     @PostMapping("/agreement")
     public ResponseEntity<ApiResponse<Void>> saveAgreement(
@@ -50,19 +52,22 @@ public class UserController {
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody UserRegisterRequest request) {
 
-        // 현재 인증된 사용자 ID 추출
         Long userId = Long.parseLong(userDetails.getUsername());
+        String lockKey = duplicatePreventionService.generateKey(userId, "registerUser");
 
-        // 사용자 등록 처리
-        userCommandService.registerUser(
-                userId,
-                request.getNickname(),
-                request.getProfile_image(),
-                request.getIntroduction()
-        );
+        // 회원가입 중복 요청 방지 (대기 0초, 점유 5초)
+        return duplicatePreventionService.executeWithLock(lockKey, 0, 5, () -> {
+            // 사용자 등록 처리
+            userCommandService.registerUser(
+                    userId,
+                    request.getNickname(),
+                    request.getProfile_image(),
+                    request.getIntroduction()
+            );
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("user_info_saved", null));
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("user_info_saved", null));
+        });
     }
 
     @GetMapping("/me")
@@ -91,23 +96,25 @@ public class UserController {
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody UserProfileUpdateRequest request) {
 
-        // 현재 인증된 사용자 ID 추출
         Long userId = Long.parseLong(userDetails.getUsername());
+        String lockKey = duplicatePreventionService.generateKey(userId, "updateProfile");
 
-        // 프로필 업데이트 (서비스에서 닉네임 중복 확인 및 업데이트 처리)
-        User updatedUser = userCommandService.updateProfile(
-                userId,
-                request.getNickname(),
-                request.getProfile_image(),
-                request.getIntroduction()
-        );
+        // 프로필 수정 중복 요청 방지 (대기 0초, 점유 3초)
+        return duplicatePreventionService.executeWithLock(lockKey, 0, 3, () -> {
+            // 프로필 업데이트
+            User updatedUser = userCommandService.updateProfile(
+                    userId,
+                    request.getNickname(),
+                    request.getProfile_image(),
+                    request.getIntroduction()
+            );
 
-        // DTO로 변환하여 응답 생성
-        UserProfileResponse response = UserProfileResponse.from(updatedUser);
+            // DTO로 변환하여 응답 생성
+            UserProfileResponse response = UserProfileResponse.from(updatedUser);
 
-        return ResponseEntity.ok(ApiResponse.success("user_info_updated", response));
+            return ResponseEntity.ok(ApiResponse.success("user_info_updated", response));
+        });
     }
-
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> deleteUser(
@@ -127,5 +134,4 @@ public class UserController {
 
         return ResponseEntity.ok(ApiResponse.success("user_delete_success", null));
     }
-
 }
