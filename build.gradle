@@ -231,10 +231,6 @@ jacocoTestCoverageVerification {
 					'**/config/SecurityConfig.class',
 					'**/global/security/SecurityConfig.class',
 
-					// 캐시 관련 제외
-					'**/cache/**',
-					'**/service/cache/**',
-
 					// Storage 관련 제외
 					'**/storage/service/gcs/**',
 					'**/storage/controller/**',
@@ -244,9 +240,6 @@ jacocoTestCoverageVerification {
 
 					// Redis 서비스 제외
 					'**/redis/service/**',
-
-					// Place 도메인 제외
-					'**/place/**'
 			])
 		}))
 	}
