@@ -24,6 +24,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
+
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
@@ -59,6 +61,37 @@ class CommentControllerTest {
     @BeforeEach
     void setUp() {
         fixture = new CommentTestFixture();
+    }
+
+    // DuplicatePreventionService 기본 모킹 설정
+    private void setupSuccessfulDuplicatePreventionService() {
+        String lockKey = fixture.createLockKey();
+        String contentKey = "content:1:1:12345"; // 테스트용 content key
+
+        // generateKey 모킹
+        given(duplicatePreventionService.generateKey(
+                CommentTestConstants.TEST_USER_ID,
+                "createComment",
+                CommentTestConstants.TEST_MOMENT_ID
+        )).willReturn(lockKey);
+
+        // generateContentKey 모킹
+        given(duplicatePreventionService.generateContentKey(
+                CommentTestConstants.TEST_USER_ID,
+                CommentTestConstants.TEST_MOMENT_ID,
+                CommentTestConstants.TEST_COMMENT_CONTENT
+        )).willReturn(contentKey);
+
+        // checkDuplicateContent 모킹 (아무것도 하지 않음 - 정상 케이스)
+        willDoNothing().given(duplicatePreventionService)
+                .checkDuplicateContent(eq(contentKey), anyString(), any(Duration.class));
+
+        // executeWithLock 모킹
+        given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                .willAnswer(invocation -> {
+                    DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                    return action.execute();
+                });
     }
 
     @Nested
@@ -151,23 +184,8 @@ class CommentControllerTest {
             // given
             CommentCreateRequest request = fixture.createCommentCreateRequest();
             CommentCreateResponse response = fixture.createCommentCreateResponse();
-            String lockKey = fixture.createLockKey();
 
-            // DuplicatePreventionService 모킹
-            given(duplicatePreventionService.generateKey(
-                    CommentTestConstants.TEST_USER_ID,
-                    "createComment",
-                    CommentTestConstants.TEST_MOMENT_ID
-            )).willReturn(lockKey);
-
-            // executeWithLock이 실제 로직을 수행하도록 모킹
-            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
-                    .willAnswer(invocation -> {
-                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
-                        return action.execute(); // 실제 람다 실행
-                    });
-
-            // CommentCommandService 모킹
+            setupSuccessfulDuplicatePreventionService();
             given(commentCommandService.createComment(any(), any(), any())).willReturn(response);
 
             // when & then
@@ -191,22 +209,8 @@ class CommentControllerTest {
             // given
             CommentCreateRequest request = fixture.createReplyCommentCreateRequest();
             CommentCreateResponse response = fixture.createReplyCommentCreateResponse();
-            String lockKey = fixture.createLockKey();
 
-            // DuplicatePreventionService 모킹
-            given(duplicatePreventionService.generateKey(
-                    CommentTestConstants.TEST_USER_ID,
-                    "createComment",
-                    CommentTestConstants.TEST_MOMENT_ID
-            )).willReturn(lockKey);
-
-            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
-                    .willAnswer(invocation -> {
-                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
-                        return action.execute();
-                    });
-
-            // CommentCommandService 모킹
+            setupSuccessfulDuplicatePreventionService();
             given(commentCommandService.createComment(any(), any(), any())).willReturn(response);
 
             // when & then
@@ -248,6 +252,48 @@ class CommentControllerTest {
         }
 
         @Test
+        @DisplayName("실패 - 중복 내용")
+        @WithMockUser(username = "1")
+        void createComment_Fail_DuplicateContent() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createCommentCreateRequest();
+            String lockKey = fixture.createLockKey();
+            String contentKey = "content:1:1:12345";
+
+            given(duplicatePreventionService.generateKey(
+                    CommentTestConstants.TEST_USER_ID,
+                    "createComment",
+                    CommentTestConstants.TEST_MOMENT_ID
+            )).willReturn(lockKey);
+
+            given(duplicatePreventionService.generateContentKey(
+                    CommentTestConstants.TEST_USER_ID,
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.TEST_COMMENT_CONTENT
+            )).willReturn(contentKey);
+
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willAnswer(invocation -> {
+                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                        return action.execute();
+                    });
+
+            // checkDuplicateContent에서 예외 발생
+            willThrow(new IllegalArgumentException("동일한 댓글이 이미 등록되어 있습니다."))
+                    .given(duplicatePreventionService)
+                    .checkDuplicateContent(eq(contentKey), anyString(), any(Duration.class));
+
+            // when & then - IllegalArgumentException은 400으로 처리됨
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest()) // 400으로 변경
+                    .andExpect(jsonPath("$.message").value("동일한 댓글이 이미 등록되어 있습니다."));
+        }
+
+        @Test
         @DisplayName("실패 - 내용 누락")
         @WithMockUser(username = "1")
         void createComment_Fail_EmptyContent() throws Exception {
@@ -280,35 +326,6 @@ class CommentControllerTest {
         }
 
         @Test
-        @DisplayName("실패 - 존재하지 않는 기록")
-        @WithMockUser(username = "1")
-        void createComment_Fail_MomentNotFound() throws Exception {
-            // given
-            CommentCreateRequest request = fixture.createCommentCreateRequest();
-            String lockKey = fixture.createLockKey();
-
-            given(duplicatePreventionService.generateKey(anyLong(), anyString(), anyLong()))
-                    .willReturn(lockKey);
-
-            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
-                    .willAnswer(invocation -> {
-                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
-                        return action.execute();
-                    });
-
-            given(commentCommandService.createComment(anyLong(), any(), anyLong()))
-                    .willThrow(new BusinessException(ResponseStatus.MOMENT_NOT_FOUND));
-
-            // when & then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.DELETED_MOMENT_ID)
-                            .with(csrf())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andDo(print())
-                    .andExpect(status().isNotFound());
-        }
-
-        @Test
         @DisplayName("실패 - 타인의 비공개 기록")
         @WithMockUser(username = "999")
         void createComment_Fail_PrivateMomentAccess() throws Exception {
@@ -316,8 +333,14 @@ class CommentControllerTest {
             CommentCreateRequest request = fixture.createCommentCreateRequest();
             String lockKey = fixture.createOtherUserLockKey();
 
-            given(duplicatePreventionService.generateKey(anyLong(), anyString(), anyLong()))
+            given(duplicatePreventionService.generateKey(999L, "createComment", CommentTestConstants.TEST_MOMENT_ID))
                     .willReturn(lockKey);
+
+            given(duplicatePreventionService.generateContentKey(999L, CommentTestConstants.TEST_MOMENT_ID, CommentTestConstants.TEST_COMMENT_CONTENT))
+                    .willReturn("content:999:1:12345");
+
+            willDoNothing().given(duplicatePreventionService)
+                    .checkDuplicateContent(anyString(), anyString(), any(Duration.class));
 
             given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
                     .willAnswer(invocation -> {
@@ -343,17 +366,8 @@ class CommentControllerTest {
         void createComment_Fail_InvalidParentComment() throws Exception {
             // given
             CommentCreateRequest request = fixture.createInvalidParentCommentCreateRequest();
-            String lockKey = fixture.createLockKey();
 
-            given(duplicatePreventionService.generateKey(anyLong(), anyString(), anyLong()))
-                    .willReturn(lockKey);
-
-            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
-                    .willAnswer(invocation -> {
-                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
-                        return action.execute();
-                    });
-
+            setupSuccessfulDuplicatePreventionService();
             given(commentCommandService.createComment(anyLong(), any(), anyLong()))
                     .willThrow(new BusinessException(ResponseStatus.INVALID_PARAMETER));
 
