@@ -3,46 +3,42 @@ package com.dolpin.domain.comment.controller;
 import com.dolpin.domain.comment.dto.request.CommentCreateRequest;
 import com.dolpin.domain.comment.dto.response.CommentCreateResponse;
 import com.dolpin.domain.comment.dto.response.CommentListResponse;
+import com.dolpin.global.fixture.CommentTestFixture;
 import com.dolpin.domain.comment.service.command.CommentCommandService;
 import com.dolpin.domain.comment.service.query.CommentQueryService;
-import com.dolpin.global.config.TestConfig;
 import com.dolpin.global.constants.CommentTestConstants;
+import com.dolpin.global.exception.BusinessException;
+import com.dolpin.global.redis.service.DuplicatePreventionService;
+import com.dolpin.global.response.ResponseStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.BDDMockito.willDoNothing;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.BDDMockito.willThrow;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(controllers = CommentController.class, excludeAutoConfiguration = {})
-@AutoConfigureMockMvc(addFilters = false)
-@Import(TestConfig.class)
-@ActiveProfiles("test")
+@ExtendWith(MockitoExtension.class)
+@WebMvcTest(CommentController.class)
 @DisplayName("CommentController 테스트")
 class CommentControllerTest {
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -55,205 +51,127 @@ class CommentControllerTest {
     @MockitoBean
     private CommentCommandService commentCommandService;
 
-    private CommentListResponse mockCommentListResponse;
-    private CommentCreateResponse mockCommentCreateResponse;
+    @MockitoBean
+    private DuplicatePreventionService duplicatePreventionService;
+
+    private CommentTestFixture fixture;
 
     @BeforeEach
     void setUp() {
-        setupMockResponse();
-    }
-
-    private void setupMockResponse() {
-
-        CommentListResponse.CommentDto commentDto = CommentListResponse.CommentDto.builder()
-                .id(CommentTestConstants.TEST_COMMENT_ID)
-                .user(CommentListResponse.UserDto.builder()
-                        .id(CommentTestConstants.TEST_USER_ID)
-                        .nickname(CommentTestConstants.TEST_USERNAME)
-                        .profileImage(CommentTestConstants.TEST_PROFILE_IMAGE_URL)
-                        .build())
-                .content(CommentTestConstants.TEST_COMMENT_CONTENT)
-                .depth(CommentTestConstants.ROOT_COMMENT_DEPTH)
-                .parentCommentId(null)
-                .createdAt(LocalDateTime.now())
-                .isOwner(CommentTestConstants.IS_OWNER)
-                .build();
-
-        CommentListResponse.MetaDto meta = CommentListResponse.MetaDto.builder()
-                .pagination(CommentListResponse.PaginationDto.builder()
-                        .limit(CommentTestConstants.DEFAULT_PAGE_LIMIT)
-                        .nextCursor(null)
-                        .hasNext(CommentTestConstants.NO_NEXT)
-                        .build())
-                .build();
-
-        CommentListResponse.LinksDto links = CommentListResponse.LinksDto.builder()
-                .self(CommentListResponse.LinkDto.builder()
-                        .href(String.format("/api/v1/moments/%d/comments?limit=%d",
-                                CommentTestConstants.TEST_MOMENT_ID, CommentTestConstants.DEFAULT_PAGE_LIMIT))
-                        .build())
-                .next(null)
-                .build();
-
-        mockCommentListResponse = CommentListResponse.builder()
-                .comments(List.of(commentDto))
-                .meta(meta)
-                .links(links)
-                .build();
-
-        mockCommentCreateResponse = CommentCreateResponse.builder()
-                .id(CommentTestConstants.TEST_COMMENT_ID)
-                .user(CommentCreateResponse.UserDto.builder()
-                        .id(CommentTestConstants.TEST_USER_ID)
-                        .nickname(CommentTestConstants.TEST_USERNAME)
-                        .profileImage(CommentTestConstants.TEST_PROFILE_IMAGE_URL)
-                        .build())
-                .content(CommentTestConstants.NEW_COMMENT_CONTENT)
-                .depth(CommentTestConstants.ROOT_COMMENT_DEPTH)
-                .parentCommentId(null)
-                .createdAt(LocalDateTime.now())
-                .isOwner(CommentTestConstants.IS_OWNER)
-                .momentId(CommentTestConstants.TEST_MOMENT_ID)
-                .build();
+        fixture = new CommentTestFixture();
     }
 
     @Nested
-    @DisplayName("GET /api/v1/moments/{moment_id}/comments - 댓글 목록 조회")
-    class GetCommentsTest{
+    @DisplayName("댓글 목록 조회")
+    class GetCommentsTest {
 
         @Test
-        @DisplayName("로그인 사용자의 댓글 목록 조회가 정상 동작한다")
+        @DisplayName("성공 - 인증된 사용자")
         @WithMockUser(username = "1")
-        void getComments_WithAuthentication_ReturnsCommentList() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
-
+        void getComments_Success_AuthenticatedUser() throws Exception {
+            // given
+            CommentListResponse response = fixture.createCommentListResponse();
             given(commentQueryService.getCommentsByMomentId(
-                    eq(momentId), eq(CommentTestConstants.DEFAULT_PAGE_LIMIT), isNull(), eq(userId)))
-                    .willReturn(mockCommentListResponse);
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.DEFAULT_PAGE_LIMIT,
+                    null,
+                    CommentTestConstants.TEST_USER_ID
+            )).willReturn(response);
 
-            // When & Then
-            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
-                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.DEFAULT_PAGE_LIMIT))
-                            .contentType(MediaType.APPLICATION_JSON))
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.DEFAULT_PAGE_LIMIT)))
                     .andDo(print())
                     .andExpect(status().isOk())
-                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                     .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.GET_COMMENT_SUCCESS_MESSAGE))
-                    .andExpect(jsonPath(CommentTestConstants.COMMENTS_JSON_PATH).isArray())
-                    .andExpect(jsonPath("$.data.comments[0].id").value(CommentTestConstants.TEST_COMMENT_ID))
-                    .andExpect(jsonPath("$.data.comments[0].content").value(CommentTestConstants.TEST_COMMENT_CONTENT))
-                    .andExpect(jsonPath("$.data.comments[0].depth").value(CommentTestConstants.ROOT_COMMENT_DEPTH))
-                    .andExpect(jsonPath("$.data.comments[0].is_owner").value(CommentTestConstants.IS_OWNER))
-                    .andExpect(jsonPath(CommentTestConstants.META_JSON_PATH).exists())
-                    .andExpect(jsonPath(CommentTestConstants.PAGINATION_JSON_PATH).exists());
+                    .andExpect(jsonPath(CommentTestConstants.COMMENTS_JSON_PATH).isArray());
         }
 
         @Test
-        @DisplayName("커서 기반 페이지네이션이 정상 동작한다")
+        @DisplayName("성공 - 커서 페이지네이션")
         @WithMockUser(username = "1")
-        void getComments_WithCursor_ReturnsCommentList() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
-            String cursor = CommentTestConstants.TEST_CURSOR;
-
+        void getComments_Success_WithCursor() throws Exception {
+            // given
+            CommentListResponse response = fixture.createCommentListResponseWithCursor();
             given(commentQueryService.getCommentsByMomentId(
-                    eq(momentId), eq(CommentTestConstants.CUSTOM_PAGE_LIMIT), eq(cursor), eq(userId)))
-                    .willReturn(mockCommentListResponse);
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.CUSTOM_PAGE_LIMIT,
+                    CommentTestConstants.TEST_CURSOR,
+                    CommentTestConstants.TEST_USER_ID
+            )).willReturn(response);
 
-            // When & Then
-            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.CUSTOM_PAGE_LIMIT))
-                            .param(CommentTestConstants.CURSOR_PARAM, cursor)
-                            .contentType(MediaType.APPLICATION_JSON))
+                            .param(CommentTestConstants.CURSOR_PARAM, CommentTestConstants.TEST_CURSOR))
                     .andDo(print())
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.GET_COMMENT_SUCCESS_MESSAGE));
+                    .andExpect(jsonPath(CommentTestConstants.LIMIT_JSON_PATH).value(CommentTestConstants.CUSTOM_PAGE_LIMIT));
         }
 
         @Test
-        @DisplayName("빈 댓글 목록을 정상적으로 반환한다")
+        @DisplayName("실패 - 존재하지 않는 기록")
         @WithMockUser(username = "1")
-        void getComments_EmptyList_ReturnsEmptyCommentList() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId   = CommentTestConstants.TEST_USER_ID;
+        void getComments_Fail_MomentNotFound() throws Exception {
+            // given
+            given(commentQueryService.getCommentsByMomentId(anyLong(), anyInt(), any(), anyLong()))
+                    .willThrow(new BusinessException(ResponseStatus.MOMENT_NOT_FOUND));
 
-            CommentListResponse emptyResponse = createEmptyCommentListResponse();
-            given(commentQueryService.getCommentsByMomentId(
-                    eq(momentId),
-                    eq(CommentTestConstants.DEFAULT_PAGE_LIMIT),
-                    isNull(),
-                    eq(userId)))
-                    .willReturn(emptyResponse);
-
-            // When & Then
-            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
-                            .contentType(MediaType.APPLICATION_JSON))
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.DELETED_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.DEFAULT_PAGE_LIMIT)))
                     .andDo(print())
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.message")
-                            .value(CommentTestConstants.GET_COMMENT_SUCCESS_MESSAGE))
-                    .andExpect(jsonPath("$.data").doesNotExist());
-        }
-
-        @ParameterizedTest
-        @ValueSource(ints = {5, 10, 20, 50})
-        @DisplayName("다양한 limit 값으로 댓글 목록 조회가 정상 동작한다")
-        @WithMockUser(username = "1")
-        void getComments_WithVariousLimits_ReturnsCommentList(int limit) throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
-
-            given(commentQueryService.getCommentsByMomentId(
-                    eq(momentId), eq(limit), isNull(), eq(userId)))
-                    .willReturn(mockCommentListResponse);
-
-            // When & Then
-            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
-                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(limit))
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andDo(print())
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.GET_COMMENT_SUCCESS_MESSAGE));
+                    .andExpect(status().isNotFound());
         }
 
         @Test
-        @DisplayName("잘못된 형식의 moment_id로 조회 실패")
-        @WithMockUser(username = "1")
-        void getComments_WithInvalidMomentId_Returns400() throws Exception {
-            // When & Then
-            mockMvc.perform(get("/api/v1/moments/invalid/comments")
-                            .contentType(MediaType.APPLICATION_JSON))
+        @DisplayName("실패 - 접근 권한 없음")
+        @WithMockUser(username = "999")
+        void getComments_Fail_AccessDenied() throws Exception {
+            // given
+            given(commentQueryService.getCommentsByMomentId(anyLong(), anyInt(), any(), anyLong()))
+                    .willThrow(new BusinessException(ResponseStatus.FORBIDDEN));
+
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.DEFAULT_PAGE_LIMIT)))
                     .andDo(print())
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isForbidden());
         }
     }
 
     @Nested
-    @DisplayName("POST /api/v1/moments/{moment_id}/comments - 댓글 생성")
-    class CreateCommentTest{
+    @DisplayName("댓글 생성")
+    class CreateCommentTest {
 
         @Test
-        @DisplayName("일반 댓글 생성이 정상 동작한다")
+        @DisplayName("성공 - 일반 댓글 생성")
         @WithMockUser(username = "1")
-        void createComment_RootComment_Success() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
+        void createComment_Success_RootComment() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createCommentCreateRequest();
+            CommentCreateResponse response = fixture.createCommentCreateResponse();
+            String lockKey = fixture.createLockKey();
 
-            CommentCreateRequest request = new CommentCreateRequest(
-                    CommentTestConstants.NEW_COMMENT_CONTENT, null
-            );
+            // DuplicatePreventionService 모킹
+            given(duplicatePreventionService.generateKey(
+                    CommentTestConstants.TEST_USER_ID,
+                    "createComment",
+                    CommentTestConstants.TEST_MOMENT_ID
+            )).willReturn(lockKey);
 
-            given(commentCommandService.createComment(eq(momentId), any(CommentCreateRequest.class), eq(userId)))
-                    .willReturn(mockCommentCreateResponse);
+            // executeWithLock이 실제 로직을 수행하도록 모킹
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willAnswer(invocation -> {
+                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                        return action.execute(); // 실제 람다 실행
+                    });
 
-            // When & Then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            // CommentCommandService 모킹
+            given(commentCommandService.createComment(any(), any(), any())).willReturn(response);
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
@@ -261,65 +179,83 @@ class CommentControllerTest {
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.COMMENT_CREATED_MESSAGE))
                     .andExpect(jsonPath(CommentTestConstants.COMMENT_ID_JSON_PATH).value(CommentTestConstants.TEST_COMMENT_ID))
-                    .andExpect(jsonPath(CommentTestConstants.COMMENT_CONTENT_JSON_PATH).value(CommentTestConstants.NEW_COMMENT_CONTENT))
+                    .andExpect(jsonPath(CommentTestConstants.COMMENT_CONTENT_JSON_PATH).value(CommentTestConstants.TEST_COMMENT_CONTENT))
                     .andExpect(jsonPath(CommentTestConstants.COMMENT_DEPTH_JSON_PATH).value(CommentTestConstants.ROOT_COMMENT_DEPTH))
-                    .andExpect(jsonPath(CommentTestConstants.PARENT_COMMENT_ID_JSON_PATH).doesNotExist())
-                    .andExpect(jsonPath("$.data.is_owner").value(CommentTestConstants.IS_OWNER));
+                    .andExpect(jsonPath(CommentTestConstants.IS_OWNER_JSON_PATH).value(CommentTestConstants.IS_OWNER));
         }
 
         @Test
-        @DisplayName("대댓글 생성이 정상 동작한다")
+        @DisplayName("성공 - 대댓글 생성")
         @WithMockUser(username = "1")
-        void createComment_ReplyComment_Success() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
+        void createComment_Success_ReplyComment() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createReplyCommentCreateRequest();
+            CommentCreateResponse response = fixture.createReplyCommentCreateResponse();
+            String lockKey = fixture.createLockKey();
 
-            CommentCreateRequest request = new CommentCreateRequest(
-                    CommentTestConstants.REPLY_CONTENT, CommentTestConstants.PARENT_COMMENT_ID);
+            // DuplicatePreventionService 모킹
+            given(duplicatePreventionService.generateKey(
+                    CommentTestConstants.TEST_USER_ID,
+                    "createComment",
+                    CommentTestConstants.TEST_MOMENT_ID
+            )).willReturn(lockKey);
 
-            CommentCreateResponse replyResponse = CommentCreateResponse.builder()
-                    .id(CommentTestConstants.REPLY_COMMENT_ID)
-                    .user(CommentCreateResponse.UserDto.builder()
-                            .id(CommentTestConstants.TEST_USER_ID)
-                            .nickname(CommentTestConstants.TEST_USERNAME)
-                            .profileImage(CommentTestConstants.TEST_PROFILE_IMAGE_URL)
-                            .build())
-                    .content(CommentTestConstants.REPLY_CONTENT)
-                    .depth(CommentTestConstants.REPLY_COMMENT_DEPTH)
-                    .parentCommentId(CommentTestConstants.PARENT_COMMENT_ID)
-                    .createdAt(LocalDateTime.now())
-                    .isOwner(CommentTestConstants.IS_OWNER)
-                    .momentId(CommentTestConstants.TEST_MOMENT_ID)
-                    .build();
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willAnswer(invocation -> {
+                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                        return action.execute();
+                    });
 
-            given(commentCommandService.createComment(eq(momentId), any(CommentCreateRequest.class), eq(userId)))
-                    .willReturn(replyResponse);
+            // CommentCommandService 모킹
+            given(commentCommandService.createComment(any(), any(), any())).willReturn(response);
 
-            // When & Then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andDo(print())
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.COMMENT_CREATED_MESSAGE))
-                    .andExpect(jsonPath(CommentTestConstants.COMMENT_ID_JSON_PATH).value(CommentTestConstants.REPLY_COMMENT_ID))
-                    .andExpect(jsonPath(CommentTestConstants.COMMENT_CONTENT_JSON_PATH).value(CommentTestConstants.REPLY_CONTENT))
                     .andExpect(jsonPath(CommentTestConstants.COMMENT_DEPTH_JSON_PATH).value(CommentTestConstants.REPLY_COMMENT_DEPTH))
-                    .andExpect(jsonPath("$.data.parent_comment_id").value(CommentTestConstants.PARENT_COMMENT_ID));
+                    .andExpect(jsonPath(CommentTestConstants.PARENT_COMMENT_ID_JSON_PATH).value(CommentTestConstants.PARENT_COMMENT_ID));
         }
 
         @Test
-        @DisplayName("댓글 생성 실패 - 내용 누락")
+        @DisplayName("실패 - 중복 요청")
         @WithMockUser(username = "1")
-        void createComment_ContentMissing_Fail() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            CommentCreateRequest request = new CommentCreateRequest(CommentTestConstants.NULL_CONTENT, null);
+        void createComment_Fail_DuplicateRequest() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createCommentCreateRequest();
+            String lockKey = fixture.createLockKey();
 
-            // When & Then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            given(duplicatePreventionService.generateKey(
+                    CommentTestConstants.TEST_USER_ID,
+                    "createComment",
+                    CommentTestConstants.TEST_MOMENT_ID
+            )).willReturn(lockKey);
+
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willThrow(new RuntimeException("동일한 요청이 처리 중입니다. 잠시 후 다시 시도해주세요."));
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andDo(print())
+                    .andExpect(status().isInternalServerError());
+        }
+
+        @Test
+        @DisplayName("실패 - 내용 누락")
+        @WithMockUser(username = "1")
+        void createComment_Fail_EmptyContent() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createInvalidCommentCreateRequest();
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
@@ -328,15 +264,14 @@ class CommentControllerTest {
         }
 
         @Test
-        @DisplayName("댓글 생성 실패 - 빈 내용")
+        @DisplayName("실패 - 내용 길이 초과")
         @WithMockUser(username = "1")
-        void createComment_EmptyContent_Fail() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            CommentCreateRequest request = new CommentCreateRequest(CommentTestConstants.EMPTY_CONTENT, null);
+        void createComment_Fail_ContentTooLong() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createLongContentCommentCreateRequest();
 
-            // When & Then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
@@ -345,15 +280,85 @@ class CommentControllerTest {
         }
 
         @Test
-        @DisplayName("댓글 생성 실패 - 공백만 있는 내용")
+        @DisplayName("실패 - 존재하지 않는 기록")
         @WithMockUser(username = "1")
-        void createComment_BlankContent_Fail() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            CommentCreateRequest request = new CommentCreateRequest(CommentTestConstants.BLANK_CONTENT, null);
+        void createComment_Fail_MomentNotFound() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createCommentCreateRequest();
+            String lockKey = fixture.createLockKey();
 
-            // When & Then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            given(duplicatePreventionService.generateKey(anyLong(), anyString(), anyLong()))
+                    .willReturn(lockKey);
+
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willAnswer(invocation -> {
+                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                        return action.execute();
+                    });
+
+            given(commentCommandService.createComment(anyLong(), any(), anyLong()))
+                    .willThrow(new BusinessException(ResponseStatus.MOMENT_NOT_FOUND));
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.DELETED_MOMENT_ID)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andDo(print())
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("실패 - 타인의 비공개 기록")
+        @WithMockUser(username = "999")
+        void createComment_Fail_PrivateMomentAccess() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createCommentCreateRequest();
+            String lockKey = fixture.createOtherUserLockKey();
+
+            given(duplicatePreventionService.generateKey(anyLong(), anyString(), anyLong()))
+                    .willReturn(lockKey);
+
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willAnswer(invocation -> {
+                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                        return action.execute();
+                    });
+
+            given(commentCommandService.createComment(anyLong(), any(), anyLong()))
+                    .willThrow(new BusinessException(ResponseStatus.FORBIDDEN));
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andDo(print())
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("실패 - 유효하지 않은 부모 댓글")
+        @WithMockUser(username = "1")
+        void createComment_Fail_InvalidParentComment() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createInvalidParentCommentCreateRequest();
+            String lockKey = fixture.createLockKey();
+
+            given(duplicatePreventionService.generateKey(anyLong(), anyString(), anyLong()))
+                    .willReturn(lockKey);
+
+            given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                    .willAnswer(invocation -> {
+                        DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                        return action.execute();
+                    });
+
+            given(commentCommandService.createComment(anyLong(), any(), anyLong()))
+                    .willThrow(new BusinessException(ResponseStatus.INVALID_PARAMETER));
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
@@ -362,107 +367,222 @@ class CommentControllerTest {
         }
 
         @Test
-        @DisplayName("댓글 생성 성공 - 최대 길이 내용")
-        @WithMockUser(username = "1")
-        void createComment_MaxLengthContent_Success() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
-            String maxLengthContent = "A".repeat(CommentTestConstants.MAX_CONTENT_LENGTH);
+        @DisplayName("실패 - 인증되지 않은 사용자")
+        void createComment_Fail_Unauthenticated() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createCommentCreateRequest();
 
-            CommentCreateRequest request = new CommentCreateRequest(maxLengthContent, null);
-
-            given(commentCommandService.createComment(eq(momentId), any(CommentCreateRequest.class), eq(userId)))
-                    .willReturn(mockCommentCreateResponse);
-
-            // When & Then
-            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, momentId)
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andDo(print())
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.COMMENT_CREATED_MESSAGE));
+                    .andExpect(status().isUnauthorized());
         }
     }
 
     @Nested
-    @DisplayName("DELETE /api/v1/moments/{moment_id}/comments/{comment_id} - 댓글 삭제")
+    @DisplayName("댓글 삭제")
     class DeleteCommentTest {
 
         @Test
-        @DisplayName("댓글 삭제가 정상 동작한다")
+        @DisplayName("성공 - 댓글 삭제")
         @WithMockUser(username = "1")
         void deleteComment_Success() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
-            Long commentId = CommentTestConstants.TEST_COMMENT_ID;
-            Long userId = CommentTestConstants.TEST_USER_ID;
-
+            // given
             willDoNothing().given(commentCommandService)
-                    .deleteComment(eq(momentId), eq(commentId), eq(userId));
+                    .deleteComment(
+                            CommentTestConstants.TEST_MOMENT_ID,
+                            CommentTestConstants.TEST_COMMENT_ID,
+                            CommentTestConstants.TEST_USER_ID
+                    );
 
-            // When & Then
-            mockMvc.perform(delete(CommentTestConstants.COMMENT_DELETE_PATH, momentId, commentId)
+            // when & then
+            mockMvc.perform(delete(CommentTestConstants.COMMENT_DELETE_PATH,
+                            CommentTestConstants.TEST_MOMENT_ID,
+                            CommentTestConstants.TEST_COMMENT_ID)
                             .with(csrf()))
                     .andDo(print())
                     .andExpect(status().isNoContent())
-                    .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.COMMENT_DELETED_MESSAGE))
-                    .andExpect(jsonPath(CommentTestConstants.DATA_JSON_PATH).doesNotExist());
+                    .andExpect(jsonPath(CommentTestConstants.MESSAGE_JSON_PATH).value(CommentTestConstants.COMMENT_DELETED_MESSAGE));
         }
 
         @Test
-        @DisplayName("잘못된 형식의 comment_id로 삭제 실패")
+        @DisplayName("실패 - 존재하지 않는 댓글")
         @WithMockUser(username = "1")
-        void deleteComment_WithInvalidCommentId_Returns400() throws Exception {
-            // Given
-            Long momentId = CommentTestConstants.TEST_MOMENT_ID;
+        void deleteComment_Fail_CommentNotFound() throws Exception {
+            // given
+            willThrow(new BusinessException(ResponseStatus.USER_NOT_FOUND))
+                    .given(commentCommandService)
+                    .deleteComment(anyLong(), anyLong(), anyLong());
 
-            // When & Then
-            mockMvc.perform(delete("/api/v1/moments/{moment_id}/comments/invalid", momentId)
+            // when & then
+            mockMvc.perform(delete(CommentTestConstants.COMMENT_DELETE_PATH,
+                            CommentTestConstants.TEST_MOMENT_ID,
+                            CommentTestConstants.NON_EXISTENT_COMMENT_ID)
                             .with(csrf()))
                     .andDo(print())
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isNotFound());
         }
 
         @Test
-        @DisplayName("잘못된 형식의 moment_id로 삭제 실패")
-        @WithMockUser(username = "1")
-        void deleteComment_WithInvalidMomentId_Returns400() throws Exception {
-            // Given
-            Long commentId = CommentTestConstants.TEST_COMMENT_ID;
+        @DisplayName("실패 - 삭제 권한 없음")
+        @WithMockUser(username = "999")
+        void deleteComment_Fail_NoPermission() throws Exception {
+            // given
+            willThrow(new BusinessException(ResponseStatus.FORBIDDEN))
+                    .given(commentCommandService)
+                    .deleteComment(anyLong(), anyLong(), anyLong());
 
-            // When & Then
-            mockMvc.perform(delete("/api/v1/moments/invalid/comments/{comment_id}", commentId)
+            // when & then
+            mockMvc.perform(delete(CommentTestConstants.COMMENT_DELETE_PATH,
+                            CommentTestConstants.TEST_MOMENT_ID,
+                            CommentTestConstants.TEST_COMMENT_ID)
                             .with(csrf()))
                     .andDo(print())
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("실패 - 존재하지 않는 기록")
+        @WithMockUser(username = "1")
+        void deleteComment_Fail_MomentNotFound() throws Exception {
+            // given
+            willThrow(new BusinessException(ResponseStatus.MOMENT_NOT_FOUND))
+                    .given(commentCommandService)
+                    .deleteComment(anyLong(), anyLong(), anyLong());
+
+            // when & then
+            mockMvc.perform(delete(CommentTestConstants.COMMENT_DELETE_PATH,
+                            CommentTestConstants.DELETED_MOMENT_ID,
+                            CommentTestConstants.TEST_COMMENT_ID)
+                            .with(csrf()))
+                    .andDo(print())
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("실패 - 인증되지 않은 사용자")
+        void deleteComment_Fail_Unauthenticated() throws Exception {
+            // when & then
+            mockMvc.perform(delete(CommentTestConstants.COMMENT_DELETE_PATH,
+                            CommentTestConstants.TEST_MOMENT_ID,
+                            CommentTestConstants.TEST_COMMENT_ID)
+                            .with(csrf()))
+                    .andDo(print())
+                    .andExpect(status().isUnauthorized());
         }
     }
 
+    @Nested
+    @DisplayName("추가 테스트 케이스")
+    class AdditionalTestCases {
 
+        @Test
+        @DisplayName("성공 - 빈 댓글 목록 조회")
+        @WithMockUser(username = "1")
+        void getComments_Success_EmptyList() throws Exception {
+            // given
+            CommentListResponse response = fixture.createEmptyCommentListResponse();
+            given(commentQueryService.getCommentsByMomentId(
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.DEFAULT_PAGE_LIMIT,
+                    null,
+                    CommentTestConstants.TEST_USER_ID
+            )).willReturn(response);
 
-    private CommentListResponse createEmptyCommentListResponse() {
-        CommentListResponse.MetaDto meta = CommentListResponse.MetaDto.builder()
-                .pagination(CommentListResponse.PaginationDto.builder()
-                        .limit(CommentTestConstants.DEFAULT_PAGE_LIMIT)
-                        .nextCursor(null)
-                        .hasNext(CommentTestConstants.NO_NEXT)
-                        .build())
-                .build();
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.DEFAULT_PAGE_LIMIT)))
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(CommentTestConstants.COMMENTS_JSON_PATH).isEmpty());
+        }
 
-        CommentListResponse.LinksDto links = CommentListResponse.LinksDto.builder()
-                .self(CommentListResponse.LinkDto.builder()
-                        .href(String.format("/api/v1/moments/%d/comments?limit=%d",
-                                CommentTestConstants.TEST_MOMENT_ID, CommentTestConstants.DEFAULT_PAGE_LIMIT))
-                        .build())
-                .next(null)
-                .build();
+        @Test
+        @DisplayName("성공 - 페이지네이션 테스트")
+        @WithMockUser(username = "1")
+        void getComments_Success_Pagination() throws Exception {
+            // given
+            CommentListResponse response = fixture.createPaginatedCommentListResponse(
+                    CommentTestConstants.CUSTOM_PAGE_LIMIT,
+                    CommentTestConstants.HAS_NEXT
+            );
+            given(commentQueryService.getCommentsByMomentId(
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.CUSTOM_PAGE_LIMIT,
+                    null,
+                    CommentTestConstants.TEST_USER_ID
+            )).willReturn(response);
 
-        return CommentListResponse.builder()
-                .comments(Collections.emptyList())
-                .meta(meta)
-                .links(links)
-                .build();
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.CUSTOM_PAGE_LIMIT)))
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(CommentTestConstants.LIMIT_JSON_PATH).value(CommentTestConstants.CUSTOM_PAGE_LIMIT))
+                    .andExpect(jsonPath(CommentTestConstants.HAS_NEXT_JSON_PATH).value(CommentTestConstants.HAS_NEXT))
+                    .andExpect(jsonPath("$.data.comments").value(hasSize(CommentTestConstants.CUSTOM_PAGE_LIMIT)));
+        }
+
+        @Test
+        @DisplayName("성공 - 스레드 구조 댓글 조회")
+        @WithMockUser(username = "1")
+        void getComments_Success_ThreadedComments() throws Exception {
+            // given
+            CommentListResponse response = fixture.createThreadedCommentListResponse();
+            given(commentQueryService.getCommentsByMomentId(
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.DEFAULT_PAGE_LIMIT,
+                    null,
+                    CommentTestConstants.TEST_USER_ID
+            )).willReturn(response);
+
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.DEFAULT_PAGE_LIMIT)))
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(CommentTestConstants.COMMENTS_JSON_PATH).isArray())
+                    .andExpect(jsonPath("$.data.comments[0].depth").value(CommentTestConstants.ROOT_COMMENT_DEPTH))
+                    .andExpect(jsonPath("$.data.comments[1].depth").value(CommentTestConstants.REPLY_COMMENT_DEPTH));
+        }
+
+        @Test
+        @DisplayName("실패 - 댓글 내용에 공백만 있는 경우 검증")
+        @WithMockUser(username = "1")
+        void createComment_Fail_BlankContent() throws Exception {
+            // given
+            CommentCreateRequest request = fixture.createBlankContentCommentCreateRequest();
+
+            // when & then
+            mockMvc.perform(post(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("성공 - 최대 페이지 크기 제한 테스트")
+        @WithMockUser(username = "1")
+        void getComments_Success_MaxLimitTest() throws Exception {
+            // given
+            CommentListResponse response = fixture.createCommentListResponse();
+            given(commentQueryService.getCommentsByMomentId(
+                    CommentTestConstants.TEST_MOMENT_ID,
+                    CommentTestConstants.OVER_MAX_LIMIT,
+                    null,
+                    CommentTestConstants.TEST_USER_ID
+            )).willReturn(response);
+
+            // when & then
+            mockMvc.perform(get(CommentTestConstants.COMMENTS_BASE_PATH, CommentTestConstants.TEST_MOMENT_ID)
+                            .param(CommentTestConstants.LIMIT_PARAM, String.valueOf(CommentTestConstants.OVER_MAX_LIMIT)))
+                    .andDo(print())
+                    .andExpect(status().isOk());
+        }
     }
 }

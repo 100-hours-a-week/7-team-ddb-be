@@ -101,14 +101,14 @@ public final class CommentTestConstants {
     public static final String COMMENT_ID_JSON_PATH = "$.data.id";
     public static final String COMMENT_CONTENT_JSON_PATH = "$.data.content";
     public static final String COMMENT_DEPTH_JSON_PATH = "$.data.depth";
-    public static final String PARENT_COMMENT_ID_JSON_PATH = "$.data.parentCommentId";
-    public static final String IS_OWNER_JSON_PATH = "$.data.isOwner";
+    public static final String PARENT_COMMENT_ID_JSON_PATH = "$.data.parent_comment_id";
+    public static final String IS_OWNER_JSON_PATH = "$.data.is_owner";
     public static final String COMMENTS_JSON_PATH = "$.data.comments";
     public static final String META_JSON_PATH = "$.data.meta";
     public static final String PAGINATION_JSON_PATH = "$.data.meta.pagination";
     public static final String LIMIT_JSON_PATH = "$.data.meta.pagination.limit";
-    public static final String HAS_NEXT_JSON_PATH = "$.data.meta.pagination.hasNext";
-    public static final String NEXT_CURSOR_JSON_PATH = "$.data.meta.pagination.nextCursor";
+    public static final String HAS_NEXT_JSON_PATH = "$.data.meta.pagination.has_next";
+    public static final String NEXT_CURSOR_JSON_PATH = "$.data.meta.pagination.next_cursor";
 
     // HTTP 상태 코드
     public static final int HTTP_STATUS_OK = 200;

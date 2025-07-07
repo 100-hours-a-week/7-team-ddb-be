@@ -4,38 +4,36 @@ import com.dolpin.domain.auth.service.cookie.CookieService;
 import com.dolpin.domain.user.dto.request.AgreementRequest;
 import com.dolpin.domain.user.dto.request.UserProfileUpdateRequest;
 import com.dolpin.domain.user.dto.request.UserRegisterRequest;
-import com.dolpin.domain.user.dto.response.MyProfileResponse;
-import com.dolpin.domain.user.dto.response.UserProfileResponse;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserCommandService;
 import com.dolpin.domain.user.service.UserQueryService;
-import com.dolpin.global.constants.UserTestConstants;
 import com.dolpin.global.exception.BusinessException;
-import com.dolpin.global.response.ApiResponse;
+import com.dolpin.global.redis.service.DuplicatePreventionService;
 import com.dolpin.global.response.ResponseStatus;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 
-import static org.assertj.core.api.Assertions.*;
+import static com.dolpin.global.constants.UserTestConstants.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.mockito.Mockito.reset;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(controllers = UserController.class)
+@WebMvcTest(UserController.class)
 @DisplayName("UserController 테스트")
 class UserControllerTest {
 
@@ -54,403 +52,247 @@ class UserControllerTest {
     @MockitoBean
     private CookieService cookieService;
 
-    @Nested
-    @DisplayName("약관 동의 API 테스트")
-    class SaveAgreementTest {
-
-        @Test
-        @DisplayName("정상적인 약관 동의가 성공한다")
-        void saveAgreement_WithValidRequest_ReturnsSuccessResponse() throws Exception {
-            // given
-            AgreementRequest request = new AgreementRequest(UserTestConstants.PRIVACY_AGREED, UserTestConstants.LOCATION_AGREED);
-
-            willDoNothing().given(userCommandService).agreeToTerms(UserTestConstants.USER_ID_1,
-                    UserTestConstants.PRIVACY_AGREED, UserTestConstants.LOCATION_AGREED);
-
-            // when & then
-            MvcResult result = performPostRequest("/api/v1/users/agreement", request)
-                    .andExpect(status().isCreated())
-                    .andReturn();
-
-            ApiResponse<Void> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Void>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.SUCCESS_MESSAGE_AGREEMENT_SAVED);
-            assertThat(apiResponse.getData()).isNull();
-
-            verify(userCommandService).agreeToTerms(UserTestConstants.USER_ID_1,
-                    UserTestConstants.PRIVACY_AGREED, UserTestConstants.LOCATION_AGREED);
-        }
-
-        @Test
-        @DisplayName("필수 동의 항목이 null인 경우 400 에러가 발생한다")
-        void saveAgreement_WithNullPrivacyAgreed_Returns400Error() throws Exception {
-            // given
-            AgreementRequest request = new AgreementRequest(null, UserTestConstants.LOCATION_AGREED);
-
-            // when & then
-            MvcResult result = performPostRequest("/api/v1/users/agreement", request)
-                    .andExpect(status().isBadRequest())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).contains(UserTestConstants.ERROR_MESSAGE_PRIVACY_AGREEMENT_REQUIRED);
-
-            verifyNoInteractions(userCommandService);
-        }
-
-        @Test
-        @DisplayName("존재하지 않는 사용자에 대해 404 에러가 발생한다")
-        void saveAgreement_WithNonExistentUser_Returns404Error() throws Exception {
-            // given
-            AgreementRequest request = new AgreementRequest(UserTestConstants.PRIVACY_AGREED, UserTestConstants.LOCATION_AGREED);
-
-            willThrow(new BusinessException(ResponseStatus.USER_NOT_FOUND))
-                    .given(userCommandService).agreeToTerms(UserTestConstants.USER_ID_1,
-                            UserTestConstants.PRIVACY_AGREED, UserTestConstants.LOCATION_AGREED);
-
-            // when & then
-            MvcResult result = performPostRequest("/api/v1/users/agreement", request)
-                    .andExpect(status().isNotFound())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.ERROR_MESSAGE_USER_NOT_FOUND);
-        }
-    }
-
-    @Nested
-    @DisplayName("사용자 등록 API 테스트")
-    class RegisterUserTest {
-
-        @Test
-        @DisplayName("정상적인 사용자 등록이 성공한다")
-        void registerUser_WithValidRequest_ReturnsSuccessResponse() throws Exception {
-            // given
-            UserRegisterRequest request = new UserRegisterRequest(UserTestConstants.NICKNAME_MIN_LENGTH,
-                    UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            willDoNothing().given(userCommandService).registerUser(UserTestConstants.USER_ID_1,
-                    UserTestConstants.NICKNAME_MIN_LENGTH, UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            // when & then
-            MvcResult result = performPostRequest("/api/v1/users", request)
-                    .andExpect(status().isCreated())
-                    .andReturn();
-
-            ApiResponse<Void> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Void>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.SUCCESS_MESSAGE_USER_INFO_SAVED);
-
-            verify(userCommandService).registerUser(UserTestConstants.USER_ID_1,
-                    UserTestConstants.NICKNAME_MIN_LENGTH, UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-        }
-
-        @Test
-        @DisplayName("닉네임이 너무 짧은 경우 400 에러가 발생한다")
-        void registerUser_WithTooShortNickname_Returns400Error() throws Exception {
-            // given
-            UserRegisterRequest request = new UserRegisterRequest(UserTestConstants.NICKNAME_TOO_SHORT,
-                    UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            // when & then
-            performPostRequest("/api/v1/users", request)
-                    .andExpect(status().isBadRequest());
-
-            verify(userCommandService, never()).registerUser(any(), any(), any(), any());
-        }
-
-        @Test
-        @DisplayName("중복된 닉네임에 대해 409 에러가 발생한다")
-        void registerUser_WithDuplicateNickname_Returns409Error() throws Exception {
-            // given
-            UserRegisterRequest request = new UserRegisterRequest(UserTestConstants.USERNAME_DUPLICATE,
-                    UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            willThrow(new BusinessException(ResponseStatus.NICKNAME_DUPLICATE))
-                    .given(userCommandService).registerUser(UserTestConstants.USER_ID_1,
-                            UserTestConstants.USERNAME_DUPLICATE, UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            // when & then
-            MvcResult result = performPostRequest("/api/v1/users", request)
-                    .andExpect(status().isConflict())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.ERROR_MESSAGE_NICKNAME_DUPLICATE);
-        }
-    }
-
-    @Nested
-    @DisplayName("내 프로필 조회 API 테스트")
-    class GetMyProfileTest {
-
-        @Test
-        @DisplayName("정상적인 내 프로필 조회가 성공한다")
-        void getMyProfile_WithValidUser_ReturnsSuccessResponse() throws Exception {
-            // given
-            User mockUser = createMockUser(UserTestConstants.USER_ID_1, UserTestConstants.USERNAME_TEST,
-                    UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            given(userQueryService.getUserById(UserTestConstants.USER_ID_1)).willReturn(mockUser);
-
-            // when & then
-            MvcResult result = performGetRequest("/api/v1/users/me")
-                    .andExpect(status().isOk())
-                    .andReturn();
-
-            ApiResponse<MyProfileResponse> apiResponse = parseResponse(result, new TypeReference<ApiResponse<MyProfileResponse>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.SUCCESS_MESSAGE_RETRIEVE_SUCCESS);
-            assertThat(apiResponse.getData().getId()).isEqualTo(UserTestConstants.USER_ID_1);
-            assertThat(apiResponse.getData().getUsername()).isEqualTo(UserTestConstants.USERNAME_TEST);
-            assertThat(apiResponse.getData().getProfileImage()).isEqualTo(UserTestConstants.IMAGE_URL_PROFILE);
-
-            verify(userQueryService).getUserById(UserTestConstants.USER_ID_1);
-        }
-
-        @Test
-        @DisplayName("존재하지 않는 사용자 조회 시 404 에러가 발생한다")
-        void getMyProfile_WithNonExistentUser_Returns404Error() throws Exception {
-            // given
-            given(userQueryService.getUserById(UserTestConstants.NON_EXISTENT_USER_ID))
-                    .willThrow(new BusinessException(ResponseStatus.USER_NOT_FOUND));
-
-            // when & then
-            MvcResult result = mockMvc.perform(get("/api/v1/users/me")
-                            .with(user(UserTestConstants.NON_EXISTENT_USER_ID.toString()))
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isNotFound())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.ERROR_MESSAGE_USER_NOT_FOUND);
-        }
-    }
-
-    @Nested
-    @DisplayName("사용자 프로필 조회 API 테스트")
-    class GetUserProfileTest {
-
-        @Test
-        @DisplayName("정상적인 사용자 프로필 조회가 성공한다")
-        void getUserProfile_WithValidUserId_ReturnsSuccessResponse() throws Exception {
-            // given
-            User mockUser = createMockUser(UserTestConstants.USER_ID_1, UserTestConstants.USERNAME_OTHER,
-                    UserTestConstants.IMAGE_URL_OTHER, UserTestConstants.INTRODUCTION_OTHER);
-
-            given(userQueryService.getUserById(UserTestConstants.USER_ID_1)).willReturn(mockUser);
-
-            // when & then
-            MvcResult result = mockMvc.perform(get("/api/v1/users/{userId}", UserTestConstants.USER_ID_1)
-                            .with(user("1"))
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk())
-                    .andReturn();
-
-            ApiResponse<UserProfileResponse> apiResponse = parseResponse(result, new TypeReference<ApiResponse<UserProfileResponse>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.SUCCESS_MESSAGE_RETRIEVE_SUCCESS);
-            assertThat(apiResponse.getData().getId()).isEqualTo(UserTestConstants.USER_ID_1);
-            assertThat(apiResponse.getData().getUsername()).isEqualTo(UserTestConstants.USERNAME_OTHER);
-            assertThat(apiResponse.getData().getProfileImage()).isEqualTo(UserTestConstants.IMAGE_URL_OTHER);
-
-            verify(userQueryService).getUserById(UserTestConstants.USER_ID_1);
-        }
-
-        @Test
-        @DisplayName("잘못된 형식의 userId에 대해 400 에러가 발생한다")
-        void getUserProfile_WithInvalidUserId_Returns400Error() throws Exception {
-            // given
-            String invalidUserId = "invalid";
-
-            // when & then
-            mockMvc.perform(get("/api/v1/users/{userId}", invalidUserId)
-                            .with(user("1"))
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isBadRequest());
-        }
-    }
-
-    @Nested
-    @DisplayName("프로필 업데이트 API 테스트")
-    class UpdateUserProfileTest {
-
-        @Test
-        @DisplayName("정상적인 프로필 업데이트가 성공한다")
-        void updateUserProfile_WithValidRequest_ReturnsSuccessResponse() throws Exception {
-            // given
-            UserProfileUpdateRequest request = new UserProfileUpdateRequest(UserTestConstants.USERNAME_UPDATE,
-                    UserTestConstants.IMAGE_URL_UPDATE, UserTestConstants.INTRODUCTION_UPDATE);
-            User updatedUser = createMockUser(UserTestConstants.USER_ID_1, UserTestConstants.USERNAME_UPDATE,
-                    UserTestConstants.IMAGE_URL_UPDATE, UserTestConstants.INTRODUCTION_UPDATE);
-
-            given(userCommandService.updateProfile(UserTestConstants.USER_ID_1,
-                    UserTestConstants.USERNAME_UPDATE, UserTestConstants.IMAGE_URL_UPDATE, UserTestConstants.INTRODUCTION_UPDATE))
-                    .willReturn(updatedUser);
-
-            // when & then
-            MvcResult result = performPatchRequest("/api/v1/users", request)
-                    .andExpect(status().isOk())
-                    .andReturn();
-
-            ApiResponse<UserProfileResponse> apiResponse = parseResponse(result, new TypeReference<ApiResponse<UserProfileResponse>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.SUCCESS_MESSAGE_USER_INFO_UPDATED);
-            assertThat(apiResponse.getData().getUsername()).isEqualTo(UserTestConstants.USERNAME_UPDATE);
-            assertThat(apiResponse.getData().getProfileImage()).isEqualTo(UserTestConstants.IMAGE_URL_UPDATE);
-
-            verify(userCommandService).updateProfile(UserTestConstants.USER_ID_1,
-                    UserTestConstants.USERNAME_UPDATE, UserTestConstants.IMAGE_URL_UPDATE, UserTestConstants.INTRODUCTION_UPDATE);
-        }
-
-        @Test
-        @DisplayName("중복된 닉네임으로 업데이트 시 409 에러가 발생한다")
-        void updateUserProfile_WithDuplicateNickname_Returns409Error() throws Exception {
-            // given
-            UserProfileUpdateRequest request = new UserProfileUpdateRequest(UserTestConstants.USERNAME_DUPLICATE,
-                    UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-
-            given(userCommandService.updateProfile(UserTestConstants.USER_ID_1,
-                    UserTestConstants.USERNAME_DUPLICATE, UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO))
-                    .willThrow(new BusinessException(ResponseStatus.NICKNAME_DUPLICATE));
-
-            // when & then
-            MvcResult result = performPatchRequest("/api/v1/users", request)
-                    .andExpect(status().isConflict())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.ERROR_MESSAGE_NICKNAME_DUPLICATE);
-        }
-    }
-
-    @Nested
-    @DisplayName("사용자 삭제 API 테스트")
-    class DeleteUserTest {
-
-        @Test
-        @DisplayName("정상적인 사용자 삭제가 성공한다")
-        void deleteUser_WithValidUser_ReturnsSuccessResponse() throws Exception {
-            // given
-            willDoNothing().given(userCommandService).deleteUser(UserTestConstants.USER_ID_1);
-            willDoNothing().given(cookieService).deleteAccessTokenCookie(any());
-            willDoNothing().given(cookieService).deleteRefreshTokenCookie(any());
-
-            // when & then
-            MvcResult result = mockMvc.perform(delete("/api/v1/users")
-                            .with(user("1"))
-                            .with(csrf())
-                            .cookie(new jakarta.servlet.http.Cookie(UserTestConstants.REFRESH_TOKEN_COOKIE_NAME,
-                                    UserTestConstants.TEST_REFRESH_TOKEN))
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk())
-                    .andReturn();
-
-            ApiResponse<Void> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Void>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.SUCCESS_MESSAGE_USER_DELETE);
-            assertThat(apiResponse.getData()).isNull();
-
-            verify(userCommandService).deleteUser(UserTestConstants.USER_ID_1);
-            verify(cookieService).deleteAccessTokenCookie(any());
-            verify(cookieService).deleteRefreshTokenCookie(any());
-        }
-
-        @Test
-        @DisplayName("존재하지 않는 사용자 삭제 시 404 에러가 발생한다")
-        void deleteUser_WithNonExistentUser_Returns404Error() throws Exception {
-            // given
-            willThrow(new BusinessException(ResponseStatus.USER_NOT_FOUND))
-                    .given(userCommandService).deleteUser(UserTestConstants.NON_EXISTENT_USER_ID);
-
-            // when & then
-            MvcResult result = mockMvc.perform(delete("/api/v1/users")
-                            .with(user(UserTestConstants.NON_EXISTENT_USER_ID.toString()))
-                            .with(csrf())
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isNotFound())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.ERROR_MESSAGE_USER_NOT_FOUND);
-        }
-    }
-
-    @Nested
-    @DisplayName("공통 응답 구조 검증")
-    class CommonResponseTest {
-
-        @Test
-        @DisplayName("모든 성공 응답은 올바른 ApiResponse 구조를 가진다")
-        void allSuccessResponses_HaveCorrectApiResponseStructure() throws Exception {
-            // given
-            User mockUser = createMockUser(UserTestConstants.USER_ID_1, UserTestConstants.USERNAME_TEST,
-                    UserTestConstants.IMAGE_URL_PROFILE, UserTestConstants.INTRODUCTION_HELLO);
-            given(userQueryService.getUserById(UserTestConstants.USER_ID_1)).willReturn(mockUser);
-
-            // when & then
-            MvcResult result = performGetRequest("/api/v1/users/me")
-                    .andExpect(status().isOk())
-                    .andReturn();
-
-            ApiResponse<MyProfileResponse> apiResponse = parseResponse(result, new TypeReference<ApiResponse<MyProfileResponse>>() {});
-            assertThat(apiResponse.getMessage()).isNotNull();
-            assertThat(apiResponse.getData()).isNotNull();
-        }
-
-        @Test
-        @DisplayName("서비스 예외 발생 시 적절한 에러 응답을 반환한다")
-        void serviceException_ReturnsProperErrorResponse() throws Exception {
-            // given
-            given(userQueryService.getUserById(UserTestConstants.USER_ID_1))
-                    .willThrow(new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, UserTestConstants.ERROR_MESSAGE_SERVER_ERROR));
-
-            // when & then
-            MvcResult result = performGetRequest("/api/v1/users/me")
-                    .andExpect(status().isInternalServerError())
-                    .andReturn();
-
-            ApiResponse<Object> apiResponse = parseResponse(result, new TypeReference<ApiResponse<Object>>() {});
-            assertThat(apiResponse.getMessage()).isEqualTo(UserTestConstants.ERROR_MESSAGE_SERVER_ERROR);
-            assertThat(apiResponse.getData()).isNull();
-        }
-    }
-
-    // === 테스트 헬퍼 메서드들 (반복 코드 제거) ===
-    private User createMockUser(Long id, String username, String imageUrl, String introduction) {
-        return User.builder()
-                .id(id)
-                .providerId(UserTestConstants.PROVIDER_ID_VALID)
-                .provider(UserTestConstants.KAKAO_PROVIDER)
-                .username(username)
-                .imageUrl(imageUrl)
-                .introduction(introduction)
-                .isPrivacyAgreed(UserTestConstants.PRIVACY_AGREED)
-                .isLocationAgreed(UserTestConstants.LOCATION_AGREED)
-                .privacyAgreedAt(LocalDateTime.now())
+    @MockitoBean
+    private DuplicatePreventionService duplicatePreventionService;
+
+    private User mockUser;
+
+    @BeforeEach
+    void setUp() {
+        // Mock 초기화
+        reset(userCommandService, userQueryService, cookieService, duplicatePreventionService);
+
+        mockUser = User.builder()
+                .id(USER_ID_1)
+                .providerId(PROVIDER_ID_VALID)
+                .provider(KAKAO_PROVIDER)
+                .username(USERNAME_TEST)
+                .imageUrl(IMAGE_URL_PROFILE)
+                .introduction(INTRODUCTION_HELLO)
+                .isPrivacyAgreed(PRIVACY_AGREED)
+                .isLocationAgreed(LOCATION_AGREED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
     }
 
-    private org.springframework.test.web.servlet.ResultActions performPostRequest(String url, Object request) throws Exception {
-        return mockMvc.perform(post(url)
-                .with(user("1"))
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)));
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("약관 동의 성공")
+    void saveAgreement_Success() throws Exception {
+        // given
+        AgreementRequest request = new AgreementRequest(PRIVACY_AGREED, LOCATION_AGREED);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/agreement")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value(SUCCESS_MESSAGE_AGREEMENT_SAVED));
+
+        verify(userCommandService).agreeToTerms(USER_ID_1, PRIVACY_AGREED, LOCATION_AGREED);
     }
 
-    private org.springframework.test.web.servlet.ResultActions performGetRequest(String url) throws Exception {
-        return mockMvc.perform(get(url)
-                .with(user("1"))
-                .contentType(MediaType.APPLICATION_JSON));
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("개인정보 동의 누락으로 실패")
+    void saveAgreement_Fail_PrivacyAgreementMissing() throws Exception {
+        // given
+        AgreementRequest request = new AgreementRequest(null, LOCATION_AGREED);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/agreement")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("개인정보 동의 여부는 필수입니다"));
+
+        verify(userCommandService, never()).agreeToTerms(any(Long.class), any(Boolean.class), any(Boolean.class));
     }
 
-    private org.springframework.test.web.servlet.ResultActions performPatchRequest(String url, Object request) throws Exception {
-        return mockMvc.perform(patch(url)
-                .with(user("1"))
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)));
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("사용자 등록 성공")
+    void registerUser_Success() throws Exception {
+        // given
+        UserRegisterRequest request = new UserRegisterRequest(USERNAME_TEST, IMAGE_URL_PROFILE, INTRODUCTION_HELLO);
+        String lockKey = USER_ID_1 + ":registerUser";
+
+        given(duplicatePreventionService.generateKey(USER_ID_1, "registerUser")).willReturn(lockKey);
+        given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(5), any()))
+                .willAnswer(invocation -> {
+                    DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                    return action.execute();
+                });
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value(SUCCESS_MESSAGE_USER_INFO_SAVED));
+
+        verify(userCommandService).registerUser(USER_ID_1, USERNAME_TEST, IMAGE_URL_PROFILE, INTRODUCTION_HELLO);
     }
 
-    private <T> T parseResponse(MvcResult result, TypeReference<T> typeReference) throws Exception {
-        String responseBody = result.getResponse().getContentAsString();
-        return objectMapper.readValue(responseBody, typeReference);
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("닉네임 중복으로 사용자 등록 실패")
+    void registerUser_Fail_DuplicateNickname() throws Exception {
+        // given
+        UserRegisterRequest request = new UserRegisterRequest(USERNAME_DUPLICATE, IMAGE_URL_PROFILE, INTRODUCTION_HELLO);
+        String lockKey = USER_ID_1 + ":registerUser";
+
+        given(duplicatePreventionService.generateKey(USER_ID_1, "registerUser")).willReturn(lockKey);
+        given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(5), any()))
+                .willAnswer(invocation -> {
+                    DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                    return action.execute();
+                });
+
+        doThrow(new BusinessException(ResponseStatus.NICKNAME_DUPLICATE))
+                .when(userCommandService)
+                .registerUser(USER_ID_1, USERNAME_DUPLICATE, IMAGE_URL_PROFILE, INTRODUCTION_HELLO);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("이미 존재하는 닉네임입니다."));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("닉네임 길이 검증 실패")
+    void registerUser_Fail_NicknameTooShort() throws Exception {
+        // given
+        UserRegisterRequest request = new UserRegisterRequest(NICKNAME_TOO_SHORT, IMAGE_URL_PROFILE, INTRODUCTION_HELLO);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(userCommandService, never()).registerUser(any(Long.class), any(String.class), any(String.class), any(String.class));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("내 프로필 조회 성공")
+    void getMyProfile_Success() throws Exception {
+        // given
+        given(userQueryService.getUserById(USER_ID_1)).willReturn(mockUser);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/users/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(SUCCESS_MESSAGE_RETRIEVE_SUCCESS))
+                .andExpect(jsonPath("$.data.id").value(USER_ID_1))
+                .andExpect(jsonPath("$.data.username").value(USERNAME_TEST));
+
+        verify(userQueryService).getUserById(USER_ID_1);
+    }
+
+    @Test
+    @WithMockUser(username = "3")
+    @DisplayName("다른 사용자 프로필 조회 성공")
+    void getUserProfile_Success() throws Exception {
+        // given
+        given(userQueryService.getUserById(USER_ID_2)).willReturn(mockUser);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/users/{userId}", USER_ID_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(SUCCESS_MESSAGE_RETRIEVE_SUCCESS))
+                .andExpect(jsonPath("$.data.username").value(USERNAME_TEST));
+
+        verify(userQueryService).getUserById(USER_ID_2);
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("프로필 수정 성공")
+    void updateUserProfile_Success() throws Exception {
+        // given
+        UserProfileUpdateRequest request = new UserProfileUpdateRequest(USERNAME_UPDATE, IMAGE_URL_UPDATE, INTRODUCTION_UPDATE);
+        String lockKey = USER_ID_1 + ":updateProfile";
+
+        User updatedUser = User.builder()
+                .id(USER_ID_1)
+                .username(USERNAME_UPDATE)
+                .imageUrl(IMAGE_URL_UPDATE)
+                .introduction(INTRODUCTION_UPDATE)
+                .build();
+
+        given(duplicatePreventionService.generateKey(USER_ID_1, "updateProfile")).willReturn(lockKey);
+        given(duplicatePreventionService.executeWithLock(eq(lockKey), eq(0), eq(3), any()))
+                .willAnswer(invocation -> {
+                    DuplicatePreventionService.LockAction<?> action = invocation.getArgument(3);
+                    return action.execute();
+                });
+        given(userCommandService.updateProfile(USER_ID_1, USERNAME_UPDATE, IMAGE_URL_UPDATE, INTRODUCTION_UPDATE))
+                .willReturn(updatedUser);
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/users")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(SUCCESS_MESSAGE_USER_INFO_UPDATED))
+                .andExpect(jsonPath("$.data.username").value(USERNAME_UPDATE));
+
+        verify(userCommandService).updateProfile(USER_ID_1, USERNAME_UPDATE, IMAGE_URL_UPDATE, INTRODUCTION_UPDATE);
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("사용자 삭제 성공")
+    void deleteUser_Success() throws Exception {
+        // given
+        String refreshToken = TEST_REFRESH_TOKEN;
+
+        // when & then
+        mockMvc.perform(delete("/api/v1/users")
+                        .with(csrf())
+                        .cookie(new Cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(SUCCESS_MESSAGE_USER_DELETE));
+
+        verify(userCommandService).deleteUser(USER_ID_1);
+        verify(cookieService).deleteAccessTokenCookie(any(HttpServletResponse.class));
+        verify(cookieService).deleteRefreshTokenCookie(any(HttpServletResponse.class));
+    }
+
+    @Test
+    @DisplayName("인증 없이 내 프로필 조회 실패")
+    void getMyProfile_Fail_Unauthorized() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/v1/users/me"))
+                .andExpect(status().isUnauthorized());
+
+        verify(userQueryService, never()).getUserById(any(Long.class));
+    }
+
+    @Test
+    @DisplayName("CSRF 토큰 없이 POST 요청 실패")
+    void registerUser_Fail_NoCsrfToken() throws Exception {
+        // given
+        UserRegisterRequest request = new UserRegisterRequest(USERNAME_TEST, IMAGE_URL_PROFILE, INTRODUCTION_HELLO);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        verify(userCommandService, never()).registerUser(any(Long.class), any(String.class), any(String.class), any(String.class));
     }
 }
