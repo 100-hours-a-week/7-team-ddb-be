@@ -3,7 +3,6 @@ package com.dolpin.domain.moment.service.query;
 import com.dolpin.domain.comment.repository.CommentRepository;
 import com.dolpin.domain.moment.dto.response.MomentDetailResponse;
 import com.dolpin.domain.moment.dto.response.MomentListResponse;
-import com.dolpin.domain.moment.dto.response.PlaceMomentListResponse;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.domain.moment.service.MomentViewService;
@@ -14,9 +13,6 @@ import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,56 +37,180 @@ public class MomentQueryServiceImpl implements MomentQueryService {
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 50;
 
+    // =============== Template Method 패턴 적용 ===============
+    @Transactional(readOnly = true)
+    protected MomentListResponse getMomentList(MomentQueryStrategy strategy, MomentQueryContext context) {
+        // 1. 사전 검증 (Hook Method)
+        strategy.validateBeforeQuery(context);
+
+        // 2. 파라미터 처리
+        int pageSize = validateAndGetLimit(context.getLimit());
+        int queryLimit = pageSize + 1;
+
+        // 3. 데이터 조회 (Strategy Method)
+        List<Moment> moments = strategy.fetchMoments(context, queryLimit);
+
+        // 4. 응답 빌드 (공통 로직)
+        return buildMomentListResponse(
+                moments,
+                pageSize,
+                strategy.shouldIncludeAuthor(context),
+                context.getCursor(),
+                strategy.generateBaseUrl(context)
+        );
+    }
+
+
     @Override
     @Transactional(readOnly = true)
     public MomentListResponse getAllMoments(Long currentUserId, Integer limit, String cursor) {
-        int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor;
-        int queryLimit = pageSize + 1;
+        MomentQueryContext context = MomentQueryContext.builder()
+                .queryType(MomentQueryType.ALL_MOMENTS)
+                .currentUserId(currentUserId)
+                .limit(limit)
+                .cursor(cursor)
+                .build();
 
-        List<Moment> moments = momentRepository.findPublicMomentsWithUserPrivateNative(currentUserId, cursorString, queryLimit);
-
-        return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/users/moments");
+        return getMomentList(new AllMomentsQueryStrategy(), context);
     }
 
     @Override
     @Transactional(readOnly = true)
     public MomentListResponse getMyMoments(Long userId, Integer limit, String cursor) {
-        int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor;
-        int queryLimit = pageSize + 1;
+        MomentQueryContext context = MomentQueryContext.builder()
+                .queryType(MomentQueryType.MY_MOMENTS)
+                .currentUserId(userId)
+                .limit(limit)
+                .cursor(cursor)
+                .build();
 
-        List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(userId, true, cursorString, queryLimit);
-
-        return buildMomentListResponse(moments, pageSize, false, cursor, "/api/v1/users/me/moments");
+        return getMomentList(new MyMomentsQueryStrategy(), context);
     }
 
     @Override
     @Transactional(readOnly = true)
     public MomentListResponse getUserMoments(Long targetUserId, Integer limit, String cursor) {
-        userQueryService.getUserById(targetUserId);
+        MomentQueryContext context = MomentQueryContext.builder()
+                .queryType(MomentQueryType.USER_MOMENTS)
+                .targetUserId(targetUserId)
+                .limit(limit)
+                .cursor(cursor)
+                .build();
 
-        int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor;
-        int queryLimit = pageSize + 1;
-
-        List<Moment> moments = momentRepository.findByUserIdWithVisibilityNative(targetUserId, false, cursorString, queryLimit);
-
-        return buildMomentListResponse(moments, pageSize, false, cursor, "/api/v1/users/" + targetUserId + "/moments");
+        return getMomentList(new UserMomentsQueryStrategy(), context);
     }
 
     @Override
     @Transactional(readOnly = true)
     public MomentListResponse getPlaceMoments(Long placeId, Integer limit, String cursor) {
-        int pageSize = validateAndGetLimit(limit);
-        String cursorString = cursor;
-        int queryLimit = pageSize + 1;
+        MomentQueryContext context = MomentQueryContext.builder()
+                .queryType(MomentQueryType.PLACE_MOMENTS)
+                .placeId(placeId)
+                .limit(limit)
+                .cursor(cursor)
+                .build();
 
-        List<Moment> moments = momentRepository.findPublicMomentsByPlaceIdNative(placeId, cursorString, queryLimit);
-
-        return buildMomentListResponse(moments, pageSize, true, cursor, "/api/v1/places/" + placeId + "/moments");
+        return getMomentList(new PlaceMomentsQueryStrategy(), context);
     }
 
+    private interface MomentQueryStrategy {
+        List<Moment> fetchMoments(MomentQueryContext context, int queryLimit);
+
+        default void validateBeforeQuery(MomentQueryContext context) {
+            // 기본 구현: 아무것도 하지 않음
+        }
+
+        default boolean shouldIncludeAuthor(MomentQueryContext context) {
+            return context.getQueryType() == MomentQueryType.ALL_MOMENTS ||
+                    context.getQueryType() == MomentQueryType.PLACE_MOMENTS;
+        }
+
+        default String generateBaseUrl(MomentQueryContext context) {
+            return switch (context.getQueryType()) {
+                case ALL_MOMENTS -> "/api/v1/users/moments";
+                case MY_MOMENTS -> "/api/v1/users/me/moments";
+                case USER_MOMENTS -> "/api/v1/users/" + context.getTargetUserId() + "/moments";
+                case PLACE_MOMENTS -> "/api/v1/places/" + context.getPlaceId() + "/moments";
+            };
+        }
+    }
+
+
+    private class AllMomentsQueryStrategy implements MomentQueryStrategy {
+        @Override
+        public List<Moment> fetchMoments(MomentQueryContext context, int queryLimit) {
+            return momentRepository.findPublicMomentsWithUserPrivateNative(
+                    context.getCurrentUserId(),
+                    context.getCursor(),
+                    queryLimit
+            );
+        }
+    }
+
+    private class MyMomentsQueryStrategy implements MomentQueryStrategy {
+        @Override
+        public List<Moment> fetchMoments(MomentQueryContext context, int queryLimit) {
+            return momentRepository.findByUserIdWithVisibilityNative(
+                    context.getCurrentUserId(),
+                    true,
+                    context.getCursor(),
+                    queryLimit
+            );
+        }
+
+        @Override
+        public boolean shouldIncludeAuthor(MomentQueryContext context) {
+            return false; // 내 기록에는 작성자 정보 불필요
+        }
+    }
+
+    private class UserMomentsQueryStrategy implements MomentQueryStrategy {
+        @Override
+        public void validateBeforeQuery(MomentQueryContext context) {
+            userQueryService.getUserById(context.getTargetUserId());
+        }
+
+        @Override
+        public List<Moment> fetchMoments(MomentQueryContext context, int queryLimit) {
+            return momentRepository.findByUserIdWithVisibilityNative(
+                    context.getTargetUserId(),
+                    false,
+                    context.getCursor(),
+                    queryLimit
+            );
+        }
+
+        @Override
+        public boolean shouldIncludeAuthor(MomentQueryContext context) {
+            return false; // 특정 사용자 기록에는 작성자 정보 불필요
+        }
+    }
+
+    private class PlaceMomentsQueryStrategy implements MomentQueryStrategy {
+        @Override
+        public List<Moment> fetchMoments(MomentQueryContext context, int queryLimit) {
+            return momentRepository.findPublicMomentsByPlaceIdNative(
+                    context.getPlaceId(),
+                    context.getCursor(),
+                    queryLimit
+            );
+        }
+    }
+
+    @lombok.Builder
+    @lombok.Getter
+    public static class MomentQueryContext {
+        private MomentQueryType queryType;
+        private Long currentUserId;
+        private Long targetUserId;
+        private Long placeId;
+        private Integer limit;
+        private String cursor;
+    }
+
+    public enum MomentQueryType {
+        ALL_MOMENTS, MY_MOMENTS, USER_MOMENTS, PLACE_MOMENTS
+    }
 
     @Override
     @Transactional
@@ -102,9 +222,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
             throw new BusinessException(ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다."));
         }
 
-        // 조회수 증가
         momentViewService.incrementViewCount(momentId);
-
         User author = userQueryService.getUserById(moment.getUserId());
 
         boolean isOwner = moment.isOwnedBy(currentUserId);
@@ -114,45 +232,19 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         return MomentDetailResponse.from(moment, isOwner, commentCount, viewCount, author);
     }
 
-    private PlaceMomentListResponse.PlaceMomentDto buildPlaceMomentDto(Moment moment) {
-        String thumbnail = moment.getThumbnailUrl();
-        User author = userQueryService.getUserById(moment.getUserId());
-
-        return PlaceMomentListResponse.PlaceMomentDto.builder()
-                .id(moment.getId())
-                .title(moment.getTitle())
-                .thumbnail(thumbnail)
-                .imagesCount(moment.getImageCount())
-                .isPublic(moment.getIsPublic())
-                .createdAt(moment.getCreatedAt())
-                .place(PlaceMomentListResponse.PlaceDto.builder()
-                        .id(moment.getPlaceId())
-                        .name(moment.getPlaceName())
-                        .build())
-                .author(PlaceMomentListResponse.AuthorDto.builder()
-                        .id(author.getId())
-                        .nickname(author.getUsername())
-                        .profileImage(author.getImageUrl())
-                        .build())
-                .build();
-    }
-
     private MomentListResponse buildMomentListResponse(List<Moment> moments, int pageSize, boolean includeAuthor, String currentCursor, String baseUrl) {
         boolean hasNext = moments.size() > pageSize;
         List<Moment> actualMoments = hasNext ? moments.subList(0, pageSize) : moments;
 
-        // 빈 결과 처리 추가
         if (actualMoments.isEmpty()) {
             return buildEmptyMomentListResponse(pageSize, baseUrl);
         }
 
-        // 댓글 수 한 번에 조회
         List<Long> momentIds = actualMoments.stream()
                 .map(Moment::getId)
                 .collect(Collectors.toList());
 
         Map<Long, Long> commentCountMap = getCommentCountMapWithCache(momentIds);
-
         Map<Long, Long> viewCountMap = getViewCountMapWithCache(actualMoments);
 
         List<MomentListResponse.MomentSummaryDto> momentDtos = actualMoments.stream()
@@ -174,7 +266,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                         .build())
                 .build();
 
-        // _links href 값을 API 명세에 맞게 생성
         String selfHref = currentCursor != null
                 ? String.format("%s?limit=%d&cursor=%s", baseUrl, pageSize, currentCursor)
                 : String.format("%s?limit=%d", baseUrl, pageSize);
@@ -197,7 +288,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
 
     private MomentListResponse.MomentSummaryDto buildMomentSummaryDto(Moment moment, boolean includeAuthor,
                                                                       Map<Long, Long> commentCountMap,
-                                                                      Map<Long, Long> viewCountMap) { // 👈 viewCountMap 파라미터 추가
+                                                                      Map<Long, Long> viewCountMap) {
         String thumbnail = moment.getThumbnailUrl();
 
         MomentListResponse.MomentSummaryDto.MomentSummaryDtoBuilder builder = MomentListResponse.MomentSummaryDto.builder()
@@ -209,7 +300,7 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                 .isPublic(moment.getIsPublic())
                 .createdAt(moment.getCreatedAt())
                 .commentCount(commentCountMap.getOrDefault(moment.getId(), 0L))
-                .viewCount(viewCountMap.getOrDefault(moment.getId(), 0L)); // 👈 캐시에서 조회한 값 사용
+                .viewCount(viewCountMap.getOrDefault(moment.getId(), 0L));
 
         if (includeAuthor) {
             User author = userQueryService.getUserById(moment.getUserId());
@@ -228,22 +319,16 @@ public class MomentQueryServiceImpl implements MomentQueryService {
             return new HashMap<>();
         }
 
-        // 1. 캐시에서 댓글 수 조회
         Map<Long, Long> cachedCommentCounts = momentCacheService.getCommentCounts(momentIds);
-
-        // 2. 캐시 미스인 기록들 추출
         List<Long> missedMomentIds = momentIds.stream()
                 .filter(momentId -> !cachedCommentCounts.containsKey(momentId))
                 .collect(Collectors.toList());
 
         Map<Long, Long> result = new HashMap<>(cachedCommentCounts);
 
-        // 3. 캐시 미스인 경우 DB에서 조회
         if (!missedMomentIds.isEmpty()) {
-            Map<Long, Long> dbCommentCounts = getCommentCountMap(missedMomentIds); // 기존 메서드 활용
+            Map<Long, Long> dbCommentCounts = getCommentCountMap(missedMomentIds);
             result.putAll(dbCommentCounts);
-
-            // 4. DB에서 조회한 데이터 캐싱
             momentCacheService.cacheCommentCountsBatch(dbCommentCounts);
 
             log.debug("댓글 수 조회: 캐시 히트 {}/{}, DB 조회 {}/{}",
@@ -285,9 +370,6 @@ public class MomentQueryServiceImpl implements MomentQueryService {
         return Math.min(limit, MAX_LIMIT);
     }
 
-    /**
-     * 캐시를 활용한 조회 수 조회
-     */
     private Map<Long, Long> getViewCountMapWithCache(List<Moment> moments) {
         List<Long> momentIds = moments.stream().map(Moment::getId).collect(Collectors.toList());
 
@@ -295,17 +377,13 @@ public class MomentQueryServiceImpl implements MomentQueryService {
             return new HashMap<>();
         }
 
-        // 캐시에서 조회 수 조회
         Map<Long, Long> cachedViewCounts = momentCacheService.getViewCounts(momentIds);
-
-        // 캐시 미스인 기록들 추출
         List<Long> missedMomentIds = momentIds.stream()
                 .filter(momentId -> !cachedViewCounts.containsKey(momentId))
                 .collect(Collectors.toList());
 
         Map<Long, Long> result = new HashMap<>(cachedViewCounts);
 
-        // 캐시 미스인 경우 Moment 엔티티에서 조회
         if (!missedMomentIds.isEmpty()) {
             Map<Long, Long> dbViewCounts = new HashMap<>();
             for (Moment moment : moments) {
@@ -314,17 +392,12 @@ public class MomentQueryServiceImpl implements MomentQueryService {
                 }
             }
             result.putAll(dbViewCounts);
-
-            // DB에서 조회한 데이터 캐싱
             momentCacheService.cacheViewCountsBatch(dbViewCounts);
         }
 
         return result;
     }
 
-    /**
-     * 빈 응답 생성
-     */
     private MomentListResponse buildEmptyMomentListResponse(int pageSize, String baseUrl) {
         MomentListResponse.MetaDto meta = MomentListResponse.MetaDto.builder()
                 .pagination(MomentListResponse.PaginationDto.builder()
