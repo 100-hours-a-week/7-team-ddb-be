@@ -4,6 +4,8 @@ import com.dolpin.domain.comment.dto.request.CommentCreateRequest;
 import com.dolpin.domain.comment.dto.response.CommentCreateResponse;
 import com.dolpin.domain.comment.entity.Comment;
 import com.dolpin.domain.comment.repository.CommentRepository;
+import com.dolpin.domain.comment.service.template.CommentCreateOperation;
+import com.dolpin.domain.comment.service.template.CommentDeleteOperation;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.domain.user.entity.User;
@@ -29,12 +31,20 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("CommentCommandService 테스트")
+@DisplayName("CommentCommandService 테스트 - Template Method 패턴 적용")
 class CommentCommandServiceTest {
 
     @InjectMocks
     private CommentCommandServiceImpl commentCommandService;
 
+    // Template Method 패턴의 Operation들을 Mock으로 주입
+    @Mock
+    private CommentCreateOperation commentCreateOperation;
+
+    @Mock
+    private CommentDeleteOperation commentDeleteOperation;
+
+    // Operation 내부에서 사용되는 실제 의존성들 (Integration Test에서 사용)
     @Mock
     private CommentRepository commentRepository;
 
@@ -53,16 +63,9 @@ class CommentCommandServiceTest {
                 null
         );
 
-        Moment publicMoment = createPublicMoment();
-        User user = createTestUser();
-        Comment savedComment = createCommentWithId();
-
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(publicMoment));
-        given(userQueryService.getUserById(CommentTestConstants.TEST_USER_ID))
-                .willReturn(user);
-        given(commentRepository.save(any(Comment.class)))
-                .willReturn(savedComment);
+        CommentCreateResponse expectedResponse = createExpectedCommentResponse();
+        given(commentCreateOperation.executeCommentOperation(any()))
+                .willReturn(expectedResponse);
 
         // when
         CommentCreateResponse response = commentCommandService.createComment(
@@ -79,42 +82,8 @@ class CommentCommandServiceTest {
         assertThat(response.getIsOwner()).isEqualTo(CommentTestConstants.IS_OWNER);
         assertThat(response.getMomentId()).isEqualTo(CommentTestConstants.TEST_MOMENT_ID);
 
-        then(commentRepository).should().save(any(Comment.class));
-    }
-
-    @Test
-    @DisplayName("본인 비공개 기록에 댓글 작성 성공")
-    void createComment_OwnPrivateMoment_Success() {
-        // given
-        CommentCreateRequest request = new CommentCreateRequest(
-                CommentTestConstants.NEW_COMMENT_CONTENT,
-                null
-        );
-
-        Moment privateMoment = createPrivateMoment(CommentTestConstants.TEST_USER_ID);
-        User user = createTestUser();
-        Comment savedComment = createCommentWithId();
-
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(privateMoment));
-        given(userQueryService.getUserById(CommentTestConstants.TEST_USER_ID))
-                .willReturn(user);
-        given(commentRepository.save(any(Comment.class)))
-                .willReturn(savedComment);
-
-        // when
-        CommentCreateResponse response = commentCommandService.createComment(
-                CommentTestConstants.TEST_MOMENT_ID,
-                request,
-                CommentTestConstants.TEST_USER_ID
-        );
-
-        // then
-        assertThat(response.getId()).isEqualTo(CommentTestConstants.TEST_COMMENT_ID);
-        assertThat(response.getContent()).isEqualTo(CommentTestConstants.NEW_COMMENT_CONTENT);
-        assertThat(response.getIsOwner()).isEqualTo(CommentTestConstants.IS_OWNER);
-
-        then(commentRepository).should().save(any(Comment.class));
+        // CommentCreateOperation이 호출되었는지 검증
+        then(commentCreateOperation).should().executeCommentOperation(any());
     }
 
     @Test
@@ -126,21 +95,10 @@ class CommentCommandServiceTest {
                 CommentTestConstants.PARENT_COMMENT_ID
         );
 
-        Moment publicMoment = createPublicMoment();
-        User user = createTestUser();
-        Comment parentComment = createParentComment();
-        Comment savedReplyComment = createReplyCommentWithId();
+        CommentCreateResponse expectedResponse = createExpectedReplyResponse();
 
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(publicMoment));
-        given(commentRepository.findValidParentComment(
-                CommentTestConstants.PARENT_COMMENT_ID,
-                CommentTestConstants.TEST_MOMENT_ID
-        )).willReturn(Optional.of(parentComment));
-        given(userQueryService.getUserById(CommentTestConstants.TEST_USER_ID))
-                .willReturn(user);
-        given(commentRepository.save(any(Comment.class)))
-                .willReturn(savedReplyComment);
+        given(commentCreateOperation.executeCommentOperation(any()))
+                .willReturn(expectedResponse);
 
         // when
         CommentCreateResponse response = commentCommandService.createComment(
@@ -156,50 +114,24 @@ class CommentCommandServiceTest {
         assertThat(response.getParentCommentId()).isEqualTo(CommentTestConstants.PARENT_COMMENT_ID);
         assertThat(response.getIsOwner()).isEqualTo(CommentTestConstants.IS_OWNER);
 
-        then(commentRepository).should().findValidParentComment(
-                CommentTestConstants.PARENT_COMMENT_ID,
-                CommentTestConstants.TEST_MOMENT_ID
-        );
-        then(commentRepository).should().save(any(Comment.class));
+        then(commentCreateOperation).should().executeCommentOperation(any());
     }
 
     @Test
-    @DisplayName("존재하지 않는 기록에 댓글 작성 시 예외")
-    void createComment_MomentNotFound_ThrowsException() {
+    @DisplayName("댓글 생성 시 Operation에서 예외 발생")
+    void createComment_OperationThrowsException_PropagatesException() {
         // given
         CommentCreateRequest request = new CommentCreateRequest(
                 CommentTestConstants.NEW_COMMENT_CONTENT,
                 null
         );
 
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> commentCommandService.createComment(
-                CommentTestConstants.TEST_MOMENT_ID,
-                request,
-                CommentTestConstants.TEST_USER_ID
-        ))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CommentTestConstants.MOMENT_NOT_FOUND_MESSAGE);
-
-        then(commentRepository).should(never()).save(any(Comment.class));
-    }
-
-    @Test
-    @DisplayName("다른 사용자의 비공개 기록에 댓글 작성 시 예외")
-    void createComment_OtherUserPrivateMoment_ThrowsException() {
-        // given
-        CommentCreateRequest request = new CommentCreateRequest(
-                CommentTestConstants.NEW_COMMENT_CONTENT,
-                null
+        BusinessException expectedException = new BusinessException(
+                ResponseStatus.MOMENT_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")
         );
 
-        Moment privateMoment = createPrivateMoment(CommentTestConstants.OTHER_USER_ID);
-
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(privateMoment));
+        given(commentCreateOperation.executeCommentOperation(any()))
+                .willThrow(expectedException);
 
         // when & then
         assertThatThrownBy(() -> commentCommandService.createComment(
@@ -208,55 +140,17 @@ class CommentCommandServiceTest {
                 CommentTestConstants.TEST_USER_ID
         ))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CommentTestConstants.PRIVATE_MOMENT_COMMENT_DENIED_MESSAGE);
+                .hasMessageContaining("기록을 찾을 수 없습니다.");
 
-        then(commentRepository).should(never()).save(any(Comment.class));
-    }
-
-    @Test
-    @DisplayName("유효하지 않은 부모 댓글로 대댓글 작성 시 예외")
-    void createComment_InvalidParentComment_ThrowsException() {
-        // given
-        CommentCreateRequest request = new CommentCreateRequest(
-                CommentTestConstants.REPLY_CONTENT,
-                CommentTestConstants.INVALID_PARENT_COMMENT_ID
-        );
-
-        Moment publicMoment = createPublicMoment();
-
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(publicMoment));
-        given(commentRepository.findValidParentComment(
-                CommentTestConstants.INVALID_PARENT_COMMENT_ID,
-                CommentTestConstants.TEST_MOMENT_ID
-        )).willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> commentCommandService.createComment(
-                CommentTestConstants.TEST_MOMENT_ID,
-                request,
-                CommentTestConstants.TEST_USER_ID
-        ))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CommentTestConstants.INVALID_PARENT_COMMENT_MESSAGE);
-
-        then(commentRepository).should(never()).save(any(Comment.class));
+        then(commentCreateOperation).should().executeCommentOperation(any());
     }
 
     @Test
     @DisplayName("댓글 삭제 성공")
     void deleteComment_Success() {
-        // given
-        Moment moment = createPublicMoment();
-        Comment comment = createCommentWithId();
-
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(moment));
-        given(commentRepository.findByIdAndMomentIdAndNotDeleted(
-                CommentTestConstants.TEST_COMMENT_ID,
-                CommentTestConstants.TEST_MOMENT_ID
-        )).willReturn(Optional.of(comment));
-        given(commentRepository.save(comment)).willReturn(comment);
+        // given - CommentDeleteOperation이 정상적으로 실행되도록 모킹
+        given(commentDeleteOperation.executeCommentOperation(any()))
+                .willReturn(null); // 삭제는 반환값이 없음
 
         // when
         commentCommandService.deleteComment(
@@ -266,48 +160,19 @@ class CommentCommandServiceTest {
         );
 
         // then
-        then(commentRepository).should().save(comment);
-        assertThat(comment.isDeleted()).isEqualTo(CommentTestConstants.IS_DELETED);
+        then(commentDeleteOperation).should().executeCommentOperation(any());
     }
 
     @Test
-    @DisplayName("존재하지 않는 댓글 삭제 시 예외")
-    void deleteComment_CommentNotFound_ThrowsException() {
+    @DisplayName("댓글 삭제 시 Operation에서 예외 발생")
+    void deleteComment_OperationThrowsException_PropagatesException() {
         // given
-        Moment moment = createPublicMoment();
+        BusinessException expectedException = new BusinessException(
+                ResponseStatus.FORBIDDEN.withMessage("댓글을 삭제할 권한이 없습니다.")
+        );
 
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(moment));
-        given(commentRepository.findByIdAndMomentIdAndNotDeleted(
-                CommentTestConstants.NON_EXISTENT_COMMENT_ID,
-                CommentTestConstants.TEST_MOMENT_ID
-        )).willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> commentCommandService.deleteComment(
-                CommentTestConstants.TEST_MOMENT_ID,
-                CommentTestConstants.NON_EXISTENT_COMMENT_ID,
-                CommentTestConstants.TEST_USER_ID
-        ))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CommentTestConstants.COMMENT_NOT_FOUND_MESSAGE);
-
-        then(commentRepository).should(never()).save(any(Comment.class));
-    }
-
-    @Test
-    @DisplayName("다른 사용자의 댓글 삭제 시 예외")
-    void deleteComment_NotOwner_ThrowsException() {
-        // given
-        Moment moment = createPublicMoment();
-        Comment otherUserComment = createOtherUserComment();
-
-        given(momentRepository.findBasicMomentById(CommentTestConstants.TEST_MOMENT_ID))
-                .willReturn(Optional.of(moment));
-        given(commentRepository.findByIdAndMomentIdAndNotDeleted(
-                CommentTestConstants.TEST_COMMENT_ID,
-                CommentTestConstants.TEST_MOMENT_ID
-        )).willReturn(Optional.of(otherUserComment));
+        given(commentDeleteOperation.executeCommentOperation(any()))
+                .willThrow(expectedException);
 
         // when & then
         assertThatThrownBy(() -> commentCommandService.deleteComment(
@@ -316,109 +181,43 @@ class CommentCommandServiceTest {
                 CommentTestConstants.TEST_USER_ID
         ))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CommentTestConstants.DELETE_PERMISSION_DENIED_MESSAGE);
+                .hasMessageContaining("댓글을 삭제할 권한이 없습니다.");
 
-        then(commentRepository).should(never()).save(any(Comment.class));
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 기록의 댓글 삭제 시 예외")
-    void deleteComment_MomentNotFound_ThrowsException() {
-        // given
-        given(momentRepository.findBasicMomentById(CommentTestConstants.DELETED_MOMENT_ID))
-                .willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> commentCommandService.deleteComment(
-                CommentTestConstants.DELETED_MOMENT_ID,
-                CommentTestConstants.TEST_COMMENT_ID,
-                CommentTestConstants.TEST_USER_ID
-        ))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CommentTestConstants.MOMENT_NOT_FOUND_MESSAGE);
-
-        then(commentRepository).should(never()).findByIdAndMomentIdAndNotDeleted(any(), any());
-        then(commentRepository).should(never()).save(any(Comment.class));
+        then(commentDeleteOperation).should().executeCommentOperation(any());
     }
 
     // Helper methods
-    private Moment createPublicMoment() {
-        return Moment.builder()
-                .id(CommentTestConstants.TEST_MOMENT_ID)
-                .userId(CommentTestConstants.OTHER_USER_ID)
-                .title(CommentTestConstants.PUBLIC_MOMENT_TITLE)
-                .content(CommentTestConstants.MOMENT_CONTENT)
-                .isPublic(CommentTestConstants.IS_PUBLIC)
-                .viewCount(CommentTestConstants.DEFAULT_VIEW_COUNT)
-                .build();
-    }
-
-    private Moment createPrivateMoment(Long userId) {
-        return Moment.builder()
-                .id(CommentTestConstants.TEST_MOMENT_ID)
-                .userId(userId)
-                .title(CommentTestConstants.PRIVATE_MOMENT_TITLE)
-                .content(CommentTestConstants.PRIVATE_MOMENT_CONTENT)
-                .isPublic(CommentTestConstants.IS_PRIVATE)
-                .viewCount(CommentTestConstants.DEFAULT_VIEW_COUNT)
-                .build();
-    }
-
-    private User createTestUser() {
-        return User.builder()
-                .id(CommentTestConstants.TEST_USER_ID)
-                .username(CommentTestConstants.TEST_USERNAME)
-                .imageUrl(CommentTestConstants.TEST_PROFILE_IMAGE_URL)
-                .build();
-    }
-
-    private Comment createCommentWithId() {
-        return Comment.builder()
+    private CommentCreateResponse createExpectedCommentResponse() {
+        return CommentCreateResponse.builder()
                 .id(CommentTestConstants.TEST_COMMENT_ID)
-                .userId(CommentTestConstants.TEST_USER_ID)
-                .momentId(CommentTestConstants.TEST_MOMENT_ID)
                 .content(CommentTestConstants.NEW_COMMENT_CONTENT)
                 .depth(CommentTestConstants.ROOT_COMMENT_DEPTH)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
-    private Comment createParentComment() {
-        return Comment.builder()
-                .id(CommentTestConstants.PARENT_COMMENT_ID)
-                .userId(CommentTestConstants.OTHER_USER_ID)
+                .parentCommentId(null)
+                .isOwner(CommentTestConstants.IS_OWNER)
                 .momentId(CommentTestConstants.TEST_MOMENT_ID)
-                .content(CommentTestConstants.PARENT_COMMENT_CONTENT)
-                .depth(CommentTestConstants.ROOT_COMMENT_DEPTH)
                 .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .user(CommentCreateResponse.UserDto.builder()
+                        .id(CommentTestConstants.TEST_USER_ID)
+                        .nickname(CommentTestConstants.TEST_USERNAME)
+                        .profileImage(CommentTestConstants.TEST_PROFILE_IMAGE_URL)
+                        .build())
                 .build();
     }
 
-    private Comment createReplyCommentWithId() {
-        Comment parentComment = createParentComment();
-        return Comment.builder()
+    private CommentCreateResponse createExpectedReplyResponse() {
+        return CommentCreateResponse.builder()
                 .id(CommentTestConstants.REPLY_COMMENT_ID)
-                .userId(CommentTestConstants.TEST_USER_ID)
-                .momentId(CommentTestConstants.TEST_MOMENT_ID)
                 .content(CommentTestConstants.REPLY_CONTENT)
-                .parentComment(parentComment)
                 .depth(CommentTestConstants.REPLY_COMMENT_DEPTH)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
-    private Comment createOtherUserComment() {
-        return Comment.builder()
-                .id(CommentTestConstants.TEST_COMMENT_ID)
-                .userId(CommentTestConstants.OTHER_USER_ID)
+                .parentCommentId(CommentTestConstants.PARENT_COMMENT_ID)
+                .isOwner(CommentTestConstants.IS_OWNER)
                 .momentId(CommentTestConstants.TEST_MOMENT_ID)
-                .content(CommentTestConstants.OTHER_USER_COMMENT_CONTENT)
-                .depth(CommentTestConstants.ROOT_COMMENT_DEPTH)
                 .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .user(CommentCreateResponse.UserDto.builder()
+                        .id(CommentTestConstants.TEST_USER_ID)
+                        .nickname(CommentTestConstants.TEST_USERNAME)
+                        .profileImage(CommentTestConstants.TEST_PROFILE_IMAGE_URL)
+                        .build())
                 .build();
     }
 }
