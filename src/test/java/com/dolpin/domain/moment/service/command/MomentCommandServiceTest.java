@@ -4,8 +4,9 @@ import com.dolpin.domain.moment.dto.request.MomentCreateRequest;
 import com.dolpin.domain.moment.dto.request.MomentUpdateRequest;
 import com.dolpin.domain.moment.dto.response.MomentCreateResponse;
 import com.dolpin.domain.moment.dto.response.MomentUpdateResponse;
-import com.dolpin.domain.moment.entity.Moment;
-import com.dolpin.domain.moment.repository.MomentRepository;
+import com.dolpin.domain.moment.service.template.MomentCreateOperation;
+import com.dolpin.domain.moment.service.template.MomentDeleteOperation;
+import com.dolpin.domain.moment.service.template.MomentUpdateOperation;
 import com.dolpin.global.constants.MomentTestConstants;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
@@ -14,43 +15,39 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("MomentCommandService 테스트")
+@DisplayName("MomentCommandService 테스트 - Template Method 패턴 적용")
 class MomentCommandServiceTest {
-
-    @Mock
-    private MomentRepository momentRepository;
 
     @InjectMocks
     private MomentCommandServiceImpl momentCommandService;
 
-    private Moment testMoment;
-    private Moment savedMoment;
+    // Template Method 패턴의 Operation들을 Mock으로 주입
+    @Mock
+    private MomentCreateOperation momentCreateOperation;
+    @Mock
+    private MomentUpdateOperation momentUpdateOperation;
+    @Mock
+    private MomentDeleteOperation momentDeleteOperation;
+
     private MomentCreateRequest createRequest;
     private MomentUpdateRequest updateRequest;
 
     @BeforeEach
     void setUp() {
-        testMoment = createTestMoment();
-        savedMoment = createSavedMoment();
         createRequest = createMomentCreateRequest();
         updateRequest = createMomentUpdateRequest();
     }
@@ -60,7 +57,27 @@ class MomentCommandServiceTest {
     class CreateMomentTest {
 
         @Test
-        @DisplayName("정상적인 Moment 생성 - 이미지 없음")
+        @DisplayName("정상적인 Moment 생성")
+        void createMoment_Success() {
+            // given
+            MomentCreateResponse expectedResponse = createExpectedCreateResponse();
+            given(momentCreateOperation.executeMomentOperation(any()))
+                    .willReturn(expectedResponse);
+
+            // when
+            MomentCreateResponse response = momentCommandService.createMoment(
+                    MomentTestConstants.TEST_USER_ID, createRequest);
+
+            // then
+            assertThat(response.getId()).isEqualTo(MomentTestConstants.TEST_MOMENT_ID);
+            assertThat(response.getCreatedAt()).isNotNull();
+
+            // MomentCreateOperation이 호출되었는지 검증
+            then(momentCreateOperation).should().executeMomentOperation(any());
+        }
+
+        @Test
+        @DisplayName("이미지 없는 Moment 생성")
         void createMoment_Success_NoImages() {
             // given
             MomentCreateRequest requestWithoutImages = MomentCreateRequest.builder()
@@ -71,7 +88,9 @@ class MomentCommandServiceTest {
                     .isPublic(MomentTestConstants.DEFAULT_IS_PUBLIC)
                     .build();
 
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
+            MomentCreateResponse expectedResponse = createExpectedCreateResponse();
+            given(momentCreateOperation.executeMomentOperation(any()))
+                    .willReturn(expectedResponse);
 
             // when
             MomentCreateResponse response = momentCommandService.createMoment(
@@ -79,84 +98,42 @@ class MomentCommandServiceTest {
 
             // then
             assertThat(response.getId()).isEqualTo(MomentTestConstants.TEST_MOMENT_ID);
-            assertThat(response.getCreatedAt()).isNotNull();
-
-            ArgumentCaptor<Moment> momentCaptor = ArgumentCaptor.forClass(Moment.class);
-            then(momentRepository).should(times(1)).save(momentCaptor.capture());
-
-            Moment capturedMoment = momentCaptor.getValue();
-            assertThat(capturedMoment.getUserId()).isEqualTo(MomentTestConstants.TEST_USER_ID);
-            assertThat(capturedMoment.getTitle()).isEqualTo(MomentTestConstants.TEST_MOMENT_TITLE);
-            assertThat(capturedMoment.getContent()).isEqualTo(MomentTestConstants.TEST_MOMENT_CONTENT);
-            assertThat(capturedMoment.getPlaceId()).isEqualTo(MomentTestConstants.TEST_PLACE_ID);
-            assertThat(capturedMoment.getPlaceName()).isEqualTo(MomentTestConstants.TEST_PLACE_NAME);
-            assertThat(capturedMoment.getIsPublic()).isEqualTo(MomentTestConstants.DEFAULT_IS_PUBLIC);
+            then(momentCreateOperation).should().executeMomentOperation(any());
         }
 
         @Test
-        @DisplayName("정상적인 Moment 생성 - 이미지 포함")
-        void createMoment_Success_WithImages() {
+        @DisplayName("Moment 생성 시 Operation에서 예외 발생")
+        void createMoment_OperationThrowsException_PropagatesException() {
             // given
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER.withMessage("제목이 필요합니다.")
+            );
 
-            // when
-            MomentCreateResponse response = momentCommandService.createMoment(
-                    MomentTestConstants.TEST_USER_ID, createRequest);
+            given(momentCreateOperation.executeMomentOperation(any()))
+                    .willThrow(expectedException);
 
-            // then
-            assertThat(response.getId()).isEqualTo(MomentTestConstants.TEST_MOMENT_ID);
-
-            ArgumentCaptor<Moment> momentCaptor = ArgumentCaptor.forClass(Moment.class);
-            then(momentRepository).should(times(1)).save(momentCaptor.capture());
-
-            Moment capturedMoment = momentCaptor.getValue();
-            assertThat(capturedMoment.getImageCount()).isEqualTo(MomentTestConstants.TEST_IMAGES_COUNT);
+            // when & then
+            assertThatThrownBy(() -> momentCommandService.createMoment(
+                    MomentTestConstants.TEST_USER_ID, createRequest))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("제목이 필요합니다.");
         }
 
         @Test
-        @DisplayName("isPublic이 null인 경우 기본값 true 설정")
-        void createMoment_DefaultIsPublicTrue() {
+        @DisplayName("null userId로 생성 시 예외 전파")
+        void createMoment_NullUserId_ThrowsException() {
             // given
-            MomentCreateRequest requestWithNullIsPublic = MomentCreateRequest.builder()
-                    .title(MomentTestConstants.TEST_MOMENT_TITLE)
-                    .content(MomentTestConstants.TEST_MOMENT_CONTENT)
-                    .isPublic(null)
-                    .build();
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER.withMessage("사용자 ID가 필요합니다.")
+            );
 
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
+            given(momentCreateOperation.executeMomentOperation(any()))
+                    .willThrow(expectedException);
 
-            // when
-            momentCommandService.createMoment(MomentTestConstants.TEST_USER_ID, requestWithNullIsPublic);
-
-            // then
-            ArgumentCaptor<Moment> momentCaptor = ArgumentCaptor.forClass(Moment.class);
-            then(momentRepository).should(times(1)).save(momentCaptor.capture());
-
-            Moment capturedMoment = momentCaptor.getValue();
-            assertThat(capturedMoment.getIsPublic()).isTrue();
-        }
-
-        @Test
-        @DisplayName("빈 이미지 리스트인 경우 처리")
-        void createMoment_EmptyImageList() {
-            // given
-            MomentCreateRequest requestWithEmptyImages = MomentCreateRequest.builder()
-                    .title(MomentTestConstants.TEST_MOMENT_TITLE)
-                    .content(MomentTestConstants.TEST_MOMENT_CONTENT)
-                    .images(List.of())
-                    .build();
-
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
-
-            // when
-            momentCommandService.createMoment(MomentTestConstants.TEST_USER_ID, requestWithEmptyImages);
-
-            // then
-            ArgumentCaptor<Moment> momentCaptor = ArgumentCaptor.forClass(Moment.class);
-            then(momentRepository).should(times(1)).save(momentCaptor.capture());
-
-            Moment capturedMoment = momentCaptor.getValue();
-            assertThat(capturedMoment.getImageCount()).isEqualTo(0);
+            // when & then
+            assertThatThrownBy(() -> momentCommandService.createMoment(null, createRequest))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("사용자 ID가 필요합니다.");
         }
     }
 
@@ -165,12 +142,12 @@ class MomentCommandServiceTest {
     class UpdateMomentTest {
 
         @Test
-        @DisplayName("정상적인 Moment 수정 - 모든 필드")
-        void updateMoment_Success_AllFields() {
+        @DisplayName("정상적인 Moment 수정")
+        void updateMoment_Success() {
             // given
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
+            MomentUpdateResponse expectedResponse = createExpectedUpdateResponse();
+            given(momentUpdateOperation.executeMomentOperation(any()))
+                    .willReturn(expectedResponse);
 
             // when
             MomentUpdateResponse response = momentCommandService.updateMoment(
@@ -180,9 +157,8 @@ class MomentCommandServiceTest {
             assertThat(response.getId()).isEqualTo(MomentTestConstants.TEST_MOMENT_ID);
             assertThat(response.getUpdatedAt()).isNotNull();
 
-            then(momentRepository).should(times(1))
-                    .findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID);
-            then(momentRepository).should(times(1)).save(testMoment);
+            // MomentUpdateOperation이 호출되었는지 검증
+            then(momentUpdateOperation).should().executeMomentOperation(any());
         }
 
         @Test
@@ -191,88 +167,78 @@ class MomentCommandServiceTest {
             // given
             MomentUpdateRequest partialUpdateRequest = new MomentUpdateRequest(
                     MomentTestConstants.UPDATED_MOMENT_TITLE,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
+                    null, null, null, null, null
             );
 
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
+            MomentUpdateResponse expectedResponse = createExpectedUpdateResponse();
+            given(momentUpdateOperation.executeMomentOperation(any()))
+                    .willReturn(expectedResponse);
 
             // when
-            momentCommandService.updateMoment(
+            MomentUpdateResponse response = momentCommandService.updateMoment(
                     MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, partialUpdateRequest);
 
             // then
-            then(momentRepository).should(times(1))
-                    .findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID);
-            then(momentRepository).should(times(1)).save(testMoment);
+            assertThat(response.getId()).isEqualTo(MomentTestConstants.TEST_MOMENT_ID);
+            then(momentUpdateOperation).should().executeMomentOperation(any());
         }
 
         @Test
-        @DisplayName("존재하지 않는 Moment 수정 시 예외 발생")
-        void updateMoment_MomentNotFound() {
+        @DisplayName("존재하지 않는 Moment 수정 시 예외 전파")
+        void updateMoment_MomentNotFound_ThrowsException() {
             // given
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.empty());
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.MOMENT_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")
+            );
+
+            given(momentUpdateOperation.executeMomentOperation(any()))
+                    .willThrow(expectedException);
 
             // when & then
             assertThatThrownBy(() -> momentCommandService.updateMoment(
                     MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, updateRequest))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("responseStatus")
-                    .extracting("message")
-                    .isEqualTo(MomentTestConstants.MOMENT_NOT_FOUND_MESSAGE);
-
-            then(momentRepository).should(times(0)).save(any(Moment.class));
+                    .hasMessageContaining("기록을 찾을 수 없습니다.");
         }
 
         @Test
-        @DisplayName("다른 사용자의 Moment 수정 시 예외 발생")
-        void updateMoment_AccessDenied() {
+        @DisplayName("다른 사용자의 Moment 수정 시 예외 전파")
+        void updateMoment_AccessDenied_ThrowsException() {
             // given
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다.")
+            );
+
+            given(momentUpdateOperation.executeMomentOperation(any()))
+                    .willThrow(expectedException);
 
             // when & then
             assertThatThrownBy(() -> momentCommandService.updateMoment(
                     MomentTestConstants.OTHER_USER_ID, MomentTestConstants.TEST_MOMENT_ID, updateRequest))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("responseStatus")
-                    .extracting("message")
-                    .isEqualTo(MomentTestConstants.ACCESS_DENIED_MESSAGE);
-
-            then(momentRepository).should(times(0)).save(any(Moment.class));
+                    .hasMessageContaining("접근 권한이 없습니다.");
         }
 
         @Test
-        @DisplayName("이미지만 교체")
-        void updateMoment_OnlyImages() {
+        @DisplayName("수정할 내용이 없는 경우 예외 전파")
+        void updateMoment_NoUpdateContent_ThrowsException() {
             // given
-            MomentUpdateRequest imageOnlyRequest = new MomentUpdateRequest(
-                    null,
-                    null,
-                    null,
-                    null,
-                    MomentTestConstants.UPDATED_IMAGES,
-                    null
+            MomentUpdateRequest emptyUpdateRequest = new MomentUpdateRequest(
+                    null, null, null, null, null, null
             );
 
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER.withMessage("수정할 내용이 없습니다.")
+            );
 
-            // when
-            momentCommandService.updateMoment(
-                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, imageOnlyRequest);
+            given(momentUpdateOperation.executeMomentOperation(any()))
+                    .willThrow(expectedException);
 
-            // then
-            then(momentRepository).should(times(1))
-                    .findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID);
-            then(momentRepository).should(times(1)).save(testMoment);
+            // when & then
+            assertThatThrownBy(() -> momentCommandService.updateMoment(
+                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, emptyUpdateRequest))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("수정할 내용이 없습니다.");
         }
     }
 
@@ -284,243 +250,73 @@ class MomentCommandServiceTest {
         @DisplayName("정상적인 Moment 삭제")
         void deleteMoment_Success() {
             // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
+            // void 메서드이므로 아무것도 반환하지 않음
 
             // when
-            momentCommandService.deleteMoment(MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID);
+            momentCommandService.deleteMoment(
+                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID);
 
             // then
-            then(momentRepository).should(times(1))
-                    .findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID);
-            then(momentRepository).should(times(1)).delete(testMoment);
+            // MomentDeleteOperation이 호출되었는지 검증
+            then(momentDeleteOperation).should().executeMomentOperation(any());
         }
 
         @Test
-        @DisplayName("존재하지 않는 Moment 삭제 시 예외 발생")
-        void deleteMoment_MomentNotFound() {
+        @DisplayName("존재하지 않는 Moment 삭제 시 예외 전파")
+        void deleteMoment_MomentNotFound_ThrowsException() {
             // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.empty());
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.MOMENT_NOT_FOUND.withMessage("기록을 찾을 수 없습니다.")
+            );
+
+            willThrow(expectedException)
+                    .given(momentDeleteOperation).executeMomentOperation(any());
 
             // when & then
             assertThatThrownBy(() -> momentCommandService.deleteMoment(
                     MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("responseStatus")
-                    .extracting("message")
-                    .isEqualTo(MomentTestConstants.USER_NOT_FOUND_MESSAGE);
-
-            then(momentRepository).should(times(0)).delete(any(Moment.class));
+                    .hasMessageContaining("기록을 찾을 수 없습니다.");
         }
 
         @Test
-        @DisplayName("다른 사용자의 Moment 삭제 시 예외 발생")
-        void deleteMoment_AccessDenied() {
+        @DisplayName("다른 사용자의 Moment 삭제 시 예외 전파")
+        void deleteMoment_AccessDenied_ThrowsException() {
             // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.FORBIDDEN.withMessage("접근 권한이 없습니다.")
+            );
+
+            willThrow(expectedException)
+                    .given(momentDeleteOperation).executeMomentOperation(any());
 
             // when & then
             assertThatThrownBy(() -> momentCommandService.deleteMoment(
                     MomentTestConstants.OTHER_USER_ID, MomentTestConstants.TEST_MOMENT_ID))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("responseStatus")
-                    .extracting("message")
-                    .isEqualTo(MomentTestConstants.ACCESS_DENIED_MESSAGE);
-
-            then(momentRepository).should(times(0)).delete(any(Moment.class));
-        }
-    }
-
-    @Nested
-    @DisplayName("권한 검증 테스트")
-    class OwnershipValidationTest {
-
-        @Test
-        @DisplayName("소유자 확인 성공")
-        void validateOwnership_Success() {
-            // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-
-            // when & then - 예외가 발생하지 않아야 함
-            momentCommandService.deleteMoment(MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID);
-
-            then(momentRepository).should(times(1)).delete(testMoment);
+                    .hasMessageContaining("접근 권한이 없습니다.");
         }
 
         @Test
-        @DisplayName("null userId로 권한 검증")
-        void validateOwnership_NullUserId() {
+        @DisplayName("null 값 파라미터로 삭제 시 예외 전파")
+        void deleteMoment_NullParameters_ThrowsException() {
             // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
+            BusinessException expectedException = new BusinessException(
+                    ResponseStatus.INVALID_PARAMETER.withMessage("기록 ID가 필요합니다.")
+            );
+
+            willThrow(expectedException)
+                    .given(momentDeleteOperation).executeMomentOperation(any());
 
             // when & then
             assertThatThrownBy(() -> momentCommandService.deleteMoment(
-                    null, MomentTestConstants.TEST_MOMENT_ID))
+                    MomentTestConstants.TEST_USER_ID, null))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("responseStatus")
-                    .extracting("message")
-                    .isEqualTo(MomentTestConstants.ACCESS_DENIED_MESSAGE);
-        }
-
-        @Test
-        @DisplayName("음수 userId로 권한 검증")
-        void validateOwnership_NegativeUserId() {
-            // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-
-            // when & then
-            assertThatThrownBy(() -> momentCommandService.deleteMoment(
-                    -1L, MomentTestConstants.TEST_MOMENT_ID))
-                    .isInstanceOf(BusinessException.class)
-                    .extracting("responseStatus")
-                    .extracting("message")
-                    .isEqualTo(MomentTestConstants.ACCESS_DENIED_MESSAGE);
+                    .hasMessageContaining("기록 ID가 필요합니다.");
         }
     }
 
-    @Nested
-    @DisplayName("도메인 로직 검증 테스트")
-    class DomainLogicTest {
-
-        @Test
-        @DisplayName("이미지 추가 도메인 메서드 호출 확인")
-        void createMoment_ImageDomainMethodCalled() {
-            // given
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
-
-            // when
-            momentCommandService.createMoment(MomentTestConstants.TEST_USER_ID, createRequest);
-
-            // then
-            ArgumentCaptor<Moment> momentCaptor = ArgumentCaptor.forClass(Moment.class);
-            then(momentRepository).should(times(1)).save(momentCaptor.capture());
-
-            Moment capturedMoment = momentCaptor.getValue();
-            // 도메인 메서드가 호출되어 이미지가 추가되었는지 확인
-            assertThat(capturedMoment.hasImages()).isTrue();
-            assertThat(capturedMoment.getImageCount()).isEqualTo(MomentTestConstants.TEST_IMAGES_COUNT);
-        }
-
-        @Test
-        @DisplayName("장소 정보 업데이트 도메인 메서드 호출 확인")
-        void updateMoment_PlaceInfoUpdateCalled() {
-            // given
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
-
-            // when
-            momentCommandService.updateMoment(
-                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, updateRequest);
-
-            // then
-            then(momentRepository).should(times(1)).save(testMoment);
-            // 실제 도메인 메서드 호출로 인한 상태 변화는 통합 테스트에서 검증
-        }
-
-        @Test
-        @DisplayName("이미지 교체 도메인 메서드 호출 확인")
-        void updateMoment_ImageReplacementCalled() {
-            // given
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-            given(momentRepository.save(any(Moment.class))).willReturn(savedMoment);
-
-            // when
-            momentCommandService.updateMoment(
-                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, updateRequest);
-
-            // then
-            then(momentRepository).should(times(1)).save(testMoment);
-        }
-    }
-
-    @Nested
-    @DisplayName("예외 상황 처리 테스트")
-    class ExceptionHandlingTest {
-
-        @Test
-        @DisplayName("Repository 저장 실패")
-        void createMoment_SaveFailed() {
-            // given
-            given(momentRepository.save(any(Moment.class)))
-                    .willThrow(new RuntimeException("Database save failed"));
-
-            // when & then
-            assertThatThrownBy(() -> momentCommandService.createMoment(
-                    MomentTestConstants.TEST_USER_ID, createRequest))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("Database save failed");
-        }
-
-        @Test
-        @DisplayName("Repository 조회 실패")
-        void updateMoment_FindFailed() {
-            // given
-            given(momentRepository.findByIdWithImages(MomentTestConstants.TEST_MOMENT_ID))
-                    .willThrow(new RuntimeException("Database find failed"));
-
-            // when & then
-            assertThatThrownBy(() -> momentCommandService.updateMoment(
-                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID, updateRequest))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("Database find failed");
-
-            then(momentRepository).should(times(0)).save(any(Moment.class));
-        }
-
-        @Test
-        @DisplayName("Repository 삭제 실패")
-        void deleteMoment_DeleteFailed() {
-            // given
-            given(momentRepository.findBasicMomentById(MomentTestConstants.TEST_MOMENT_ID))
-                    .willReturn(Optional.of(testMoment));
-
-            // willThrow를 사용하여 void 메서드 예외 설정
-            willThrow(new RuntimeException("Database delete failed"))
-                    .given(momentRepository).delete(testMoment);
-
-            // when & then
-            assertThatThrownBy(() -> momentCommandService.deleteMoment(
-                    MomentTestConstants.TEST_USER_ID, MomentTestConstants.TEST_MOMENT_ID))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("Database delete failed");
-        }
-    }
-
-    // Helper methods
-    private Moment createTestMoment() {
-        return Moment.builder()
-                .id(MomentTestConstants.TEST_MOMENT_ID)
-                .userId(MomentTestConstants.TEST_USER_ID)
-                .title(MomentTestConstants.TEST_MOMENT_TITLE)
-                .content(MomentTestConstants.TEST_MOMENT_CONTENT)
-                .placeId(MomentTestConstants.TEST_PLACE_ID)
-                .placeName(MomentTestConstants.TEST_PLACE_NAME)
-                .isPublic(MomentTestConstants.DEFAULT_IS_PUBLIC)
-                .viewCount(MomentTestConstants.DEFAULT_VIEW_COUNT)
-                .build();
-    }
-
-    private Moment createSavedMoment() {
-        return Moment.builder()
-                .id(MomentTestConstants.TEST_MOMENT_ID)
-                .userId(MomentTestConstants.TEST_USER_ID)
-                .title(MomentTestConstants.TEST_MOMENT_TITLE)
-                .content(MomentTestConstants.TEST_MOMENT_CONTENT)
-                .placeId(MomentTestConstants.TEST_PLACE_ID)
-                .placeName(MomentTestConstants.TEST_PLACE_NAME)
-                .isPublic(MomentTestConstants.DEFAULT_IS_PUBLIC)
-                .viewCount(MomentTestConstants.DEFAULT_VIEW_COUNT)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
+    // ==================== Helper Methods ====================
 
     private MomentCreateRequest createMomentCreateRequest() {
         return MomentCreateRequest.builder()
@@ -542,5 +338,19 @@ class MomentCommandServiceTest {
                 MomentTestConstants.UPDATED_IMAGES,
                 MomentTestConstants.UPDATED_IS_PUBLIC
         );
+    }
+
+    private MomentCreateResponse createExpectedCreateResponse() {
+        return MomentCreateResponse.builder()
+                .id(MomentTestConstants.TEST_MOMENT_ID)
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    private MomentUpdateResponse createExpectedUpdateResponse() {
+        return MomentUpdateResponse.builder()
+                .id(MomentTestConstants.TEST_MOMENT_ID)
+                .updatedAt(LocalDateTime.now())
+                .build();
     }
 }
