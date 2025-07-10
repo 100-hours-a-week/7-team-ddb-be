@@ -7,6 +7,12 @@ import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.entity.PlaceHours;
 import com.dolpin.domain.place.repository.PlaceRepository;
 import com.dolpin.domain.place.service.cache.PlaceCacheService;
+import com.dolpin.domain.place.service.strategy.PlaceSearchContext;
+import com.dolpin.domain.place.service.strategy.PlaceSearchStrategy;
+import com.dolpin.domain.place.service.strategy.PlaceSearchStrategyFactory;
+import com.dolpin.domain.place.service.strategy.PlaceSearchType;
+import com.dolpin.domain.place.service.template.FullPlaceDetailQuery;
+import com.dolpin.domain.place.service.template.SimplePlaceDetailQuery;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import com.dolpin.global.util.DayOfWeek;
@@ -22,7 +28,6 @@ import reactor.core.scheduler.Schedulers;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -33,11 +38,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PlaceQueryServiceImpl implements PlaceQueryService {
 
+    // 기존 의존성들
     private final PlaceRepository placeRepository;
     private final PlaceAiClient placeAiClient;
     private final MomentRepository momentRepository;
     private final PlaceBookmarkQueryService bookmarkQueryService;
     private final PlaceCacheService placeCacheService;
+
+    // Template Method 구현체들
+    private final FullPlaceDetailQuery fullPlaceDetailQuery;
+    private final SimplePlaceDetailQuery simplePlaceDetailQuery;
+
+    private final PlaceSearchStrategyFactory placeSearchStrategyFactory;
 
     @Value("${place.search.default-radius}")
     private double defaultSearchRadius;
@@ -77,19 +89,30 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     }
 
     private Mono<PlaceSearchResponse> executeSearchLogicAsync(String query, Double lat, Double lng, String category, Long userId, String devToken) {
+        PlaceSearchContext context = PlaceSearchContext.builder()
+                .query(query)
+                .lat(lat)
+                .lng(lng)
+                .category(category)
+                .userId(userId)
+                .devToken(devToken)
+                .build();
 
-        return Mono.fromCallable(() -> validateSearchParams(query, category, lat, lng))
-                .flatMap(validationResult -> {
-                    if (query != null && !query.trim().isEmpty()) {
-                        return searchByQueryAsync(query, lat, lng, devToken, userId);
-                    } else {
-                        return searchByCategoryAsync(category, lat, lng, userId);
-                    }
+        return Mono.fromCallable(() -> {
+                    context.validate(); // 파라미터 검증
+                    return context;
+                })
+                .flatMap(validContext -> {
+                    PlaceSearchType searchType = validContext.determineSearchType();
+                    PlaceSearchStrategy strategy = placeSearchStrategyFactory.getStrategy(searchType);
+                    return strategy.search(validContext);
                 })
                 .map(placeDtos -> PlaceSearchResponse.builder()
                         .total(placeDtos.size())
                         .places(placeDtos)
-                        .build());
+                        .build())
+                .doOnSuccess(response -> log.debug("검색 완료: 총 {}개 결과", response.getTotal()))
+                .doOnError(error -> log.error("검색 실패: {}", error.getMessage()));
     }
 
     private Boolean validateSearchParams(String query, String category, Double lat, Double lng) {
@@ -209,13 +232,13 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Override
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetail(Long placeId, Long userId) {
-        return getPlaceDetailInternal(placeId, userId);
+        return fullPlaceDetailQuery.getPlaceDetail(placeId, userId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetailWithoutBookmark(Long placeId) {
-        return getPlaceDetailInternal(placeId, null);
+        return simplePlaceDetailQuery.getPlaceDetail(placeId, null);
     }
 
     private List<Long> filterByCategoryInTransaction(List<Long> placeIds, String category) {
