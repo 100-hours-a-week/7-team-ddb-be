@@ -80,20 +80,35 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
     private List<PlaceSearchResponse.PlaceDto> processAiRecommendations(
             PlaceAiResponse aiResponse, PlaceSearchContext context) {
 
-        List<Long> placeIds = aiResponse.getRecommendations().stream()
+        // null 값 필터링된 추천 목록만 사용
+        List<PlaceAiResponse.PlaceRecommendation> validRecommendations = aiResponse.getRecommendations().stream()
+                .filter(Objects::nonNull)
+                .filter(rec -> rec.getId() != null)
+                .collect(Collectors.toList());
+
+        if (validRecommendations.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> placeIds = validRecommendations.stream()
                 .map(PlaceAiResponse.PlaceRecommendation::getId)
                 .collect(Collectors.toList());
 
-        Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
+        // null 안전성을 위한 Map 생성
+        Map<Long, Double> similarityScores = validRecommendations.stream()
+                .filter(rec -> rec.getSimilarityScore() != null)
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore
+                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore,
+                        (existing, replacement) -> existing
                 ));
 
-        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
+        Map<Long, List<String>> keywordsByPlaceId = validRecommendations.stream()
+                .filter(rec -> rec.getKeyword() != null && !rec.getKeyword().isEmpty())
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getKeyword
+                        PlaceAiResponse.PlaceRecommendation::getKeyword,
+                        (existing, replacement) -> existing
                 ));
 
         List<PlaceWithDistance> placesWithDistance = placeRepository.findPlacesWithinRadiusByIds(
@@ -115,7 +130,7 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
         Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService
                 .getBookmarkStatusMap(context.getUserId(), foundPlaceIds);
 
-        // Factory를 사용한 DTO 생성 - 기존 복잡한 convertToPlaceDto 로직 대체
+        // Factory를 사용한 DTO 생성
         return placesWithDistance.stream()
                 .map(placeWithDistance -> {
                     Place place = placeMap.get(placeWithDistance.getId());
@@ -123,13 +138,18 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
                         return null;
                     }
 
-                    return placeDtoFactory.createAiSearchDto(
-                            place,
-                            similarityScores.get(place.getId()),
-                            keywordsByPlaceId.get(place.getId()),
-                            momentCountMap,
-                            bookmarkStatusMap
-                    );
+                    try {
+                        return placeDtoFactory.createAiSearchDto(
+                                place,
+                                similarityScores.get(place.getId()),
+                                keywordsByPlaceId.get(place.getId()),
+                                momentCountMap,
+                                bookmarkStatusMap
+                        );
+                    } catch (Exception e) {
+                        log.error("DTO 생성 실패: placeId={}, error={}", place.getId(), e.getMessage());
+                        return null;
+                    }
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
