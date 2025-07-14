@@ -50,6 +50,11 @@ public class AuthTestConstants {
     public static final String GOOGLE_PROVIDER = "google";
     public static final String UNSUPPORTED_PROVIDER = "naver";
 
+    // Cookie 관련 상수
+    public static final String TEST_COOKIE_DOMAIN = "test.dolpin.site";
+    public static final long ACCESS_TOKEN_EXPIRES_IN = 3600L; // 1시간
+    public static final int REFRESH_TOKEN_EXPIRES_IN = 14 * 24 * 60 * 60; // 14일
+
     // 에러 메시지 상수
     public static final String OAUTH_AUTH_FAILED_MESSAGE = "OAuth 인증에 실패했습니다";
     public static final String REFRESH_TOKEN_INVALID_MESSAGE = "리프레시 토큰이 유효하지 않습니다";

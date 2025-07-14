@@ -105,4 +105,18 @@ public interface MomentRepository extends JpaRepository<Moment, Long> {
     long countByUserIdAndCreatedAtBetween(@Param("userId") Long userId,
                                           @Param("startDate") LocalDateTime startDate,
                                           @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(m) > 0 FROM Moment m " +
+            "WHERE m.userId = :userId " +
+            "AND m.title = :title " +
+            "AND m.createdAt > :afterTime")
+    boolean existsByUserIdAndTitleAndCreatedAtAfter(@Param("userId") Long userId,
+                                                    @Param("title") String title,
+                                                    @Param("afterTime") LocalDateTime afterTime);
+
+    @Query("SELECT COUNT(m) FROM Moment m " +
+            "WHERE m.userId = :userId " +
+            "AND m.createdAt > :afterTime")
+    long countByUserIdAndCreatedAtAfter(@Param("userId") Long userId,
+                                        @Param("afterTime") LocalDateTime afterTime);
 }

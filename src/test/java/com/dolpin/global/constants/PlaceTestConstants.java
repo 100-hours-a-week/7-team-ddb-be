@@ -1,8 +1,8 @@
 package com.dolpin.global.constants;
 
-public final class TestConstants {
+public final class PlaceTestConstants {
 
-    private TestConstants() {
+    private PlaceTestConstants() {
     }
 
     // === 사용자 관련 상수 ===
@@ -213,4 +213,10 @@ public final class TestConstants {
     public static final Long MOMENT_COUNT_MEDIUM = 5L;
     public static final Long MOMENT_COUNT_LOW = 2L;
     public static final Long MOMENT_COUNT_ZERO = 0L;
+
+    public static final String AI_IMAGE_1 = "ai_image1.jpg";
+    public static final String AI_IMAGE_2 = "ai_image2.jpg";
+    public static final String ERROR_MESSAGE_AI_UNAVAILABLE = "AI service unavailable";
+    public static final String ERROR_MESSAGE_PLACE_NOT_FOUND = "Place not found";
+    public static final String ERROR_MESSAGE_DATABASE_ERROR = "Database error";
 }

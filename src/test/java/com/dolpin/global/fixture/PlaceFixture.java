@@ -1,7 +1,7 @@
 package com.dolpin.global.fixture;
 
 import com.dolpin.domain.place.entity.*;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -36,67 +36,67 @@ public class PlaceFixture {
     // === 기본값을 사용하는 편의 메서드 ===
     public static Place createPlace(String name, String category, double lat, double lng) {
         return createPlace(name, category, lat, lng,
-                TestConstants.DEFAULT_ROAD_ADDRESS,
-                TestConstants.DEFAULT_LOT_ADDRESS,
-                TestConstants.DEFAULT_IMAGE_URL,
-                TestConstants.DEFAULT_DESCRIPTION,
-                TestConstants.DEFAULT_PHONE);
+                PlaceTestConstants.DEFAULT_ROAD_ADDRESS,
+                PlaceTestConstants.DEFAULT_LOT_ADDRESS,
+                PlaceTestConstants.DEFAULT_IMAGE_URL,
+                PlaceTestConstants.DEFAULT_DESCRIPTION,
+                PlaceTestConstants.DEFAULT_PHONE);
     }
 
     // === 카테고리별 장소 생성 메서드 (기본값) ===
     public static Place createCafe(String name, double lat, double lng) {
-        return createPlace(name, TestConstants.CAFE_CATEGORY, lat, lng);
+        return createPlace(name, PlaceTestConstants.CAFE_CATEGORY, lat, lng);
     }
 
     public static Place createRestaurant(String name, double lat, double lng) {
-        return createPlace(name, TestConstants.RESTAURANT_CATEGORY, lat, lng);
+        return createPlace(name, PlaceTestConstants.RESTAURANT_CATEGORY, lat, lng);
     }
 
     public static Place createBar(String name, double lat, double lng) {
-        return createPlace(name, TestConstants.BAR_CATEGORY, lat, lng);
+        return createPlace(name, PlaceTestConstants.BAR_CATEGORY, lat, lng);
     }
 
     // === 카테고리별 장소 생성 메서드 (커스터마이징 가능) ===
     public static Place createCafe(String name, double lat, double lng, String roadAddress,
                                    String imageUrl, String description, String phone) {
-        return createPlace(name, TestConstants.CAFE_CATEGORY, lat, lng,
-                roadAddress, TestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
+        return createPlace(name, PlaceTestConstants.CAFE_CATEGORY, lat, lng,
+                roadAddress, PlaceTestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
     }
 
     public static Place createRestaurant(String name, double lat, double lng, String roadAddress,
                                          String imageUrl, String description, String phone) {
-        return createPlace(name, TestConstants.RESTAURANT_CATEGORY, lat, lng,
-                roadAddress, TestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
+        return createPlace(name, PlaceTestConstants.RESTAURANT_CATEGORY, lat, lng,
+                roadAddress, PlaceTestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
     }
 
     public static Place createBar(String name, double lat, double lng, String roadAddress,
                                   String imageUrl, String description, String phone) {
-        return createPlace(name, TestConstants.BAR_CATEGORY, lat, lng,
-                roadAddress, TestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
+        return createPlace(name, PlaceTestConstants.BAR_CATEGORY, lat, lng,
+                roadAddress, PlaceTestConstants.DEFAULT_LOT_ADDRESS, imageUrl, description, phone);
     }
 
     // === 테스트용 장소 생성 메서드 (상수 활용) ===
     public static Place createBasicCafe() {
-        return createCafe(TestConstants.TEST_CAFE_NAME, TestConstants.CENTER_LAT, TestConstants.CENTER_LNG);
+        return createCafe(PlaceTestConstants.TEST_CAFE_NAME, PlaceTestConstants.CENTER_LAT, PlaceTestConstants.CENTER_LNG);
     }
 
     public static Place createNearbyCafe() {
-        return createCafe(TestConstants.NEARBY_PREFIX + TestConstants.TEST_CAFE_NAME,
-                TestConstants.NEAR_LAT, TestConstants.NEAR_LNG);
+        return createCafe(PlaceTestConstants.NEARBY_PREFIX + PlaceTestConstants.TEST_CAFE_NAME,
+                PlaceTestConstants.NEAR_LAT, PlaceTestConstants.NEAR_LNG);
     }
 
     public static Place createFarCafe() {
-        return createCafe(TestConstants.FAR_PREFIX + TestConstants.TEST_CAFE_NAME,
-                TestConstants.FAR_LAT, TestConstants.FAR_LNG);
+        return createCafe(PlaceTestConstants.FAR_PREFIX + PlaceTestConstants.TEST_CAFE_NAME,
+                PlaceTestConstants.FAR_LAT, PlaceTestConstants.FAR_LNG);
     }
 
     public static Place createBasicRestaurant() {
-        return createRestaurant(TestConstants.TEST_RESTAURANT_NAME,
-                TestConstants.RESTAURANT1_LAT, TestConstants.RESTAURANT1_LNG);
+        return createRestaurant(PlaceTestConstants.TEST_RESTAURANT_NAME,
+                PlaceTestConstants.RESTAURANT1_LAT, PlaceTestConstants.RESTAURANT1_LNG);
     }
 
     public static Place createBasicBar() {
-        return createBar(TestConstants.TEST_BAR_NAME, TestConstants.BAR_LAT, TestConstants.BAR_LNG);
+        return createBar(PlaceTestConstants.TEST_BAR_NAME, PlaceTestConstants.BAR_LAT, PlaceTestConstants.BAR_LNG);
     }
 
     // === 연관 엔티티 생성 메서드 ===
@@ -137,11 +137,11 @@ public class PlaceFixture {
 
     // === 기본 메뉴 생성 메서드 ===
     public static PlaceMenu createAmericanoMenu(Place place) {
-        return createPlaceMenu(place, TestConstants.AMERICANO_MENU, TestConstants.AMERICANO_PRICE);
+        return createPlaceMenu(place, PlaceTestConstants.AMERICANO_MENU, PlaceTestConstants.AMERICANO_PRICE);
     }
 
     public static PlaceMenu createLatteMenu(Place place) {
-        return createPlaceMenu(place, TestConstants.LATTE_MENU, TestConstants.LATTE_PRICE);
+        return createPlaceMenu(place, PlaceTestConstants.LATTE_MENU, PlaceTestConstants.LATTE_PRICE);
     }
 
     // === 커스터마이징 가능한 메뉴 생성 ===
@@ -151,11 +151,11 @@ public class PlaceFixture {
 
     // === 기본 영업시간 생성 메서드 ===
     public static PlaceHours createMondayHours(Place place) {
-        return createPlaceHours(place, TestConstants.MONDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME);
+        return createPlaceHours(place, PlaceTestConstants.MONDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.CLOSE_TIME);
     }
 
     public static PlaceHours createTuesdayHours(Place place) {
-        return createPlaceHours(place, TestConstants.TUESDAY, TestConstants.OPEN_TIME, TestConstants.CLOSE_TIME);
+        return createPlaceHours(place, PlaceTestConstants.TUESDAY, PlaceTestConstants.OPEN_TIME, PlaceTestConstants.CLOSE_TIME);
     }
 
     // === 커스터마이징 가능한 영업시간 ===

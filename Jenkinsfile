@@ -87,8 +87,10 @@ pipeline {
                 set -e
 
                 mkdir -p deploy/scripts
+                mkdir -p deploy/promtail/
                 cp -r appspec.yml deploy/
                 cp -r scripts/* deploy/scripts/
+                cp -r promtail/* deploy/promtail/
                 echo ${env.IMAGE_TAG} > deploy/.image_tag
                 cd deploy && zip -r ../${env.ZIP_NAME} .
                 """

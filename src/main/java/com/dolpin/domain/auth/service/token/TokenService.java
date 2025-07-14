@@ -4,8 +4,10 @@ import com.dolpin.domain.auth.entity.Token;
 import com.dolpin.domain.auth.entity.enums.TokenStatus;
 import com.dolpin.domain.auth.repository.TokenRepository;
 import com.dolpin.domain.auth.dto.response.RefreshTokenResponse;
+import com.dolpin.domain.auth.service.cache.RefreshTokenCacheService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.global.exception.BusinessException;
+import com.dolpin.global.redis.util.CacheKeyUtil;
 import com.dolpin.global.response.ResponseStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,32 +23,35 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TokenService {
 
-    private final TokenRepository tokenRepository;
+    private final TokenRepository tokenRepository; // 기존 DB 레포지토리는 유지 (마이그레이션용)
+    private final RefreshTokenCacheService refreshTokenCacheService; // 새로 추가
     private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
     public Token createRefreshToken(User user) {
-        // 1. 먼저 유효한 기존 토큰이 있는지 확인
-        List<Token> validTokens = tokenRepository.findValidTokensByUserId(user.getId());
+        // 1. 기존 유효한 토큰 확인 (Redis에서)
+        cleanupExpiredTokensForUser(user.getId());
 
-        if (!validTokens.isEmpty()) {
-            // 유효한 토큰이 있으면 재사용
-            Token existingToken = validTokens.get(0);
-            log.info("기존 유효한 리프레시 토큰 재사용 - 사용자: {}, 만료일: {}",
-                    user.getId(), existingToken.getExpiredAt());
-            return existingToken;
-        }
-
-        // 2. 유효한 토큰이 없을 때만 새로 생성
-        // 만료된 토큰들만 정리
-        cleanupExpiredTokens(user);
-
-        // 새 리프레시 토큰 생성
+        // 2. 새 리프레시 토큰 생성
         String refreshToken = jwtTokenProvider.generateToken(user.getId());
+        String tokenHash = generateTokenHash(refreshToken);
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiryDate = now.plusDays(14); // 리프레시 토큰 유효기간 2주
+        LocalDateTime expiryDate = now.plusDays(14);
 
-        Token token = Token.builder()
+        // 3. Redis에 저장
+        RefreshTokenCacheService.RefreshTokenData tokenData =
+                RefreshTokenCacheService.RefreshTokenData.builder()
+                        .userId(user.getId())
+                        .token(refreshToken)
+                        .createdAt(now)
+                        .expiredAt(expiryDate)
+                        .isRevoked(false)
+                        .build();
+
+        refreshTokenCacheService.saveRefreshToken(tokenHash, tokenData);
+
+        // 4. DB에도 저장 (기존 호환성 유지 - 나중에 제거 가능)
+        Token dbToken = Token.builder()
                 .user(user)
                 .token(refreshToken)
                 .status(TokenStatus.ACTIVE)
@@ -55,51 +60,32 @@ public class TokenService {
                 .isRevoked(false)
                 .build();
 
-        log.info("새 리프레시 토큰 생성 - 사용자: {}, 만료일: {}", user.getId(), expiryDate);
-        return tokenRepository.save(token);
-    }
-
-    // 만료된 토큰만 정리하는 메서드
-    @Transactional
-    public void cleanupExpiredTokens(User user) {
-        List<Token> expiredTokens = tokenRepository.findAllByUser(user)
-                .stream()
-                .filter(Token::isExpired)
-                .collect(Collectors.toList());
-
-        if (!expiredTokens.isEmpty()) {
-            expiredTokens.forEach(Token::revoke);
-            tokenRepository.saveAll(expiredTokens);
-            log.info("만료된 토큰 {}개 정리 완료 - 사용자: {}", expiredTokens.size(), user.getId());
-        }
-    }
-
-    // 모든 토큰 무효화 (로그아웃, 계정 삭제 시에만 사용)
-    @Transactional
-    public void invalidateUserTokens(User user) {
-        List<Token> userTokens = tokenRepository.findAllByUser(user);
-        userTokens.forEach(Token::revoke);
-        tokenRepository.saveAll(userTokens);
-        log.info("사용자 모든 토큰 무효화 완료 - 사용자: {}, 토큰 수: {}", user.getId(), userTokens.size());
+        log.info("새 리프레시 토큰 생성: userId={}", user.getId());
+        return tokenRepository.save(dbToken);
     }
 
     @Transactional
     public RefreshTokenResponse refreshAccessToken(String refreshToken) {
-        // 리프레시 토큰 조회
-        Token token = tokenRepository.findByToken(refreshToken)
-                .orElseThrow(() -> new BusinessException(
-                        ResponseStatus.UNAUTHORIZED.withMessage("리프레시 토큰이 유효하지 않습니다.")));
+        String tokenHash = generateTokenHash(refreshToken);
 
-        // 만료 또는 취소된 토큰 체크
-        if (token.isExpired()) {
+        // Redis에서 토큰 검증
+        if (!refreshTokenCacheService.isValidToken(tokenHash)) {
             throw new BusinessException(
-                    ResponseStatus.UNAUTHORIZED.withMessage("리프레시 토큰이 만료되었습니다."));
+                    ResponseStatus.UNAUTHORIZED.withMessage("리프레시 토큰이 유효하지 않습니다."));
+        }
+
+        RefreshTokenCacheService.RefreshTokenData tokenData =
+                refreshTokenCacheService.getRefreshToken(tokenHash);
+
+        if (tokenData == null) {
+            throw new BusinessException(
+                    ResponseStatus.UNAUTHORIZED.withMessage("리프레시 토큰을 찾을 수 없습니다."));
         }
 
         // 새 액세스 토큰 생성
-        String newAccessToken = jwtTokenProvider.generateToken(token.getUser().getId());
+        String newAccessToken = jwtTokenProvider.generateToken(tokenData.getUserId());
 
-        log.info("액세스 토큰 갱신 완료 - 사용자: {}", token.getUser().getId());
+        log.info("액세스 토큰 갱신 완료: userId={}", tokenData.getUserId());
         return RefreshTokenResponse.builder()
                 .newAccessToken(newAccessToken)
                 .expiresIn(jwtTokenProvider.getExpirationMs() / 1000)
@@ -108,19 +94,48 @@ public class TokenService {
 
     @Transactional
     public void invalidateRefreshToken(String refreshToken) {
-        Token token = tokenRepository.findByToken(refreshToken)
-                .orElseThrow(() -> new BusinessException(
-                        ResponseStatus.UNAUTHORIZED.withMessage("리프레시 토큰이 유효하지 않습니다.")));
+        String tokenHash = generateTokenHash(refreshToken);
 
-        token.revoke();
-        tokenRepository.save(token);
-        log.info("리프레시 토큰 무효화 완료 - 사용자: {}", token.getUser().getId());
+        // Redis에서 토큰 무효화
+        refreshTokenCacheService.blacklistToken(tokenHash);
+        refreshTokenCacheService.deleteRefreshToken(tokenHash);
+
+        // DB에서도 무효화 (기존 호환성)
+        tokenRepository.findByToken(refreshToken).ifPresent(token -> {
+            token.revoke();
+            tokenRepository.save(token);
+        });
+
+        log.info("리프레시 토큰 무효화 완료");
+    }
+
+    @Transactional
+    public void invalidateUserTokens(User user) {
+        // Redis에서 사용자의 모든 토큰 무효화
+        refreshTokenCacheService.invalidateUserTokens(user.getId());
+
+        // DB에서도 무효화 (기존 호환성)
+        List<Token> userTokens = tokenRepository.findAllByUser(user);
+        userTokens.forEach(Token::revoke);
+        tokenRepository.saveAll(userTokens);
+
+        log.info("사용자 모든 토큰 무효화 완료: userId={}", user.getId());
+    }
+
+    // ===================== 헬퍼 메서드 =====================
+
+    private String generateTokenHash(String token) {
+        return CacheKeyUtil.generateHash(token);
+    }
+
+    private void cleanupExpiredTokensForUser(Long userId) {
+        // Redis에서 만료된 토큰 정리는 자동으로 처리됨 (TTL)
+        // 필요시 수동 정리 로직 추가 가능
     }
 
     @Transactional(readOnly = true)
     public boolean validateRefreshToken(String refreshToken) {
-        return tokenRepository.findByToken(refreshToken)
-                .map(token -> !token.isExpired())
-                .orElse(false);
+        String tokenHash = generateTokenHash(refreshToken);
+        return refreshTokenCacheService.isValidToken(tokenHash);
     }
 }

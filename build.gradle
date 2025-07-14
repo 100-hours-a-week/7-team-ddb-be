@@ -2,6 +2,7 @@ plugins {
 	id 'org.springframework.boot' version '3.4.4'
 	id 'io.spring.dependency-management' version '1.1.4'
 	id 'java'
+	id 'jacoco'
 }
 
 group = 'com.dolpin'
@@ -75,9 +76,21 @@ dependencies {
 	implementation 'org.springframework.retry:spring-retry'
 	implementation 'org.springframework:spring-aspects'
 
-	// AWS
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
+	implementation 'org.apache.commons:commons-pool2'
+
+	// JSON 직렬화
+	implementation 'com.fasterxml.jackson.core:jackson-databind'
+	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+	// 캐시 추상화
+	implementation 'org.springframework.boot:spring-boot-starter-cache'
+
+
 	implementation platform("software.amazon.awssdk:bom:2.25.15")
 	implementation 'software.amazon.awssdk:s3'
+
 }
 
 // QueryDSL 설정
@@ -121,5 +134,113 @@ tasks.withType(JavaCompile) {
 clean {
 	doLast {
 		delete querydslGeneratedDir
+	}
+}
+
+jacoco {
+	toolVersion = "0.8.8"
+}
+
+test {
+	useJUnitPlatform()
+	finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+		html.required = true
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+					// 기본 제외 항목
+					'**/config/**',
+					'**/dto/**',
+					'**/*Application.class',
+
+					// SecurityConfig 구체적 제외
+					'**/SecurityConfig.class',
+					'**/security/SecurityConfig.class',
+					'**/config/SecurityConfig.class',
+					'**/global/security/SecurityConfig.class',
+
+					// QueryDSL 자동 생성 Q클래스 제외
+					'**/Q*.class',
+
+					// Lombok 자동 생성 코드 제외
+					'**/*$Builder.class',
+
+					// 캐시 관련 제외
+					'**/cache/**',
+					'**/service/cache/**',
+
+					// Storage 관련 제외
+					'**/storage/service/gcs/**',
+					'**/storage/service/s3/**',
+					'**/storage/controller/**',
+
+					// Rate Limit 제외
+					'**/ratelimit/**',
+
+					// Redis 서비스 제외
+					'**/redis/service/**',
+
+					// Place 도메인 제외
+					'**/place/**',
+
+					// 기타 설정 클래스들
+					'**/WebConfig.class',
+					'**/RedisConfig.class',
+					'**/DatabaseConfig.class',
+					'**/CorsConfig.class',
+					'**/AsyncConfig.class',
+					'**/QuerydslConfig.class',
+					'**/GcsConfig.class',
+					'**/S3Config.class',
+					'**/SchedulingConfig.class'
+			])
+		}))
+	}
+}
+
+jacocoTestCoverageVerification {
+	violationRules {
+		rule {
+			limit {
+				counter = 'LINE'
+				value = 'COVEREDRATIO'
+				minimum = 0.70
+			}
+		}
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+					// 기본 제외 항목
+					'**/config/**',
+					'**/dto/**',
+					'**/*Application.class',
+
+					// SecurityConfig 구체적 제외
+					'**/SecurityConfig.class',
+					'**/security/SecurityConfig.class',
+					'**/config/SecurityConfig.class',
+					'**/global/security/SecurityConfig.class',
+
+					// Storage 관련 제외
+					'**/storage/service/gcs/**',
+					'**/storage/controller/**',
+
+					// Rate Limit 제외
+					'**/ratelimit/**',
+
+					// Redis 서비스 제외
+					'**/redis/service/**',
+			])
+		}))
 	}
 }

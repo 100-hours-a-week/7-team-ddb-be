@@ -5,9 +5,8 @@ import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.service.query.PlaceQueryService;
 import com.dolpin.global.config.TestConfig;
-import com.dolpin.global.constants.TestConstants;
+import com.dolpin.global.constants.PlaceTestConstants;
 import com.dolpin.global.exception.BusinessException;
-import com.dolpin.global.response.ApiResponse;
 import com.dolpin.global.response.ResponseStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -15,7 +14,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -68,10 +66,10 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void searchPlaces_WithQuery_ReturnsSearchResults() throws Exception {
             // Given
-            String query = TestConstants.CAFE_SEARCH_QUERY;
-            Double lat = TestConstants.CENTER_LAT;
-            Double lng = TestConstants.CENTER_LNG;
-            Long userId = TestConstants.USER_ID_1;
+            String query = PlaceTestConstants.CAFE_SEARCH_QUERY;
+            Double lat = PlaceTestConstants.CENTER_LAT;
+            Double lng = PlaceTestConstants.CENTER_LNG;
+            Long userId = PlaceTestConstants.USER_ID_1;
 
             PlaceSearchResponse expectedResponse = createSearchResponse();
             given(placeQueryService.searchPlacesAsync(query, lat, lng, null, userId))
@@ -91,11 +89,11 @@ class PlaceControllerTest {
             mockMvc.perform(asyncDispatch(result))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH))
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_SEARCH))
                     .andExpect(jsonPath("$.data.total").value(2))
                     .andExpect(jsonPath("$.data.places").isArray())
-                    .andExpect(jsonPath("$.data.places[0].id").value(TestConstants.PLACE_ID_1))
-                    .andExpect(jsonPath("$.data.places[0].name").value(TestConstants.STARBUCKS_NAME));
+                    .andExpect(jsonPath("$.data.places[0].id").value(PlaceTestConstants.PLACE_ID_1))
+                    .andExpect(jsonPath("$.data.places[0].name").value(PlaceTestConstants.STARBUCKS_NAME));
 
             verify(placeQueryService).searchPlacesAsync(query, lat, lng, null, userId);
         }
@@ -105,10 +103,10 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void searchPlaces_WithCategory_ReturnsSearchResults() throws Exception {
             // Given
-            String category = TestConstants.CAFE_CATEGORY;
-            Double lat = TestConstants.CENTER_LAT;
-            Double lng = TestConstants.CENTER_LNG;
-            Long userId = TestConstants.USER_ID_1;
+            String category = PlaceTestConstants.CAFE_CATEGORY;
+            Double lat = PlaceTestConstants.CENTER_LAT;
+            Double lng = PlaceTestConstants.CENTER_LNG;
+            Long userId = PlaceTestConstants.USER_ID_1;
 
             PlaceSearchResponse expectedResponse = createSearchResponse();
             given(placeQueryService.searchPlacesAsync(null, lat, lng, category, userId))
@@ -128,7 +126,7 @@ class PlaceControllerTest {
             mockMvc.perform(asyncDispatch(result))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH))
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_SEARCH))
                     .andExpect(jsonPath("$.data.total").value(2))
                     .andExpect(jsonPath("$.data.places").isArray());
 
@@ -139,9 +137,9 @@ class PlaceControllerTest {
         @DisplayName("인증되지 않은 사용자도 장소 검색이 가능하다")
         void searchPlaces_WithoutAuthentication_ReturnsSearchResults() throws Exception {
             // Given
-            String query = TestConstants.CAFE_SEARCH_QUERY;
-            Double lat = TestConstants.CENTER_LAT;
-            Double lng = TestConstants.CENTER_LNG;
+            String query = PlaceTestConstants.CAFE_SEARCH_QUERY;
+            Double lat = PlaceTestConstants.CENTER_LAT;
+            Double lng = PlaceTestConstants.CENTER_LNG;
 
             PlaceSearchResponse expectedResponse = createSearchResponse();
             given(placeQueryService.searchPlacesAsync(query, lat, lng, null, null))
@@ -161,7 +159,7 @@ class PlaceControllerTest {
             mockMvc.perform(asyncDispatch(result))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH));
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_SEARCH));
 
             verify(placeQueryService).searchPlacesAsync(query, lat, lng, null, null);
         }
@@ -176,7 +174,7 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void searchPlaces_WithMissingRequiredParams_CallsService(String query, Double lat, Double lng) throws Exception {
             // Given
-            Long userId = TestConstants.USER_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
 
             // 서비스에서 예외를 던지도록 Mock 설정
             given(placeQueryService.searchPlacesAsync(eq(query), eq(lat), eq(lng), isNull(), eq(userId)))
@@ -199,10 +197,10 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void searchPlaces_WithNoResults_ReturnsEmptyResults() throws Exception {
             // Given
-            String query = TestConstants.NON_EXISTENT_SEARCH_QUERY;
-            Double lat = TestConstants.CENTER_LAT;
-            Double lng = TestConstants.CENTER_LNG;
-            Long userId = TestConstants.USER_ID_1;
+            String query = PlaceTestConstants.NON_EXISTENT_SEARCH_QUERY;
+            Double lat = PlaceTestConstants.CENTER_LAT;
+            Double lng = PlaceTestConstants.CENTER_LNG;
+            Long userId = PlaceTestConstants.USER_ID_1;
 
             PlaceSearchResponse emptyResponse = PlaceSearchResponse.builder()
                     .total(0)
@@ -226,7 +224,7 @@ class PlaceControllerTest {
             mockMvc.perform(asyncDispatch(result))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_SEARCH))
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_SEARCH))
                     .andExpect(jsonPath("$.data.total").value(0))
                     .andExpect(jsonPath("$.data.places").isArray())
                     .andExpect(jsonPath("$.data.places").isEmpty());
@@ -244,8 +242,8 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void getPlaceDetail_WithAuthentication_ReturnsPlaceDetail() throws Exception {
             // Given
-            Long placeId = TestConstants.PLACE_ID_1;
-            Long userId = TestConstants.USER_ID_1;
+            Long placeId = PlaceTestConstants.PLACE_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
 
             PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
             given(placeQueryService.getPlaceDetail(placeId, userId))
@@ -256,9 +254,9 @@ class PlaceControllerTest {
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_DETAIL))
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_DETAIL))
                     .andExpect(jsonPath("$.data.id").value(placeId))
-                    .andExpect(jsonPath("$.data.name").value(TestConstants.TEST_CAFE_NAME))
+                    .andExpect(jsonPath("$.data.name").value(PlaceTestConstants.TEST_CAFE_NAME))
                     .andExpect(jsonPath("$.data.is_bookmarked").value(true))
                     .andExpect(jsonPath("$.data.keywords").isArray())
                     .andExpect(jsonPath("$.data.menu").isArray())
@@ -274,7 +272,7 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void getPlaceDetail_WithVariousIds_CallsServiceCorrectly(Long placeId) throws Exception {
             // Given
-            Long userId = TestConstants.USER_ID_1;
+            Long userId = PlaceTestConstants.USER_ID_1;
             PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
             given(placeQueryService.getPlaceDetail(placeId, userId))
                     .willReturn(expectedResponse);
@@ -309,11 +307,11 @@ class PlaceControllerTest {
         void getAllCategories_ReturnsCategories() throws Exception {
             // Given
             List<String> categories = List.of(
-                    TestConstants.CAFE_CATEGORY,
-                    TestConstants.RESTAURANT_CATEGORY,
-                    TestConstants.BAR_CATEGORY,
-                    TestConstants.BAKERY_CATEGORY,
-                    TestConstants.FASTFOOD_CATEGORY
+                    PlaceTestConstants.CAFE_CATEGORY,
+                    PlaceTestConstants.RESTAURANT_CATEGORY,
+                    PlaceTestConstants.BAR_CATEGORY,
+                    PlaceTestConstants.BAKERY_CATEGORY,
+                    PlaceTestConstants.FASTFOOD_CATEGORY
             );
             PlaceCategoryResponse expectedResponse = PlaceCategoryResponse.builder()
                     .categories(categories)
@@ -326,11 +324,11 @@ class PlaceControllerTest {
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_CATEGORIES))
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_CATEGORIES))
                     .andExpect(jsonPath("$.data.categories").isArray())
                     .andExpect(jsonPath("$.data.categories.length()").value(5))
-                    .andExpect(jsonPath("$.data.categories[0]").value(TestConstants.CAFE_CATEGORY))
-                    .andExpect(jsonPath("$.data.categories[1]").value(TestConstants.RESTAURANT_CATEGORY));
+                    .andExpect(jsonPath("$.data.categories[0]").value(PlaceTestConstants.CAFE_CATEGORY))
+                    .andExpect(jsonPath("$.data.categories[1]").value(PlaceTestConstants.RESTAURANT_CATEGORY));
 
             verify(placeQueryService).getAllCategories();
         }
@@ -351,7 +349,7 @@ class PlaceControllerTest {
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(jsonPath("$.message").value(TestConstants.Api.SUCCESS_MESSAGE_CATEGORIES))
+                    .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_CATEGORIES))
                     .andExpect(jsonPath("$.data.categories").isArray())
                     .andExpect(jsonPath("$.data.categories").isEmpty());
 
@@ -363,7 +361,7 @@ class PlaceControllerTest {
         @WithMockUser(username = "1")
         void getAllCategories_WithAuthentication_ReturnsCategories() throws Exception {
             // Given
-            List<String> categories = List.of(TestConstants.CAFE_CATEGORY, TestConstants.RESTAURANT_CATEGORY);
+            List<String> categories = List.of(PlaceTestConstants.CAFE_CATEGORY, PlaceTestConstants.RESTAURANT_CATEGORY);
             PlaceCategoryResponse expectedResponse = PlaceCategoryResponse.builder()
                     .categories(categories)
                     .build();
@@ -384,26 +382,26 @@ class PlaceControllerTest {
     private PlaceSearchResponse createSearchResponse() {
         List<PlaceSearchResponse.PlaceDto> places = List.of(
                 PlaceSearchResponse.PlaceDto.builder()
-                        .id(TestConstants.PLACE_ID_1)
-                        .name(TestConstants.STARBUCKS_NAME)
-                        .thumbnail(TestConstants.STARBUCKS_THUMBNAIL)
-                        .distance(TestConstants.DISTANCE_100M)
-                        .momentCount(TestConstants.MOMENT_COUNT_LOW)
-                        .keywords(List.of(TestConstants.CHAIN_STORE_KEYWORD, TestConstants.SPACIOUS_KEYWORD))
-                        .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.CENTER_LNG, TestConstants.CENTER_LAT}))
+                        .id(PlaceTestConstants.PLACE_ID_1)
+                        .name(PlaceTestConstants.STARBUCKS_NAME)
+                        .thumbnail(PlaceTestConstants.STARBUCKS_THUMBNAIL)
+                        .distance(PlaceTestConstants.DISTANCE_100M)
+                        .momentCount(PlaceTestConstants.MOMENT_COUNT_LOW)
+                        .keywords(List.of(PlaceTestConstants.CHAIN_STORE_KEYWORD, PlaceTestConstants.SPACIOUS_KEYWORD))
+                        .location(Map.of("type", "Point", "coordinates", new double[]{PlaceTestConstants.CENTER_LNG, PlaceTestConstants.CENTER_LAT}))
                         .isBookmarked(true)
-                        .similarityScore(TestConstants.SIMILARITY_SCORE_HIGH)
+                        .similarityScore(PlaceTestConstants.SIMILARITY_SCORE_HIGH)
                         .build(),
                 PlaceSearchResponse.PlaceDto.builder()
-                        .id(TestConstants.PLACE_ID_2)
-                        .name(TestConstants.TWOSOME_NAME)
-                        .thumbnail(TestConstants.TEST_THUMBNAIL)
-                        .distance(TestConstants.DISTANCE_200M)
-                        .momentCount(TestConstants.MOMENT_COUNT_LOW)
-                        .keywords(List.of(TestConstants.DESSERT_KEYWORD, TestConstants.CAKE_KEYWORD))
-                        .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.SORT_TEST_PLACE2_LNG, TestConstants.SORT_TEST_PLACE2_LAT}))
+                        .id(PlaceTestConstants.PLACE_ID_2)
+                        .name(PlaceTestConstants.TWOSOME_NAME)
+                        .thumbnail(PlaceTestConstants.TEST_THUMBNAIL)
+                        .distance(PlaceTestConstants.DISTANCE_200M)
+                        .momentCount(PlaceTestConstants.MOMENT_COUNT_LOW)
+                        .keywords(List.of(PlaceTestConstants.DESSERT_KEYWORD, PlaceTestConstants.CAKE_KEYWORD))
+                        .location(Map.of("type", "Point", "coordinates", new double[]{PlaceTestConstants.SORT_TEST_PLACE2_LNG, PlaceTestConstants.SORT_TEST_PLACE2_LAT}))
                         .isBookmarked(false)
-                        .similarityScore(TestConstants.SIMILARITY_SCORE_MEDIUM)
+                        .similarityScore(PlaceTestConstants.SIMILARITY_SCORE_MEDIUM)
                         .build()
         );
 
@@ -417,41 +415,41 @@ class PlaceControllerTest {
         List<PlaceDetailResponse.Schedule> schedules = List.of(
                 PlaceDetailResponse.Schedule.builder()
                         .day("mon")
-                        .hours(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME)
-                        .breakTime(TestConstants.BREAK_START_TIME + "~" + TestConstants.BREAK_END_TIME)
+                        .hours(PlaceTestConstants.OPEN_TIME + "~" + PlaceTestConstants.CLOSE_TIME)
+                        .breakTime(PlaceTestConstants.BREAK_START_TIME + "~" + PlaceTestConstants.BREAK_END_TIME)
                         .build(),
                 PlaceDetailResponse.Schedule.builder()
                         .day("tue")
-                        .hours(TestConstants.OPEN_TIME + "~" + TestConstants.CLOSE_TIME)
+                        .hours(PlaceTestConstants.OPEN_TIME + "~" + PlaceTestConstants.CLOSE_TIME)
                         .breakTime(null)
                         .build()
         );
 
         PlaceDetailResponse.OpeningHours openingHours = PlaceDetailResponse.OpeningHours.builder()
-                .status(TestConstants.BUSINESS_STATUS_OPEN)
+                .status(PlaceTestConstants.BUSINESS_STATUS_OPEN)
                 .schedules(schedules)
                 .build();
 
         List<PlaceDetailResponse.Menu> menu = List.of(
                 PlaceDetailResponse.Menu.builder()
-                        .name(TestConstants.AMERICANO_MENU)
-                        .price(TestConstants.AMERICANO_PRICE)
+                        .name(PlaceTestConstants.AMERICANO_MENU)
+                        .price(PlaceTestConstants.AMERICANO_PRICE)
                         .build(),
                 PlaceDetailResponse.Menu.builder()
-                        .name(TestConstants.LATTE_MENU)
-                        .price(TestConstants.LATTE_PRICE)
+                        .name(PlaceTestConstants.LATTE_MENU)
+                        .price(PlaceTestConstants.LATTE_PRICE)
                         .build()
         );
 
         return PlaceDetailResponse.builder()
                 .id(placeId)
-                .name(TestConstants.TEST_CAFE_NAME)
-                .address(TestConstants.DEFAULT_ROAD_ADDRESS)
-                .thumbnail(TestConstants.DEFAULT_IMAGE_URL)
-                .location(Map.of("type", "Point", "coordinates", new double[]{TestConstants.CENTER_LNG, TestConstants.CENTER_LAT}))
-                .keywords(List.of(TestConstants.COZY_KEYWORD, TestConstants.DELICIOUS_KEYWORD))
-                .description(TestConstants.DEFAULT_DESCRIPTION)
-                .phone(TestConstants.DEFAULT_PHONE)
+                .name(PlaceTestConstants.TEST_CAFE_NAME)
+                .address(PlaceTestConstants.DEFAULT_ROAD_ADDRESS)
+                .thumbnail(PlaceTestConstants.DEFAULT_IMAGE_URL)
+                .location(Map.of("type", "Point", "coordinates", new double[]{PlaceTestConstants.CENTER_LNG, PlaceTestConstants.CENTER_LAT}))
+                .keywords(List.of(PlaceTestConstants.COZY_KEYWORD, PlaceTestConstants.DELICIOUS_KEYWORD))
+                .description(PlaceTestConstants.DEFAULT_DESCRIPTION)
+                .phone(PlaceTestConstants.DEFAULT_PHONE)
                 .isBookmarked(isBookmarked)
                 .openingHours(openingHours)
                 .menu(menu)

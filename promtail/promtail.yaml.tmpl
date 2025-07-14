@@ -1,0 +1,120 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/log/loki/positions.yaml
+
+clients:
+  - url: http://10.30.110.94:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: spring-info-log
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: spring-info-log
+          compose_service: dolpin
+          env: $ENV
+          __path__: /var/log/spring/dolpin-info*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<thread>[^\]]+)\] (?P<level>[A-Z]+)\s+\[(?P<userId>[^\]]*)\] \[(?P<requestId>[^\]]*)\] (?P<logger>[^ ]+) - (?P<msg>.*)'
+      - timestamp:
+          source: ts
+          format: "2006-01-02 15:04:05.000"
+          location: UTC
+      - labels:
+          level:
+          logger:
+      - output:
+          source: msg
+
+  - job_name: spring-error-log
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: spring-error-log
+          compose_service: dolpin
+          env: $ENV
+          __path__: /var/log/spring/dolpin-error*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<thread>[^\]]+)\] (?P<level>[A-Z]+)\s+\[(?P<userId>[^\]]*)\] \[(?P<requestId>[^\]]*)\] (?P<logger>[^ ]+) - (?P<msg>.*)'
+      - timestamp:
+          source: ts
+          format: "2006-01-02 15:04:05.000"
+          location: UTC
+      - labels:
+          level:
+          logger:
+      - output:
+          source: msg
+
+  - job_name: spring-warn-log
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: spring-warn-log
+          compose_service: dolpin
+          env: $ENV
+          __path__: /var/log/spring/dolpin-warn*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<thread>[^\]]+)\] (?P<level>[A-Z]+)\s+\[(?P<userId>[^\]]*)\] \[(?P<requestId>[^\]]*)\] (?P<logger>[^ ]+) - (?P<msg>.*)'
+      - timestamp:
+          source: ts
+          format: "2006-01-02 15:04:05.000"
+          location: UTC
+      - labels:
+          level:
+          logger:
+      - output:
+          source: msg
+
+  - job_name: spring-debug-log
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: spring-debug-log
+          compose_service: dolpin
+          env: $ENV
+          __path__: /var/log/spring/dolpin-debug*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<thread>[^\]]+)\] (?P<level>[A-Z]+)\s+\[(?P<userId>[^\]]*)\] \[(?P<requestId>[^\]]*)\] (?P<logger>[^ ]+) - (?P<msg>.*)'
+      - timestamp:
+          source: ts
+          format: "2006-01-02 15:04:05.000"
+          location: UTC
+      - labels:
+          level:
+          logger:
+      - output:
+          source: msg
+
+  - job_name: spring-all-log
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: spring-all-log
+          compose_service: dolpin
+          env: $ENV
+          __path__: /var/log/spring/dolpin-all*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<thread>[^\]]+)\] (?P<level>[A-Z]+)\s+\[(?P<userId>[^\]]*)\] \[(?P<requestId>[^\]]*)\] (?P<logger>[^ ]+) - (?P<msg>.*)'
+      - timestamp:
+          source: ts
+          format: "2006-01-02 15:04:05.000"
+          location: UTC
+      - labels:
+          level:
+          logger:
+      - output:
+          source: msg
