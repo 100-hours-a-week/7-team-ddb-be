@@ -16,6 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,7 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,11 +101,10 @@ class AiQuerySearchStrategyTest {
     void search_WithRecommendations_ReturnsSuccessfully() {
         // given
         PlaceAiResponse aiResponse = createAiResponseWithRecommendations();
-        List<PlaceWithDistance> placesWithDistance = createPlacesWithDistance(); // 2개 반환
+        List<PlaceWithDistance> placesWithDistance = createPlacesWithDistance();
         List<Place> places = createPlaces();
         List<Object[]> momentCountResults = createMomentCountResults();
         Map<Long, Boolean> bookmarkStatusMap = Map.of(1L, true, 2L, false);
-        PlaceSearchResponse.PlaceDto expectedDto = createExpectedDto();
 
         given(placeAiClient.recommendPlacesAsync(testContext.getQuery()))
                 .willReturn(Mono.just(aiResponse));
@@ -115,18 +116,21 @@ class AiQuerySearchStrategyTest {
                 .willReturn(momentCountResults);
         given(bookmarkQueryService.getBookmarkStatusMap(anyLong(), anyList()))
                 .willReturn(bookmarkStatusMap);
-        given(placeDtoFactory.createAiSearchDto(any(Place.class), any(Double.class), any(List.class), any(Map.class), any(Map.class)))
-                .willReturn(expectedDto);
 
         // when
         List<PlaceSearchResponse.PlaceDto> result = aiQuerySearchStrategy.search(testContext).block();
 
         // then
         assertThat(result).hasSize(2);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+        assertThat(result.get(0).getName()).isEqualTo("테스트 파스타집");
+        assertThat(result.get(0).getSimilarityScore()).isEqualTo(0.9);
 
         verify(placeAiClient).recommendPlacesAsync(testContext.getQuery());
-        // 2번 호출되므로 times(2)로 수정
-        verify(placeDtoFactory, times(2)).createAiSearchDto(any(Place.class), any(Double.class), any(List.class), any(Map.class), any(Map.class));
+        verify(placeRepository).findPlacesWithinRadiusByIds(anyList(), anyDouble(), anyDouble(), anyDouble());
+        verify(placeRepository).findByIdsWithKeywords(anyList());
+        verify(momentRepository).countPublicMomentsByPlaceIds(anyList());
+        verify(bookmarkQueryService).getBookmarkStatusMap(anyLong(), anyList());
     }
 
     @Test
@@ -138,7 +142,6 @@ class AiQuerySearchStrategyTest {
         List<Place> places = createPlaces();
         List<Object[]> momentCountResults = createMomentCountResults();
         Map<Long, Boolean> bookmarkStatusMap = Map.of(1L, true, 2L, false);
-        PlaceSearchResponse.PlaceDto expectedDto = createExpectedDto();
 
         given(placeAiClient.recommendPlacesAsync(testContext.getQuery()))
                 .willReturn(Mono.just(aiResponse));
@@ -151,20 +154,20 @@ class AiQuerySearchStrategyTest {
         given(bookmarkQueryService.getBookmarkStatusMap(anyLong(), anyList()))
                 .willReturn(bookmarkStatusMap);
 
-        // 🚨 여기가 문제! createAiSearchDto가 아니라 createDistanceBasedDto를 사용해야 함
-        given(placeDtoFactory.createDistanceBasedDto(any(Place.class), any(Double.class), any(Map.class), any(Map.class)))
-                .willReturn(expectedDto);
-
         // when
         List<PlaceSearchResponse.PlaceDto> result = aiQuerySearchStrategy.search(testContext).block();
 
         // then
         assertThat(result).isNotEmpty();
         assertThat(result).hasSize(2);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+        assertThat(result.get(0).getName()).isEqualTo("테스트 파스타집");
 
         verify(placeAiClient).recommendPlacesAsync(testContext.getQuery());
         verify(placeRepository).findPlacesByCategoryWithinRadius(eq("이탈리안"), anyDouble(), anyDouble(), anyDouble());
-        verify(placeDtoFactory, times(2)).createDistanceBasedDto(any(Place.class), any(Double.class), any(Map.class), any(Map.class));
+        verify(placeRepository).findByIdsWithKeywords(anyList());
+        verify(momentRepository).countPublicMomentsByPlaceIds(anyList());
+        verify(bookmarkQueryService).getBookmarkStatusMap(anyLong(), anyList());
     }
 
     @Test
@@ -185,7 +188,7 @@ class AiQuerySearchStrategyTest {
         // then
         assertThat(result).isEmpty();
 
-        verifyNoInteractions(placeRepository, momentRepository, bookmarkQueryService, placeDtoFactory);
+        verifyNoInteractions(placeRepository, momentRepository, bookmarkQueryService);
     }
 
     @Test
@@ -255,7 +258,7 @@ class AiQuerySearchStrategyTest {
 
     private PlaceAiResponse createAiResponseWithCategory() {
         return PlaceAiResponse.builder()
-                .recommendations(null)
+                .recommendations(Collections.emptyList())
                 .placeCategory("이탈리안")
                 .build();
     }
@@ -282,16 +285,24 @@ class AiQuerySearchStrategyTest {
     }
 
     private List<Place> createPlaces() {
+        GeometryFactory geometryFactory = new GeometryFactory();
+        Point location1 = geometryFactory.createPoint(new Coordinate(126.9780, 37.5665));
+        Point location2 = geometryFactory.createPoint(new Coordinate(126.9790, 37.5675));
+
         Place place1 = Place.builder()
                 .id(1L)
                 .name("테스트 파스타집")
                 .imageUrl("image1.jpg")
+                .location(location1)
+                .keywords(new ArrayList<>())
                 .build();
 
         Place place2 = Place.builder()
                 .id(2L)
                 .name("이탈리안 레스토랑")
                 .imageUrl("image2.jpg")
+                .location(location2)
+                .keywords(new ArrayList<>())
                 .build();
 
         return Arrays.asList(place1, place2);
