@@ -1,4 +1,4 @@
-package com.dolpin.domain.place.service.query.strategy;
+package com.dolpin.domain.place.service.strategy;
 
 import com.dolpin.domain.moment.repository.MomentRepository;
 import com.dolpin.domain.place.client.PlaceAiClient;
@@ -7,312 +7,247 @@ import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.dto.response.PlaceWithDistance;
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.repository.PlaceRepository;
-import com.dolpin.domain.place.service.factory.PlaceDtoFactory;
 import com.dolpin.domain.place.service.query.PlaceBookmarkQueryService;
-import com.dolpin.domain.place.service.strategy.AiQuerySearchStrategy;
-import com.dolpin.domain.place.service.strategy.PlaceSearchContext;
-import com.dolpin.domain.place.service.strategy.PlaceSearchType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.dolpin.global.util.StringUtils;
+import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Point;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
+import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verifyNoInteractions;
+@Slf4j
+@Component
+public class AiQuerySearchStrategy implements PlaceSearchStrategy {
 
-@ExtendWith(MockitoExtension.class)
-@DisplayName("AiQuerySearchStrategy 테스트")
-class AiQuerySearchStrategyTest {
+    private final PlaceAiClient placeAiClient;
+    private final PlaceRepository placeRepository;
+    private final MomentRepository momentRepository;
+    private final PlaceBookmarkQueryService bookmarkQueryService;
 
-    @InjectMocks
-    private AiQuerySearchStrategy aiQuerySearchStrategy;
-
-    @Mock
-    private PlaceAiClient placeAiClient;
-
-    @Mock
-    private PlaceRepository placeRepository;
-
-    @Mock
-    private MomentRepository momentRepository;
-
-    @Mock
-    private PlaceBookmarkQueryService bookmarkQueryService;
-
-    @Mock
-    private PlaceDtoFactory placeDtoFactory;
-
-    private PlaceSearchContext testContext;
-
-    @BeforeEach
-    void setUp() {
-        testContext = PlaceSearchContext.builder()
-                .query("맛있는 파스타")
-                .lat(37.5665)
-                .lng(126.9780)
-                .userId(1L)
-                .build();
+    public AiQuerySearchStrategy(PlaceAiClient placeAiClient,
+                                 PlaceRepository placeRepository,
+                                 MomentRepository momentRepository,
+                                 PlaceBookmarkQueryService bookmarkQueryService) {
+        this.placeAiClient = placeAiClient;
+        this.placeRepository = placeRepository;
+        this.momentRepository = momentRepository;
+        this.bookmarkQueryService = bookmarkQueryService;
     }
 
-    @Test
-    @DisplayName("지원하는 검색 타입 확인 - AI_QUERY")
-    void supports_AiQueryType_ReturnsTrue() {
-        // when
-        boolean supports = aiQuerySearchStrategy.supports(PlaceSearchType.AI_QUERY);
-
-        // then
-        assertThat(supports).isTrue();
+    @Override
+    public boolean supports(PlaceSearchType searchType) {
+        return searchType == PlaceSearchType.AI_QUERY;
     }
 
-    @Test
-    @DisplayName("지원하지 않는 검색 타입 확인 - CATEGORY")
-    void supports_CategoryType_ReturnsFalse() {
-        // when
-        boolean supports = aiQuerySearchStrategy.supports(PlaceSearchType.CATEGORY);
-
-        // then
-        assertThat(supports).isFalse();
+    @Override
+    public int getPriority() {
+        return 1; // 높은 우선순위
     }
 
-    @Test
-    @DisplayName("우선순위 확인")
-    void getPriority_ReturnsCorrectValue() {
-        // when
-        int priority = aiQuerySearchStrategy.getPriority();
+    @Override
+    public Mono<List<PlaceSearchResponse.PlaceDto>> search(PlaceSearchContext context) {
+        log.debug("AI 검색 시작: query={}, lat={}, lng={}",
+                context.getQuery(), context.getLat(), context.getLng());
 
-        // then
-        assertThat(priority).isEqualTo(1);
+        return callAiService(context)
+                .flatMap(aiResponse -> processAiResponse(aiResponse, context))
+                .doOnSuccess(result -> log.debug("AI 검색 완료: 결과 수={}", result.size()))
+                .doOnError(error -> log.error("AI 검색 실패: {}", error.getMessage()));
     }
 
-    @Test
-    @DisplayName("AI 검색 성공 - 추천 결과 있음")
-    void search_WithRecommendations_ReturnsSuccessfully() {
-        // given
-        PlaceAiResponse aiResponse = createAiResponseWithRecommendations();
-        List<PlaceWithDistance> placesWithDistance = createPlacesWithDistance(); // 2개 반환
-        List<Place> places = createPlaces();
-        List<Object[]> momentCountResults = createMomentCountResults();
-        Map<Long, Boolean> bookmarkStatusMap = Map.of(1L, true, 2L, false);
-        PlaceSearchResponse.PlaceDto expectedDto = createExpectedDto();
-
-        given(placeAiClient.recommendPlacesAsync(testContext.getQuery()))
-                .willReturn(Mono.just(aiResponse));
-        given(placeRepository.findPlacesWithinRadiusByIds(anyList(), anyDouble(), anyDouble(), anyDouble()))
-                .willReturn(placesWithDistance);
-        given(placeRepository.findByIdsWithKeywords(anyList()))
-                .willReturn(places);
-        given(momentRepository.countPublicMomentsByPlaceIds(anyList()))
-                .willReturn(momentCountResults);
-        given(bookmarkQueryService.getBookmarkStatusMap(anyLong(), anyList()))
-                .willReturn(bookmarkStatusMap);
-        given(placeDtoFactory.createAiSearchDto(any(Place.class), any(Double.class), any(List.class), any(Map.class), any(Map.class)))
-                .willReturn(expectedDto);
-
-        // when
-        List<PlaceSearchResponse.PlaceDto> result = aiQuerySearchStrategy.search(testContext).block();
-
-        // then
-        assertThat(result).hasSize(2);
-
-        verify(placeAiClient).recommendPlacesAsync(testContext.getQuery());
-        // 2번 호출되므로 times(2)로 수정
-        verify(placeDtoFactory, times(2)).createAiSearchDto(any(Place.class), any(Double.class), any(List.class), any(Map.class), any(Map.class));
-    }
-
-    @Test
-    @DisplayName("AI 검색 - 카테고리 폴백")
-    void search_WithCategoryFallback_ReturnsSuccessfully() {
-        // given
-        PlaceAiResponse aiResponse = createAiResponseWithCategory();
-        List<PlaceWithDistance> placesWithDistance = createPlacesWithDistance();
-        List<Place> places = createPlaces();
-        List<Object[]> momentCountResults = createMomentCountResults();
-        Map<Long, Boolean> bookmarkStatusMap = Map.of(1L, true, 2L, false);
-        PlaceSearchResponse.PlaceDto expectedDto = createExpectedDto();
-
-        given(placeAiClient.recommendPlacesAsync(testContext.getQuery()))
-                .willReturn(Mono.just(aiResponse));
-        given(placeRepository.findPlacesByCategoryWithinRadius(anyString(), anyDouble(), anyDouble(), anyDouble()))
-                .willReturn(placesWithDistance);
-        given(placeRepository.findByIdsWithKeywords(anyList()))
-                .willReturn(places);
-        given(momentRepository.countPublicMomentsByPlaceIds(anyList()))
-                .willReturn(momentCountResults);
-        given(bookmarkQueryService.getBookmarkStatusMap(anyLong(), anyList()))
-                .willReturn(bookmarkStatusMap);
-
-        // 🚨 여기가 문제! createAiSearchDto가 아니라 createDistanceBasedDto를 사용해야 함
-        given(placeDtoFactory.createDistanceBasedDto(any(Place.class), any(Double.class), any(Map.class), any(Map.class)))
-                .willReturn(expectedDto);
-
-        // when
-        List<PlaceSearchResponse.PlaceDto> result = aiQuerySearchStrategy.search(testContext).block();
-
-        // then
-        assertThat(result).isNotEmpty();
-        assertThat(result).hasSize(2);
-
-        verify(placeAiClient).recommendPlacesAsync(testContext.getQuery());
-        verify(placeRepository).findPlacesByCategoryWithinRadius(eq("이탈리안"), anyDouble(), anyDouble(), anyDouble());
-        verify(placeDtoFactory, times(2)).createDistanceBasedDto(any(Place.class), any(Double.class), any(Map.class), any(Map.class));
-    }
-
-    @Test
-    @DisplayName("AI 검색 - 빈 결과")
-    void search_WithEmptyResult_ReturnsEmptyList() {
-        // given
-        PlaceAiResponse emptyResponse = PlaceAiResponse.builder()
-                .recommendations(Collections.emptyList())
-                .placeCategory("")
-                .build();
-
-        given(placeAiClient.recommendPlacesAsync(testContext.getQuery()))
-                .willReturn(Mono.just(emptyResponse));
-
-        // when
-        List<PlaceSearchResponse.PlaceDto> result = aiQuerySearchStrategy.search(testContext).block();
-
-        // then
-        assertThat(result).isEmpty();
-
-        verifyNoInteractions(placeRepository, momentRepository, bookmarkQueryService, placeDtoFactory);
-    }
-
-    @Test
-    @DisplayName("DevToken이 있는 경우 - 토큰과 함께 AI 클라이언트 호출")
-    void search_WithDevToken_CallsAiClientWithToken() {
-        // given
-        String devToken = "test-dev-token";
-        PlaceSearchContext contextWithToken = PlaceSearchContext.builder()
-                .query("테스트 쿼리")
-                .lat(37.5665)
-                .lng(126.9780)
-                .userId(1L)
-                .devToken(devToken)
-                .build();
-
-        PlaceAiResponse aiResponse = createAiResponseWithRecommendations();
-
-        given(placeAiClient.recommendPlacesAsync(contextWithToken.getQuery(), devToken))
-                .willReturn(Mono.just(aiResponse));
-        given(placeRepository.findPlacesWithinRadiusByIds(anyList(), anyDouble(), anyDouble(), anyDouble()))
-                .willReturn(Collections.emptyList());
-
-        // when
-        List<PlaceSearchResponse.PlaceDto> result = aiQuerySearchStrategy.search(contextWithToken).block();
-
-        // then
-        assertThat(result).isEmpty();
-
-        verify(placeAiClient).recommendPlacesAsync(contextWithToken.getQuery(), devToken);
-    }
-
-    @Test
-    @DisplayName("AI 클라이언트 에러 - 에러 전파")
-    void search_AiClientError_PropagatesError() {
-        // given
-        RuntimeException expectedException = new RuntimeException("AI 서비스 오류");
-        given(placeAiClient.recommendPlacesAsync(testContext.getQuery()))
-                .willReturn(Mono.error(expectedException));
-
-        // when & then
-        try {
-            aiQuerySearchStrategy.search(testContext).block();
-        } catch (RuntimeException e) {
-            assertThat(e.getMessage()).contains("AI 서비스 오류");
+    private Mono<PlaceAiResponse> callAiService(PlaceSearchContext context) {
+        if (context.getDevToken() != null) {
+            return placeAiClient.recommendPlacesAsync(
+                    context.getQuery(), context.getDevToken());
+        } else {
+            return placeAiClient.recommendPlacesAsync(
+                    context.getQuery());
         }
     }
 
-    private PlaceAiResponse createAiResponseWithRecommendations() {
-        List<PlaceAiResponse.PlaceRecommendation> recommendations = Arrays.asList(
-                PlaceAiResponse.PlaceRecommendation.builder()
-                        .id(1L)
-                        .similarityScore(0.9)
-                        .keyword(Arrays.asList("파스타", "맛집"))
-                        .build(),
-                PlaceAiResponse.PlaceRecommendation.builder()
-                        .id(2L)
-                        .similarityScore(0.8)
-                        .keyword(Arrays.asList("이탈리안", "레스토랑"))
-                        .build()
-        );
+    private Mono<List<PlaceSearchResponse.PlaceDto>> processAiResponse(
+            PlaceAiResponse aiResponse, PlaceSearchContext context) {
 
-        return PlaceAiResponse.builder()
-                .recommendations(recommendations)
-                .placeCategory(null)
-                .build();
+        return Mono.fromCallable(() -> {
+            if (aiResponse.getRecommendations() != null && !aiResponse.getRecommendations().isEmpty()) {
+                // AI가 특정 장소들을 추천한 경우
+                return processAiRecommendations(aiResponse, context);
+            } else if (StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+                // AI가 카테고리를 추천한 경우
+                return processCategoryFallback(aiResponse.getPlaceCategory(), context);
+            } else {
+                return Collections.<PlaceSearchResponse.PlaceDto>emptyList();
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    private PlaceAiResponse createAiResponseWithCategory() {
-        return PlaceAiResponse.builder()
-                .recommendations(null)
-                .placeCategory("이탈리안")
-                .build();
+    private List<PlaceSearchResponse.PlaceDto> processAiRecommendations(
+            PlaceAiResponse aiResponse, PlaceSearchContext context) {
+
+        List<Long> placeIds = aiResponse.getRecommendations().stream()
+                .map(PlaceAiResponse.PlaceRecommendation::getId)
+                .collect(Collectors.toList());
+
+        Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
+                .collect(Collectors.toMap(
+                        PlaceAiResponse.PlaceRecommendation::getId,
+                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore
+                ));
+
+        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
+                .collect(Collectors.toMap(
+                        PlaceAiResponse.PlaceRecommendation::getId,
+                        PlaceAiResponse.PlaceRecommendation::getKeyword
+                ));
+
+        // DB에서 반경 내 장소 정보 조회
+        List<PlaceWithDistance> placesWithDistance = placeRepository.findPlacesWithinRadiusByIds(
+                placeIds, context.getLat(), context.getLng(), 1000.0);
+
+        if (placesWithDistance.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Place 객체를 따로 조회해야 할 수도 있음 (키워드 정보 포함)
+        List<Long> foundPlaceIds = placesWithDistance.stream()
+                .map(PlaceWithDistance::getId)
+                .collect(Collectors.toList());
+
+        List<Place> places = placeRepository.findByIdsWithKeywords(foundPlaceIds);
+        Map<Long, Place> placeMap = places.stream()
+                .collect(Collectors.toMap(Place::getId, place -> place));
+
+        Map<Long, Long> momentCountMap = getMomentCountMap(foundPlaceIds);
+        Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService
+                .getBookmarkStatusMap(context.getUserId(), foundPlaceIds);
+
+        // DTO 변환
+        return placesWithDistance.stream()
+                .map(placeWithDistance -> {
+                    Place place = placeMap.get(placeWithDistance.getId());
+                    if (place == null) {
+                        return null;
+                    }
+                    return convertToPlaceDto(
+                            place,
+                            placeWithDistance.getDistance(),
+                            similarityScores.get(place.getId()),
+                            keywordsByPlaceId.get(place.getId()),
+                            momentCountMap,
+                            bookmarkStatusMap.getOrDefault(place.getId(), false)
+                    );
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
-    private List<PlaceWithDistance> createPlacesWithDistance() {
-        return Arrays.asList(
-                createPlaceWithDistance(1L, "테스트 파스타집", 100.0),
-                createPlaceWithDistance(2L, "이탈리안 레스토랑", 200.0)
-        );
+    private List<PlaceSearchResponse.PlaceDto> processCategoryFallback(
+            String category, PlaceSearchContext context) {
+
+        log.debug("AI가 카테고리 추천: {}", category);
+
+        // 카테고리 검색으로 폴백 (기존 로직 재사용)
+        List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
+                category, context.getLat(), context.getLng(), 1000.0);
+
+        if (searchResults.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> placeIds = searchResults.stream()
+                .map(PlaceWithDistance::getId)
+                .collect(Collectors.toList());
+
+        Map<Long, Long> momentCountMap = getMomentCountMap(placeIds);
+        Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService
+                .getBookmarkStatusMap(context.getUserId(), placeIds);
+
+        List<Place> placesWithKeywords = placeRepository.findByIdsWithKeywords(placeIds);
+        Map<Long, Place> placeMap = placesWithKeywords.stream()
+                .collect(Collectors.toMap(Place::getId, place -> place));
+
+        return searchResults.stream()
+                .map(placeWithDistance -> {
+                    Place place = placeMap.get(placeWithDistance.getId());
+                    return convertToPlaceDto(
+                            place,
+                            placeWithDistance.getDistance(),
+                            null, // AI similarity score 없음
+                            null, // AI keywords 없음
+                            momentCountMap,
+                            bookmarkStatusMap.getOrDefault(place.getId(), false)
+                    );
+                })
+                .collect(Collectors.toList());
     }
 
-    private PlaceWithDistance createPlaceWithDistance(Long id, String name, Double distance) {
-        return new PlaceWithDistance() {
-            @Override public Long getId() { return id; }
-            @Override public String getName() { return name; }
-            @Override public String getCategory() { return "이탈리안"; }
-            @Override public String getRoadAddress() { return "테스트 도로명 주소"; }
-            @Override public String getLotAddress() { return "테스트 지번 주소"; }
-            @Override public Double getDistance() { return distance; }
-            @Override public Double getLongitude() { return 126.9780; }
-            @Override public Double getLatitude() { return 37.5665; }
-            @Override public String getImageUrl() { return "image" + id + ".jpg"; }
-        };
+    // TODO: 다음 단계에서 별도 클래스로 분리 예정
+    private Map<Long, Long> getMomentCountMap(List<Long> placeIds) {
+        if (placeIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        List<Object[]> results = momentRepository.countPublicMomentsByPlaceIds(placeIds);
+        Map<Long, Long> momentCountMap = new HashMap<>();
+
+        for (Object[] result : results) {
+            Long placeId = (Long) result[0];
+            Long count = (Long) result[1];
+            momentCountMap.put(placeId, count);
+        }
+
+        return momentCountMap;
     }
 
-    private List<Place> createPlaces() {
-        Place place1 = Place.builder()
-                .id(1L)
-                .name("테스트 파스타집")
-                .imageUrl("image1.jpg")
-                .build();
+    // TODO: 다음 단계에서 Factory 패턴으로 분리 예정
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance,
+                                                           Double similarityScore, List<String> aiKeywords,
+                                                           Map<Long, Long> momentCountMap, Boolean isBookmarked) {
+        // 기존 convertToPlaceDto 로직 그대로 사용
+        Double convertedDistance = convertDistance(distance);
+        Long momentCount = momentCountMap.getOrDefault(place.getId(), 0L);
 
-        Place place2 = Place.builder()
-                .id(2L)
-                .name("이탈리안 레스토랑")
-                .imageUrl("image2.jpg")
-                .build();
+        List<String> keywords;
+        if (aiKeywords != null && !aiKeywords.isEmpty()) {
+            keywords = aiKeywords;
+        } else {
+            keywords = place.getKeywords().stream()
+                    .map(pk -> pk.getKeyword().getKeyword())
+                    .collect(Collectors.toList());
+        }
 
-        return Arrays.asList(place1, place2);
-    }
+        Point location = place.getLocation();
+        Map<String, Object> locationMap = new HashMap<>();
+        locationMap.put("type", "Point");
+        locationMap.put("coordinates", new double[]{location.getX(), location.getY()});
 
-    private List<Object[]> createMomentCountResults() {
-        return Arrays.asList(
-                new Object[]{1L, 5L},
-                new Object[]{2L, 3L}
-        );
-    }
-
-    private PlaceSearchResponse.PlaceDto createExpectedDto() {
         return PlaceSearchResponse.PlaceDto.builder()
-                .id(1L)
-                .name("테스트 파스타집")
-                .thumbnail("image1.jpg")
-                .distance(100.0)
-                .momentCount(5L)
-                .isBookmarked(true)
-                .similarityScore(0.9)
+                .id(place.getId())
+                .name(place.getName())
+                .thumbnail(place.getImageUrl())
+                .distance(convertedDistance)
+                .momentCount(momentCount)
+                .keywords(keywords)
+                .location(locationMap)
+                .isBookmarked(isBookmarked)
+                .similarityScore(similarityScore)
                 .build();
+    }
+
+    private Double convertDistance(Double distanceInMeters) {
+        if (distanceInMeters == null) return 0.0;
+
+        if (distanceInMeters < 1000) {
+            return (double) Math.round(distanceInMeters);
+        } else {
+            return BigDecimal.valueOf(distanceInMeters / 1000.0)
+                    .setScale(1, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
     }
 }
