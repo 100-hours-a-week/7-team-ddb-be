@@ -7,14 +7,16 @@ import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
 import com.dolpin.domain.place.dto.response.PlaceWithDistance;
 import com.dolpin.domain.place.entity.Place;
 import com.dolpin.domain.place.repository.PlaceRepository;
-import com.dolpin.domain.place.service.factory.PlaceDtoFactory;
 import com.dolpin.domain.place.service.query.PlaceBookmarkQueryService;
 import com.dolpin.global.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,14 +28,15 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
     private final PlaceRepository placeRepository;
     private final MomentRepository momentRepository;
     private final PlaceBookmarkQueryService bookmarkQueryService;
-    private final PlaceDtoFactory placeDtoFactory; // Factory 추가
 
-    public AiQuerySearchStrategy(PlaceAiClient placeAiClient, PlaceRepository placeRepository, MomentRepository momentRepository, PlaceBookmarkQueryService bookmarkQueryService, PlaceDtoFactory placeDtoFactory) {
+    public AiQuerySearchStrategy(PlaceAiClient placeAiClient,
+                                 PlaceRepository placeRepository,
+                                 MomentRepository momentRepository,
+                                 PlaceBookmarkQueryService bookmarkQueryService) {
         this.placeAiClient = placeAiClient;
         this.placeRepository = placeRepository;
         this.momentRepository = momentRepository;
         this.bookmarkQueryService = bookmarkQueryService;
-        this.placeDtoFactory = placeDtoFactory;
     }
 
     @Override
@@ -43,23 +46,27 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
 
     @Override
     public int getPriority() {
-        return 1;
+        return 1; // 높은 우선순위
     }
 
     @Override
     public Mono<List<PlaceSearchResponse.PlaceDto>> search(PlaceSearchContext context) {
-        log.debug("AI 검색 시작: query={}", context.getQuery());
+        log.debug("AI 검색 시작: query={}, lat={}, lng={}",
+                context.getQuery(), context.getLat(), context.getLng());
 
         return callAiService(context)
                 .flatMap(aiResponse -> processAiResponse(aiResponse, context))
-                .doOnSuccess(result -> log.debug("AI 검색 완료: 결과 수={}", result.size()));
+                .doOnSuccess(result -> log.debug("AI 검색 완료: 결과 수={}", result.size()))
+                .doOnError(error -> log.error("AI 검색 실패: {}", error.getMessage()));
     }
 
     private Mono<PlaceAiResponse> callAiService(PlaceSearchContext context) {
         if (context.getDevToken() != null) {
-            return placeAiClient.recommendPlacesAsync(context.getQuery(), context.getDevToken());
+            return placeAiClient.recommendPlacesAsync(
+                    context.getQuery(), context.getDevToken());
         } else {
-            return placeAiClient.recommendPlacesAsync(context.getQuery());
+            return placeAiClient.recommendPlacesAsync(
+                    context.getQuery());
         }
     }
 
@@ -68,8 +75,10 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
 
         return Mono.fromCallable(() -> {
             if (aiResponse.getRecommendations() != null && !aiResponse.getRecommendations().isEmpty()) {
+                // AI가 특정 장소들을 추천한 경우
                 return processAiRecommendations(aiResponse, context);
             } else if (StringUtils.isNotBlank(aiResponse.getPlaceCategory())) {
+                // AI가 카테고리를 추천한 경우
                 return processCategoryFallback(aiResponse.getPlaceCategory(), context);
             } else {
                 return Collections.<PlaceSearchResponse.PlaceDto>emptyList();
@@ -80,37 +89,23 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
     private List<PlaceSearchResponse.PlaceDto> processAiRecommendations(
             PlaceAiResponse aiResponse, PlaceSearchContext context) {
 
-        // null 값 필터링된 추천 목록만 사용
-        List<PlaceAiResponse.PlaceRecommendation> validRecommendations = aiResponse.getRecommendations().stream()
-                .filter(Objects::nonNull)
-                .filter(rec -> rec.getId() != null)
-                .collect(Collectors.toList());
-
-        if (validRecommendations.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<Long> placeIds = validRecommendations.stream()
+        List<Long> placeIds = aiResponse.getRecommendations().stream()
                 .map(PlaceAiResponse.PlaceRecommendation::getId)
                 .collect(Collectors.toList());
 
-        // null 안전성을 위한 Map 생성
-        Map<Long, Double> similarityScores = validRecommendations.stream()
-                .filter(rec -> rec.getSimilarityScore() != null)
+        Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore,
-                        (existing, replacement) -> existing
+                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore
                 ));
 
-        Map<Long, List<String>> keywordsByPlaceId = validRecommendations.stream()
-                .filter(rec -> rec.getKeyword() != null && !rec.getKeyword().isEmpty())
+        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getKeyword,
-                        (existing, replacement) -> existing
+                        PlaceAiResponse.PlaceRecommendation::getKeyword
                 ));
 
+        // DB에서 반경 내 장소 정보 조회
         List<PlaceWithDistance> placesWithDistance = placeRepository.findPlacesWithinRadiusByIds(
                 placeIds, context.getLat(), context.getLng(), 1000.0);
 
@@ -118,6 +113,7 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
             return Collections.emptyList();
         }
 
+        // Place 객체를 따로 조회해야 할 수도 있음 (키워드 정보 포함)
         List<Long> foundPlaceIds = placesWithDistance.stream()
                 .map(PlaceWithDistance::getId)
                 .collect(Collectors.toList());
@@ -130,26 +126,21 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
         Map<Long, Boolean> bookmarkStatusMap = bookmarkQueryService
                 .getBookmarkStatusMap(context.getUserId(), foundPlaceIds);
 
-        // Factory를 사용한 DTO 생성
+        // DTO 변환
         return placesWithDistance.stream()
                 .map(placeWithDistance -> {
                     Place place = placeMap.get(placeWithDistance.getId());
                     if (place == null) {
                         return null;
                     }
-
-                    try {
-                        return placeDtoFactory.createAiSearchDto(
-                                place,
-                                similarityScores.get(place.getId()),
-                                keywordsByPlaceId.get(place.getId()),
-                                momentCountMap,
-                                bookmarkStatusMap
-                        );
-                    } catch (Exception e) {
-                        log.error("DTO 생성 실패: placeId={}, error={}", place.getId(), e.getMessage());
-                        return null;
-                    }
+                    return convertToPlaceDto(
+                            place,
+                            placeWithDistance.getDistance(),
+                            similarityScores.get(place.getId()),
+                            keywordsByPlaceId.get(place.getId()),
+                            momentCountMap,
+                            bookmarkStatusMap.getOrDefault(place.getId(), false)
+                    );
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
@@ -160,6 +151,7 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
 
         log.debug("AI가 카테고리 추천: {}", category);
 
+        // 카테고리 검색으로 폴백 (기존 로직 재사용)
         List<PlaceWithDistance> searchResults = placeRepository.findPlacesByCategoryWithinRadius(
                 category, context.getLat(), context.getLng(), 1000.0);
 
@@ -179,25 +171,22 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
         Map<Long, Place> placeMap = placesWithKeywords.stream()
                 .collect(Collectors.toMap(Place::getId, place -> place));
 
-        // Factory를 사용한 DTO 생성
         return searchResults.stream()
                 .map(placeWithDistance -> {
                     Place place = placeMap.get(placeWithDistance.getId());
-                    if (place == null) {
-                        return null;
-                    }
-
-                    return placeDtoFactory.createDistanceBasedDto(
+                    return convertToPlaceDto(
                             place,
                             placeWithDistance.getDistance(),
+                            null, // AI similarity score 없음
+                            null, // AI keywords 없음
                             momentCountMap,
-                            bookmarkStatusMap
+                            bookmarkStatusMap.getOrDefault(place.getId(), false)
                     );
                 })
-                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
+    // TODO: 다음 단계에서 별도 클래스로 분리 예정
     private Map<Long, Long> getMomentCountMap(List<Long> placeIds) {
         if (placeIds.isEmpty()) {
             return new HashMap<>();
@@ -213,5 +202,52 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
         }
 
         return momentCountMap;
+    }
+
+    // TODO: 다음 단계에서 Factory 패턴으로 분리 예정
+    private PlaceSearchResponse.PlaceDto convertToPlaceDto(Place place, Double distance,
+                                                           Double similarityScore, List<String> aiKeywords,
+                                                           Map<Long, Long> momentCountMap, Boolean isBookmarked) {
+        // 기존 convertToPlaceDto 로직 그대로 사용
+        Double convertedDistance = convertDistance(distance);
+        Long momentCount = momentCountMap.getOrDefault(place.getId(), 0L);
+
+        List<String> keywords;
+        if (aiKeywords != null && !aiKeywords.isEmpty()) {
+            keywords = aiKeywords;
+        } else {
+            keywords = place.getKeywords().stream()
+                    .map(pk -> pk.getKeyword().getKeyword())
+                    .collect(Collectors.toList());
+        }
+
+        Point location = place.getLocation();
+        Map<String, Object> locationMap = new HashMap<>();
+        locationMap.put("type", "Point");
+        locationMap.put("coordinates", new double[]{location.getX(), location.getY()});
+
+        return PlaceSearchResponse.PlaceDto.builder()
+                .id(place.getId())
+                .name(place.getName())
+                .thumbnail(place.getImageUrl())
+                .distance(convertedDistance)
+                .momentCount(momentCount)
+                .keywords(keywords)
+                .location(locationMap)
+                .isBookmarked(isBookmarked)
+                .similarityScore(similarityScore)
+                .build();
+    }
+
+    private Double convertDistance(Double distanceInMeters) {
+        if (distanceInMeters == null) return 0.0;
+
+        if (distanceInMeters < 1000) {
+            return (double) Math.round(distanceInMeters);
+        } else {
+            return BigDecimal.valueOf(distanceInMeters / 1000.0)
+                    .setScale(1, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
     }
 }

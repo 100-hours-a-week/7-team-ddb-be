@@ -170,4 +170,17 @@ public class MomentCacheService {
             log.warn("조회 수 배치 캐시 실패: count={}", viewCounts.size(), e);
         }
     }
+
+    /**
+     * 댓글 수 캐시 무효화
+     */
+    public void invalidateCommentCount(Long momentId) {
+        String key = CacheKeyUtil.commentCount(momentId);
+        try {
+            redisService.delete(key);
+            log.debug("댓글 수 캐시 무효화: momentId={}", momentId);
+        } catch (Exception e) {
+            log.warn("댓글 수 캐시 무효화 실패: momentId={}", momentId, e);
+        }
+    }
 }

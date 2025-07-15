@@ -5,6 +5,7 @@ import com.dolpin.domain.comment.entity.Comment;
 import com.dolpin.domain.comment.repository.CommentRepository;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.repository.MomentRepository;
+import com.dolpin.domain.moment.service.cache.MomentCacheService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.exception.BusinessException;
@@ -16,10 +17,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class CommentCreateOperation extends CommentOperationTemplate {
 
+    private final MomentCacheService momentCacheService;
+
     public CommentCreateOperation(CommentRepository commentRepository,
                                   MomentRepository momentRepository,
-                                  UserQueryService userQueryService) {
+                                  UserQueryService userQueryService, MomentCacheService momentCacheService) {
         super(commentRepository, momentRepository, userQueryService);
+        this.momentCacheService = momentCacheService;
     }
 
     @Override
@@ -92,6 +96,8 @@ public class CommentCreateOperation extends CommentOperationTemplate {
             log.info("새 댓글 생성: commentId={}, momentId={}, userId={}, isReply={}",
                     response.getId(), context.getMomentId(), context.getUserId(),
                     context.getParentCommentId() != null);
+
+            momentCacheService.invalidateCommentCount(context.getMomentId());
 
             // 필요시 이벤트 발행
             // eventPublisher.publishEvent(new CommentCreatedEvent(response.getId(), context.getMomentId()));
