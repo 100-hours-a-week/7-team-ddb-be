@@ -4,6 +4,7 @@ import com.dolpin.domain.comment.entity.Comment;
 import com.dolpin.domain.comment.repository.CommentRepository;
 import com.dolpin.domain.moment.entity.Moment;
 import com.dolpin.domain.moment.repository.MomentRepository;
+import com.dolpin.domain.moment.service.cache.MomentCacheService;
 import com.dolpin.domain.user.entity.User;
 import com.dolpin.domain.user.service.UserQueryService;
 import com.dolpin.global.exception.BusinessException;
@@ -15,10 +16,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class CommentDeleteOperation extends CommentOperationTemplate {
 
+    private final MomentCacheService momentCacheService;
+
     public CommentDeleteOperation(CommentRepository commentRepository,
                                   MomentRepository momentRepository,
-                                  UserQueryService userQueryService) {
+                                  UserQueryService userQueryService, MomentCacheService momentCacheService) {
         super(commentRepository, momentRepository, userQueryService);
+        this.momentCacheService = momentCacheService;
     }
 
     @Override
@@ -75,8 +79,7 @@ public class CommentDeleteOperation extends CommentOperationTemplate {
         log.info("댓글 삭제 완료: commentId={}, momentId={}, userId={}",
                 context.getCommentId(), context.getMomentId(), context.getUserId());
 
-        // 필요시 캐시 무효화
-        // cacheService.invalidateCommentCount(context.getMomentId());
+        momentCacheService.invalidateCommentCount(context.getMomentId());
 
         // 필요시 이벤트 발행
         // eventPublisher.publishEvent(new CommentDeletedEvent(context.getCommentId(), context.getMomentId()));
