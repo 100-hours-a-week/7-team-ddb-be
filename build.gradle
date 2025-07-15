@@ -188,9 +188,6 @@ jacocoTestReport {
 					// Redis 서비스 제외
 					'**/redis/service/**',
 
-					// Place 도메인 제외
-					'**/place/**',
-
 					// 기타 설정 클래스들
 					'**/WebConfig.class',
 					'**/RedisConfig.class',
