@@ -89,20 +89,36 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
     private List<PlaceSearchResponse.PlaceDto> processAiRecommendations(
             PlaceAiResponse aiResponse, PlaceSearchContext context) {
 
-        List<Long> placeIds = aiResponse.getRecommendations().stream()
+        // 추천 데이터 null 체크 및 필터링
+        List<PlaceAiResponse.PlaceRecommendation> validRecommendations = aiResponse.getRecommendations().stream()
+                .filter(Objects::nonNull)
+                .filter(recommendation -> recommendation.getId() != null)
+                .collect(Collectors.toList());
+
+        if (validRecommendations.isEmpty()) {
+            log.warn("유효한 추천 데이터가 없습니다.");
+            return Collections.emptyList();
+        }
+
+        List<Long> placeIds = validRecommendations.stream()
                 .map(PlaceAiResponse.PlaceRecommendation::getId)
                 .collect(Collectors.toList());
 
-        Map<Long, Double> similarityScores = aiResponse.getRecommendations().stream()
+        // 유사도 점수 맵 생성 (null 체크 포함)
+        Map<Long, Double> similarityScores = validRecommendations.stream()
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getSimilarityScore
+                        recommendation -> Optional.ofNullable(recommendation.getSimilarityScore()).orElse(0.0),
+                        (existing, replacement) -> existing // 중복 키 처리
                 ));
 
-        Map<Long, List<String>> keywordsByPlaceId = aiResponse.getRecommendations().stream()
+        // 키워드 맵 생성 (null 체크 및 빈 리스트 처리)
+        Map<Long, List<String>> keywordsByPlaceId = validRecommendations.stream()
                 .collect(Collectors.toMap(
                         PlaceAiResponse.PlaceRecommendation::getId,
-                        PlaceAiResponse.PlaceRecommendation::getKeyword
+                        recommendation -> Optional.ofNullable(recommendation.getKeyword())
+                                .orElse(Collections.emptyList()),
+                        (existing, replacement) -> existing // 중복 키 처리
                 ));
 
         // DB에서 반경 내 장소 정보 조회
@@ -110,6 +126,7 @@ public class AiQuerySearchStrategy implements PlaceSearchStrategy {
                 placeIds, context.getLat(), context.getLng(), 1000.0);
 
         if (placesWithDistance.isEmpty()) {
+            log.warn("반경 내 장소가 없습니다: placeIds={}", placeIds);
             return Collections.emptyList();
         }
 
