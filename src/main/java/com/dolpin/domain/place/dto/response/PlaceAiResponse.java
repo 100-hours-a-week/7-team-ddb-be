@@ -1,12 +1,11 @@
 package com.dolpin.domain.place.dto.response;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 
-@Data
+@Getter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class PlaceAiResponse {
@@ -15,7 +14,8 @@ public class PlaceAiResponse {
 
     private String placeCategory;
 
-    @Data
+    @Getter
+    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class PlaceRecommendation {
