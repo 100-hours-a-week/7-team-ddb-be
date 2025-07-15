@@ -87,10 +87,11 @@ dependencies {
 	// 캐시 추상화
 	implementation 'org.springframework.boot:spring-boot-starter-cache'
 
-
 	implementation platform("software.amazon.awssdk:bom:2.25.15")
 	implementation 'software.amazon.awssdk:s3'
 
+	implementation 'org.springframework.retry:spring-retry'
+	implementation 'org.springframework:spring-aspects'
 }
 
 // QueryDSL 설정
