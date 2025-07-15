@@ -1,5 +1,6 @@
 package com.dolpin.domain.place.service.query;
 
+import com.dolpin.domain.place.dto.response.PlaceBusinessStatusResponse;
 import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
@@ -10,6 +11,7 @@ import com.dolpin.domain.place.service.strategy.PlaceSearchStrategy;
 import com.dolpin.domain.place.service.strategy.PlaceSearchStrategyFactory;
 import com.dolpin.domain.place.service.strategy.PlaceSearchType;
 import com.dolpin.domain.place.service.template.FullPlaceDetailQuery;
+import com.dolpin.domain.place.service.template.SimpleBusinessStatusQuery;
 import com.dolpin.domain.place.service.template.SimplePlaceDetailQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -109,5 +111,13 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetailWithoutBookmark(Long placeId) {
         return simplePlaceDetailQuery.getPlaceDetail(placeId, null);
+    }
+
+    private final SimpleBusinessStatusQuery simpleBusinessStatusQuery;
+
+    @Override
+    @Transactional(readOnly = true)
+    public PlaceBusinessStatusResponse getPlaceBusinessStatus(Long placeId) {
+        return simpleBusinessStatusQuery.getBusinessStatus(placeId);
     }
 }

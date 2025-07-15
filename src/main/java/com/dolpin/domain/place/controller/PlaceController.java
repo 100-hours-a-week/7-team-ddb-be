@@ -1,5 +1,6 @@
 package com.dolpin.domain.place.controller;
 
+import com.dolpin.domain.place.dto.response.PlaceBusinessStatusResponse;
 import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
 import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
 import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
@@ -71,5 +72,14 @@ public class PlaceController {
     public ResponseEntity<ApiResponse<PlaceCategoryResponse>> getAllCategories() {
         PlaceCategoryResponse response = placeQueryService.getAllCategories();
         return ResponseEntity.ok(ApiResponse.success("get_categories_success", response));
+    }
+
+    @GetMapping("/{place_id}/business_status")
+    public ResponseEntity<ApiResponse<PlaceBusinessStatusResponse>> getPlaceBusinessStatus(
+            @PathVariable("place_id") Long placeId) {
+
+        PlaceBusinessStatusResponse response = placeQueryService.getPlaceBusinessStatus(placeId);
+
+        return ResponseEntity.ok(ApiResponse.success("get_place_business_status_success", response));
     }
 }
