@@ -18,7 +18,7 @@ public class SimpleCacheCleanupScheduler {
     /**
      * 매일 새벽 4시 - 만료된 캐시만 정리 (AI 스케줄러 1시간 전)
      */
-    @Scheduled(cron = "0 0 11 * * *")
+    @Scheduled(cron = "0 5 1 * * *")
     public void cleanupExpiredCaches() {
         try {
             log.info("Starting cache cleanup");
