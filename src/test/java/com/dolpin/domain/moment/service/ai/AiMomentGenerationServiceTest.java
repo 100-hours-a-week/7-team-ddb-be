@@ -482,7 +482,6 @@ class AiMomentGenerationServiceTest {
                 .phone(PlaceTestConstants.DEFAULT_PHONE)
                 .openingHours(openingHours)
                 .menu(List.of(menu1, menu2))
-                .isBookmarked(false)
                 .build();
     }
 

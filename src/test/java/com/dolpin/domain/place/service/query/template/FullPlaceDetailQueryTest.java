@@ -46,7 +46,6 @@ class FullPlaceDetailQueryTest {
         Long userId  = 1L;
 
         setupMockPlaceQueries(placeId);
-        given(bookmarkQueryService.isBookmarked(userId, placeId)).willReturn(true);
 
         // when
         PlaceDetailResponse result = fullPlaceDetailQuery.getPlaceDetail(placeId, userId);
@@ -62,7 +61,6 @@ class FullPlaceDetailQueryTest {
         verify(placeRepository).findByIdWithKeywords(placeId);
         verify(placeRepository).findByIdWithMenus(placeId);
         verify(placeRepository).findByIdWithHours(placeId);
-        verify(bookmarkQueryService).isBookmarked(userId, placeId);
     }
 
     /* ──────────────────────── Mock 세팅 ──────────────────────── */

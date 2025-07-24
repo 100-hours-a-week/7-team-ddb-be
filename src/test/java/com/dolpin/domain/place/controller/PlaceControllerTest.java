@@ -243,7 +243,7 @@ class PlaceControllerTest {
             Long placeId = PlaceTestConstants.PLACE_ID_1;
             Long userId = PlaceTestConstants.USER_ID_1;
 
-            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
+            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId);
             given(placeQueryService.getPlaceDetail(placeId, userId))
                     .willReturn(expectedResponse);
 
@@ -270,7 +270,7 @@ class PlaceControllerTest {
         void getPlaceDetail_WithVariousIds_CallsServiceCorrectly(Long placeId) throws Exception {
             // Given
             Long userId = PlaceTestConstants.USER_ID_1;
-            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
+            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId);
             given(placeQueryService.getPlaceDetail(placeId, userId))
                     .willReturn(expectedResponse);
 
@@ -408,7 +408,7 @@ class PlaceControllerTest {
                 .build();
     }
 
-    private PlaceDetailResponse createPlaceDetailResponse(Long placeId, Boolean isBookmarked) {
+    private PlaceDetailResponse createPlaceDetailResponse(Long placeId) {
         List<PlaceDetailResponse.Schedule> schedules = List.of(
                 PlaceDetailResponse.Schedule.builder()
                         .day("mon")
