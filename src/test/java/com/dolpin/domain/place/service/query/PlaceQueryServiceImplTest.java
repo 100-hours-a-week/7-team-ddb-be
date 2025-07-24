@@ -139,7 +139,6 @@ class PlaceQueryServiceImplTest {
 
             // then
             assertThat(result).isEqualTo(expectedResponse);
-            assertThat(result.getIsBookmarked()).isTrue(); // 북마크 정보 포함
 
             verify(fullPlaceDetailQuery).getPlaceDetail(placeId, userId);
             verifyNoInteractions(simplePlaceDetailQuery);
@@ -160,7 +159,6 @@ class PlaceQueryServiceImplTest {
 
             // then
             assertThat(result).isEqualTo(expectedResponse);
-            assertThat(result.getIsBookmarked()).isNull(); // 북마크 정보 없음
 
             verify(simplePlaceDetailQuery).getPlaceDetail(placeId, null);
             verifyNoInteractions(fullPlaceDetailQuery);
@@ -197,7 +195,6 @@ class PlaceQueryServiceImplTest {
                     .keywords(Arrays.asList("커피", "카페", "디저트"))
                     .description("맛있는 커피를 파는 카페")
                     .phone("02-1234-5678")
-                    .isBookmarked(true) // 북마크 정보 포함
                     .openingHours(openingHours)
                     .menu(Arrays.asList(menu))
                     .build();
@@ -234,7 +231,6 @@ class PlaceQueryServiceImplTest {
                     .keywords(Arrays.asList("커피", "카페", "디저트"))
                     .description("맛있는 커피를 파는 카페")
                     .phone("02-1234-5678")
-                    .isBookmarked(null) // 북마크 정보 없음
                     .openingHours(openingHours)
                     .menu(Arrays.asList(menu))
                     .build();

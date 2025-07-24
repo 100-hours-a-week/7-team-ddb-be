@@ -105,12 +105,6 @@ public abstract class PlaceDetailQueryTemplate {
         return placeWithHours.getHours();
     }
 
-    /**
-     * 북마크 정보 조회
-     */
-    protected Boolean getBookmarkInfo(Long userId, Long placeId) {
-        return userId != null ? bookmarkQueryService.isBookmarked(userId, placeId) : null;
-    }
 
     /**
      * 응답 생성 (공통)
@@ -145,7 +139,6 @@ public abstract class PlaceDetailQueryTemplate {
                 .openingHours(openingHours)
                 .phone(basicPlace.getPhone())
                 .menu(context.getMenus())
-                .isBookmarked(context.getIsBookmarked())
                 .build();
     }
 

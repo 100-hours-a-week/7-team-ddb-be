@@ -20,7 +20,6 @@ public class SimplePlaceDetailQuery extends PlaceDetailQueryTemplate {
                 .keywords(getKeywords(placeId))
                 .menus(getMenus(placeId))
                 .hours(getHours(placeId))
-                .isBookmarked(null) // 북마크 정보 없음
                 .build();
     }
 }

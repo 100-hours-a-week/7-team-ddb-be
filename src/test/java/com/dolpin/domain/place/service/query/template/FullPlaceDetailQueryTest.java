@@ -54,7 +54,6 @@ class FullPlaceDetailQueryTest {
         // then
         assertThat(result.getId()).isEqualTo(placeId);
         assertThat(result.getName()).isEqualTo("테스트 카페");
-        assertThat(result.getIsBookmarked()).isTrue();
         assertThat(result.getKeywords()).isNotEmpty();
         assertThat(result.getMenu()).isNotEmpty();
         assertThat(result.getOpeningHours()).isNotNull();
