@@ -21,15 +21,14 @@ public class SessionValidationService {
      * 현재 세션의 유효성을 검증합니다.
      *
      * @return 세션이 유효하면 true, 그렇지 않으면 false
-     * @throws BusinessException 인증이 필요한 경우 401, 장소를 찾을 수 없는 경우 404
      */
     public boolean validateCurrentSession() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         // 인증 정보가 없거나 인증되지 않은 경우
         if (!isAuthenticated(authentication)) {
-            log.debug("인증되지 않은 요청 - 재로그인 필요");
-            throw new BusinessException(ResponseStatus.UNAUTHORIZED, "재로그인이 필요합니다.");
+            log.debug("인증되지 않은 요청 - 세션 무효");
+            return false;
         }
 
         try {
@@ -42,9 +41,10 @@ public class SessionValidationService {
 
         } catch (NumberFormatException e) {
             log.warn("잘못된 사용자 ID 형식: {}", e.getMessage());
-            throw new BusinessException(ResponseStatus.UNAUTHORIZED, "재로그인이 필요합니다.");
+            return false;
         } catch (Exception e) {
-            log.error("세션 검증 중 오류 발생", e);
+            log.error("세션 검증 중 예상치 못한 오류 발생", e);
+            // 예상치 못한 시스템 오류만 예외로 처리
             throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "내부 서버 오류입니다.");
         }
     }
