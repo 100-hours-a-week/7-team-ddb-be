@@ -15,7 +15,6 @@ public class PlaceDetailContext {
     private List<String> keywords;
     private List<PlaceDetailResponse.Menu> menus;
     private List<PlaceHours> hours;
-    private Boolean isBookmarked;
 
     public static PlaceDetailContext of(Long placeId, Long userId) {
         return PlaceDetailContext.builder()
