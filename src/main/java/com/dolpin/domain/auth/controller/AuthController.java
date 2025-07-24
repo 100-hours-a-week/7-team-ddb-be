@@ -3,17 +3,17 @@ package com.dolpin.domain.auth.controller;
 import com.dolpin.domain.auth.dto.request.TokenRequest;
 import com.dolpin.domain.auth.dto.response.OAuthUrlResponse;
 import com.dolpin.domain.auth.dto.response.RefreshTokenResponse;
+import com.dolpin.domain.auth.dto.response.SessionValidationResponse;
 import com.dolpin.domain.auth.dto.response.TokenResponse;
 import com.dolpin.domain.auth.service.auth.AuthService;
 import com.dolpin.domain.auth.service.cookie.CookieService;
+import com.dolpin.domain.auth.service.session.SessionValidationService;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ApiResponse;
 import com.dolpin.global.response.ResponseStatus;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +25,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final CookieService cookieService;
+    private final SessionValidationService sessionValidationService;
 
     @GetMapping("/oauth")
     public ResponseEntity<ApiResponse<OAuthUrlResponse>> getOAuthLoginUrl(
@@ -97,4 +98,29 @@ public class AuthController {
                 responseWithoutToken
         ));
     }
+
+    /**
+     * 세션 유효성 검증
+     */
+    @GetMapping("/session")
+    public ResponseEntity<ApiResponse<SessionValidationResponse>> validateSession() {
+        log.debug("세션 유효성 검증 요청");
+
+        try {
+            boolean isValid = sessionValidationService.validateCurrentSession();
+            SessionValidationResponse response = SessionValidationResponse.of(isValid);
+
+            return ResponseEntity.ok(
+                    ApiResponse.success("valid_session_success", response)
+            );
+
+        } catch (BusinessException e) {
+            log.warn("세션 검증 중 비즈니스 예외 발생: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("세션 검증 중 예상치 못한 오류 발생", e);
+            throw new BusinessException(ResponseStatus.INTERNAL_SERVER_ERROR, "내부 서버 오류입니다.");
+        }
+    }
+
 }
