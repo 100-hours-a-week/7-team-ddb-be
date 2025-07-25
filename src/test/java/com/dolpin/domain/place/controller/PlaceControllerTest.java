@@ -18,11 +18,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import reactor.core.publisher.Mono;
@@ -31,15 +31,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
 @WebMvcTest(controllers = PlaceController.class, excludeAutoConfiguration = {})
 @AutoConfigureMockMvc(addFilters = false)
@@ -245,7 +243,7 @@ class PlaceControllerTest {
             Long placeId = PlaceTestConstants.PLACE_ID_1;
             Long userId = PlaceTestConstants.USER_ID_1;
 
-            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
+            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId);
             given(placeQueryService.getPlaceDetail(placeId, userId))
                     .willReturn(expectedResponse);
 
@@ -257,7 +255,6 @@ class PlaceControllerTest {
                     .andExpect(jsonPath("$.message").value(PlaceTestConstants.Api.SUCCESS_MESSAGE_DETAIL))
                     .andExpect(jsonPath("$.data.id").value(placeId))
                     .andExpect(jsonPath("$.data.name").value(PlaceTestConstants.TEST_CAFE_NAME))
-                    .andExpect(jsonPath("$.data.is_bookmarked").value(true))
                     .andExpect(jsonPath("$.data.keywords").isArray())
                     .andExpect(jsonPath("$.data.menu").isArray())
                     .andExpect(jsonPath("$.data.opening_hours").exists())
@@ -273,7 +270,7 @@ class PlaceControllerTest {
         void getPlaceDetail_WithVariousIds_CallsServiceCorrectly(Long placeId) throws Exception {
             // Given
             Long userId = PlaceTestConstants.USER_ID_1;
-            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId, true);
+            PlaceDetailResponse expectedResponse = createPlaceDetailResponse(placeId);
             given(placeQueryService.getPlaceDetail(placeId, userId))
                     .willReturn(expectedResponse);
 
@@ -411,7 +408,7 @@ class PlaceControllerTest {
                 .build();
     }
 
-    private PlaceDetailResponse createPlaceDetailResponse(Long placeId, Boolean isBookmarked) {
+    private PlaceDetailResponse createPlaceDetailResponse(Long placeId) {
         List<PlaceDetailResponse.Schedule> schedules = List.of(
                 PlaceDetailResponse.Schedule.builder()
                         .day("mon")
@@ -450,7 +447,6 @@ class PlaceControllerTest {
                 .keywords(List.of(PlaceTestConstants.COZY_KEYWORD, PlaceTestConstants.DELICIOUS_KEYWORD))
                 .description(PlaceTestConstants.DEFAULT_DESCRIPTION)
                 .phone(PlaceTestConstants.DEFAULT_PHONE)
-                .isBookmarked(isBookmarked)
                 .openingHours(openingHours)
                 .menu(menu)
                 .build();

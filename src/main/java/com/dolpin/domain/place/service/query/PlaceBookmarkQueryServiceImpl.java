@@ -6,6 +6,8 @@ import com.dolpin.domain.place.entity.PlaceBookmark;
 import com.dolpin.domain.place.repository.PlaceBookmarkRepository;
 import com.dolpin.domain.place.repository.PlaceRepository;
 import com.dolpin.domain.place.service.cache.BookmarkCacheService;
+import com.dolpin.global.exception.BusinessException;
+import com.dolpin.global.response.ResponseStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,23 @@ public class PlaceBookmarkQueryServiceImpl implements PlaceBookmarkQueryService 
 
         // 2. 캐시 미스: DB에서 조회 후 캐시 저장
         return loadBookmarksFromDbAndCache(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isBookmarkedWithValidation(Long userId, Long placeId) {
+        if (userId == null || placeId == null) {
+            return false;
+        }
+
+        // 1. 장소 존재 여부 확인
+        if (!placeRepository.existsById(placeId)) {
+            throw new BusinessException(ResponseStatus.PLACE_NOT_FOUND,
+                    "장소를 찾을 수 없습니다: " + placeId);
+        }
+
+        // 2. 북마크 상태 조회 (기존 로직 재사용)
+        return isBookmarked(userId, placeId);
     }
 
     @Override

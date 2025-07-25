@@ -92,4 +92,8 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     @Query(value = "SELECT id FROM place ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Long> findRandomPlaceIds(@Param("limit") int limit);
+
+    @Query("SELECT p.id FROM Place p ORDER BY p.createdAt ASC")
+    List<Long> findAllPlaceIds();
+
 }

@@ -1,6 +1,5 @@
 package com.dolpin.domain.place.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,9 +22,7 @@ public class PlaceDetailResponse {
     private List<String> keywords;
     private String description;
     private String phone;
-    private Boolean isBookmarked;
     private OpeningHours openingHours;
-
     private List<Menu> menu;
 
     @Getter
@@ -44,7 +41,6 @@ public class PlaceDetailResponse {
     public static class Schedule {
         private String day;
         private String hours;
-
         private String breakTime;
     }
 

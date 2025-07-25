@@ -254,7 +254,7 @@ class CommentTest {
 
     @Test
     @DisplayName("Comment PreUpdate 테스트")
-    void preUpdate_UpdatesTimestamp() {
+    void preUpdate_UpdatesTimestamp() throws InterruptedException {
         // given
         Comment comment = Comment.builder()
                 .userId(CommentTestConstants.TEST_USER_ID)
@@ -263,16 +263,16 @@ class CommentTest {
                 .depth(CommentTestConstants.ROOT_COMMENT_DEPTH)
                 .build();
 
-        LocalDateTime initialTime = LocalDateTime.now().minusMinutes(1);
-        comment.prePersist(); // 초기 시간 설정
+        comment.prePersist();
+        LocalDateTime originalUpdatedAt = comment.getUpdatedAt();
+
+        Thread.sleep(1);
 
         // when
-        LocalDateTime beforeUpdate = LocalDateTime.now();
         comment.preUpdate();
 
         // then
-        LocalDateTime afterUpdate = LocalDateTime.now();
-        assertThat(comment.getUpdatedAt()).isBetween(beforeUpdate, afterUpdate);
+        assertThat(comment.getUpdatedAt()).isAfter(originalUpdatedAt);
         assertThat(comment.getUpdatedAt()).isAfter(comment.getCreatedAt());
     }
 }

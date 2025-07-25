@@ -20,7 +20,6 @@ public class FullPlaceDetailQuery extends PlaceDetailQueryTemplate {
                 .keywords(getKeywords(placeId))
                 .menus(getMenus(placeId))
                 .hours(getHours(placeId))
-                .isBookmarked(getBookmarkInfo(userId, placeId))
                 .build();
     }
 }

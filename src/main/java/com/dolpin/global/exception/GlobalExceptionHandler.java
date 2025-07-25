@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -212,5 +211,22 @@ public class GlobalExceptionHandler {
                                 e.getMessage().contains("권한") ||
                                 e.getMessage().contains("OAuth")
                 ));
+    }
+
+    @ExceptionHandler(java.time.format.DateTimeParseException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDateTimeParseException(
+            java.time.format.DateTimeParseException e) {
+        log.error("날짜/시간 파싱 오류 발생: {}", e.getMessage(), e);
+
+        String userFriendlyMessage = "시간 형식 오류가 발생했습니다. 올바른 시간 형식(HH:mm)을 확인해주세요.";
+
+        // 24:00과 같은 특수 케이스 처리 힌트 제공
+        if (e.getMessage().contains("24")) {
+            userFriendlyMessage = "24:00과 같은 시간 값은 지원되지 않습니다. 23:59 또는 00:00을 사용해주세요.";
+        }
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ResponseStatus.INTERNAL_SERVER_ERROR.withMessage(userFriendlyMessage)));
     }
 }

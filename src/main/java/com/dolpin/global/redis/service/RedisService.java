@@ -247,4 +247,13 @@ public class RedisService {
             throw new RuntimeException("Redis 배치 저장 실패", e);
         }
     }
+
+    public Long getExpire(String key) {
+        try {
+            return redisTemplate.getExpire(key);
+        } catch (Exception e) {
+            log.error("Redis TTL check failed: {} - {}", key, e.getMessage());
+            return null;
+        }
+    }
 }
