@@ -1,9 +1,6 @@
 package com.dolpin.domain.place.service.query;
 
-import com.dolpin.domain.place.dto.response.PlaceBusinessStatusResponse;
-import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
-import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
-import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
+import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.repository.PlaceRepository;
 import com.dolpin.domain.place.service.cache.PlaceCacheService;
 import com.dolpin.domain.place.service.strategy.PlaceSearchContext;
@@ -13,6 +10,8 @@ import com.dolpin.domain.place.service.strategy.PlaceSearchType;
 import com.dolpin.domain.place.service.template.FullPlaceDetailQuery;
 import com.dolpin.domain.place.service.template.SimpleBusinessStatusQuery;
 import com.dolpin.domain.place.service.template.SimplePlaceDetailQuery;
+import com.dolpin.global.exception.BusinessException;
+import com.dolpin.global.response.ResponseStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -119,5 +118,21 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
     @Transactional(readOnly = true)
     public PlaceBusinessStatusResponse getPlaceBusinessStatus(Long placeId) {
         return simpleBusinessStatusQuery.getBusinessStatus(placeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PlaceIdListResponse getAllPlaceIds() {
+        log.debug("장소 ID 목록 조회 시작");
+
+        List<Long> placeIds = placeRepository.findAllPlaceIds();
+
+        if (placeIds.isEmpty()) {
+            log.warn("등록된 장소가 없습니다.");
+            throw new BusinessException(ResponseStatus.PLACE_NOT_FOUND, "장소를 찾을 수 없습니다.");
+        }
+
+        log.debug("장소 ID 목록 조회 완료: count={}", placeIds.size());
+        return PlaceIdListResponse.of(placeIds);
     }
 }

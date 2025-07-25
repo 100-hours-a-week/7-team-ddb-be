@@ -1,9 +1,6 @@
 package com.dolpin.domain.place.service.query;
 
-import com.dolpin.domain.place.dto.response.PlaceBusinessStatusResponse;
-import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
-import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
-import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
+import com.dolpin.domain.place.dto.response.*;
 import reactor.core.publisher.Mono;
 
 public interface PlaceQueryService {
@@ -19,4 +16,6 @@ public interface PlaceQueryService {
     Mono<PlaceSearchResponse> searchPlacesWithDevTokenAsync(String query, Double lat, Double lng, String category, String devToken, Long userId);
 
     PlaceBusinessStatusResponse getPlaceBusinessStatus(Long placeId);
+
+    PlaceIdListResponse getAllPlaceIds();
 }

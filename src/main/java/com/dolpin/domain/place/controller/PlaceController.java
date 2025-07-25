@@ -1,9 +1,6 @@
 package com.dolpin.domain.place.controller;
 
-import com.dolpin.domain.place.dto.response.PlaceBusinessStatusResponse;
-import com.dolpin.domain.place.dto.response.PlaceCategoryResponse;
-import com.dolpin.domain.place.dto.response.PlaceDetailResponse;
-import com.dolpin.domain.place.dto.response.PlaceSearchResponse;
+import com.dolpin.domain.place.dto.response.*;
 import com.dolpin.domain.place.service.query.PlaceQueryService;
 import com.dolpin.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -81,5 +78,14 @@ public class PlaceController {
         PlaceBusinessStatusResponse response = placeQueryService.getPlaceBusinessStatus(placeId);
 
         return ResponseEntity.ok(ApiResponse.success("get_place_business_status_success", response));
+    }
+
+    @GetMapping("/ids")
+    public ResponseEntity<ApiResponse<PlaceIdListResponse>> getAllPlaceIds() {
+        PlaceIdListResponse response = placeQueryService.getAllPlaceIds();
+
+        return ResponseEntity.ok(
+                ApiResponse.success("get_place_id_success", response)
+        );
     }
 }
