@@ -8,6 +8,7 @@ import com.dolpin.domain.place.service.query.PlaceBookmarkQueryService;
 import com.dolpin.global.exception.BusinessException;
 import com.dolpin.global.response.ResponseStatus;
 import com.dolpin.global.util.DayOfWeek;
+import com.dolpin.global.util.TimeParsingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Point;
@@ -231,8 +232,8 @@ public abstract class PlaceDetailQueryTemplate {
         }
 
         LocalTime currentTime = now.toLocalTime();
-        LocalTime openTime = LocalTime.parse(todayRegularHours.getOpenTime());
-        LocalTime closeTime = LocalTime.parse(todayRegularHours.getCloseTime());
+        LocalTime openTime = TimeParsingUtil.parseTimeString(todayRegularHours.getOpenTime());
+        LocalTime closeTime = TimeParsingUtil.parseTimeString(todayRegularHours.getCloseTime());
 
         // 24시간 운영 처리 (자정을 넘어가는 경우)
         boolean isOverMidnight = closeTime.isBefore(openTime);
@@ -255,8 +256,8 @@ public abstract class PlaceDetailQueryTemplate {
                 todayBreakHours.getOpenTime() != null &&
                 todayBreakHours.getCloseTime() != null) {
 
-            LocalTime breakStart = LocalTime.parse(todayBreakHours.getOpenTime());
-            LocalTime breakEnd = LocalTime.parse(todayBreakHours.getCloseTime());
+            LocalTime breakStart = TimeParsingUtil.parseTimeString(todayBreakHours.getOpenTime());
+            LocalTime breakEnd = TimeParsingUtil.parseTimeString(todayBreakHours.getCloseTime());
 
             if (currentTime.isAfter(breakStart) && currentTime.isBefore(breakEnd)) {
                 return "브레이크타임";
